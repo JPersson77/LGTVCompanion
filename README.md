@@ -17,10 +17,15 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
    - Open the administrative interface of your router, and set a static DHCP lease for your WebOS devices, i.e. to ensure that the displays always have the same IP-address on your LAN.
 2. Download the setup package and install. This will install and start the service (LGTVsvc.exe), and also install the user interface (LGTV Companion.exe).
 3. Open the user interface from the Windows start menu.
-4. Click the 'Scan' button to let the application try and automatically find network attached WebOs devices (TVs)
-5. Optionally, click the drop down button to manually add, remove, configure the parameters of respective devices, this includes the network IP-address, and the physical address, i.e. the MAC(s). This information can easily be found in the network settings of the TV.
-6. In the main application window, use the checkboxes to select what power events (shutdown, restart, suspend, resume, idle) the respective devices shall respond to.
-7. Optionally, tweak additional settings, by clicking on the hamburger icon. Note that enabling logging can be very useful if you are facing any issues.
+![image](https://user-images.githubusercontent.com/77928210/110210490-371e7500-7e92-11eb-9552-a50b404a60d4.png)
+
+5. Click the 'Scan' button to let the application try and automatically find network attached WebOs devices (TVs)
+6. Optionally, click the drop down button to manually add, remove, configure the parameters of respective devices, this includes the network IP-address, and the physical address, i.e. the MAC(s). This information can easily be found in the network settings of the TV.
+![image](https://user-images.githubusercontent.com/77928210/110210517-4ac9db80-7e92-11eb-9d74-678fea1f535a.png)
+
+8. In the main application window, use the checkboxes to select what power events (shutdown, restart, suspend, resume, idle) the respective devices shall respond to.
+9. Optionally, tweak additional settings, by clicking on the hamburger icon. Note that enabling logging can be very useful if you are facing any issues.
+![image](https://user-images.githubusercontent.com/77928210/110210530-5917f780-7e92-11eb-81af-32866203ae41.png)
     
 >if your OS is not localised in english, you must in the 'additional settings' dialog click the correct checkboxes to indicate what words refer to the system restarting/rebooting (as opposed to shutting down). This is needed because there is no better (at least known to me) way for a service to know if the system is being restarted or shut down than looking at a certain event in the event log. But the event log is localised, and this approach saves me from having to build a language table for all languages in the world. Note that if you don't do this on a non-english OS the application will not be able to determine if the system is being restarted or shut down. The difference is of course that the displays should not power off when the system is restarted.
 
@@ -36,14 +41,15 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 - LG OLED displays cannot be turned on via network when an automatic pixel refresh is being performed. You can hear an internal relay click after the pixel refresh, when the display is actually powered down, at which point it can be turned on again at any time by this application.
 
 - The WebOS displays can only be turned on/off when both the PC and the display is connected to a network. 
-- 
+
 ## System requirements
-- The application must be run in a modern windows environment, and any potato running Windows 10 is fine. This is lean mean C++.
+- The application must be run in a modern windows environment, and any potato running Windows 10 is fine.
 - A Local Area Network (LAN)
 
 ## Commandline arguments
 
-**LGTV Companion.exe** *-[poweron|poweroff|autoenable|autodisable] [Device1|Name] [Device2|Name] ... [DeviceX|Name]*
+*LGTV Companion.exe ![mainwnd](https://user-images.githubusercontent.com/77928210/110210465-1f46f100-7e92-11eb-963e-9978afc35e24.JPG)
+-[poweron|poweroff|autoenable|autodisable] [Device1|Name] [Device2|Name] ... [DeviceX|Name]*
 - *-poweron* - power on a device.
 - *-poweroff* - power off a device
 - *-autoenable* - temporarily enable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. (I personally use this for my home automation system).
@@ -55,7 +61,7 @@ Example usage: LGTV Companion.exe -poweron Device1 Device2 OLED48CX -autodisable
 This command will power on device 1, device 2 and the device named OLED48CX, and additionally device2 is set to temporarily not respond to automatic power events (on/off).
 
 ## License
-Copyright (c) 2021 Jörgen Persson
+Copyright © 2021 Jörgen Persson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -69,4 +75,4 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 - @Maassoft for initial inspo and helping me understand the WebSocket/WebOS comms - https://github.com/Maassoft
 
 ## Copyright
-Copyright (c) 2021 Jörgen Persson
+Copyright © 2021 Jörgen Persson
