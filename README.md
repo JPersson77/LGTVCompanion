@@ -3,7 +3,7 @@
 ## Overview
 This application (UI and service) controls LG WebOS TVs and displays.
 
-This application aim to:
+This application aim to be a set and forget application to:
 - provide automatic management for your WebOS display, to shut off and turn on in reponse to to the PC shutting down, rebooting, entering low power modes as well as and when user is afk (idle). 
 - provide the user with a command line tool to turn displays on or off.
 
@@ -42,8 +42,20 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 
 ## Limitations
 - LG OLED displays cannot be turned on via network when an automatic pixel refresh is being performed. You can hear an internal relay click after the pixel refresh, when the display is actually powered down, at which point it can be turned on again at any time by this application.
-
 - The WebOS displays can only be turned on/off when both the PC and the display is connected to a network. 
+- The TV cannnot be on a different subnet/VLAN from your PC. This is because the TV is powerd on by means of broadcasting a magic packet, aka Wake-on-lan, which is restricted to layer 2, i.e. same subnet only. (Let me know if you really want this implemented and if you are prepared help me test implementation of a directed subnet broadcast)
+
+## Troubleshooting
+If your display has trouble powering on, these are the things to check first:
+- When connecting the TV via Wi-Fi it seems some users must enable "Quickstart+" and disable "HDD Eco mode" to avoid the NIC becoming inactive. (Cat cable seems more reliabl
+- Ensure the network is not dropping WOL-broadcasts.
+- The MAC-address configuration for the device in the application is erroneous.
+
+If your display has trouble powering off it is most likely because:
+- The IP configuration is erroneous, check the coniguration and make sure the TV has a static DHCP lease in your routers admin pages.
+- The application has not yet received a pairing key. Try removing the device, click apply and then re-add the device to force re-pairing.
+
+HOT tip! Enable the built in logger and check the output, it can be very useful for understanding where problems are.
 
 ## System requirements
 - The application must be run in a modern windows environment, and any potato running Windows 10 is fine.
@@ -55,12 +67,12 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 - *-poweron* - power on a device.
 - *-poweroff* - power off a device
 - *-autoenable* - temporarily enable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. (I personally use this for my home automation system).
-- *-autoenable* - temporarily disable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. 
+- *-autodisable* - temporarily disable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. 
 - *[DeviceX|Name]* - device identifier. Either use Device1, Device2, ..., DeviceX or the friendly device name as determined in the User Interface, for example OLED48CX.
 
-Example usage: LGTV Companion.exe -poweron Device1 Device2 OLED48CX -autodisable Device2
+Example usage: LGTV Companion.exe -poweron Device1 Device2 "LG OLED48CX" -autodisable Device2
 
-This command will power on device 1, device 2 and the device named OLED48CX, and additionally device2 is set to temporarily not respond to automatic power events (on/off).
+This command will power on device 1, device 2 and the device named LG OLED48CX, and additionally device2 is thereafter set to temporarily not respond to automatic power events (on/off). Note the usage of "quotes" for the device name.
 
 ## License
 Copyright © 2021 Jörgen Persson
