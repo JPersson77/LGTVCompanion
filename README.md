@@ -47,13 +47,13 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 
 ## Troubleshooting
 If your display has trouble powering on, these are the things to check first:
-- When connecting the TV via Wi-Fi it seems some users must enable "Quickstart+" and disable "HDD Eco mode" to avoid the NIC becoming inactive. (Cat cable seems more reliabl
+- When connecting the TV via Wi-Fi it seems some users must enable "Quickstart+" and disable "HDD Eco mode" to avoid the NIC becoming inactive. (physical network cable does ot seem to need this)
 - Ensure the network is not dropping WOL-broadcasts.
 - The MAC-address configuration for the device in the application is erroneous.
 
 If your display has trouble powering off it is most likely because:
-- The IP configuration is erroneous, check the coniguration and make sure the TV has a static DHCP lease in your routers admin pages.
-- The application has not yet received a pairing key. Try removing the device, click apply and then re-add the device to force re-pairing.
+- The IP configuration might be erroneous. Please check the configuration and make sure the TV has a static DHCP lease in your routers admin pages.
+- The application has not yet received a pairing key. Try removing the device in the UI, click apply and then re-add the device to force re-pairing.
 
 HOT tip! Enable the built in logger and check the output, it can be very useful for understanding where problems are.
 
