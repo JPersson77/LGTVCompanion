@@ -29,7 +29,7 @@
 #pragma comment(lib, "Advapi32.lib")
 
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.0.0" 
+#define APPVERSION					    L"1.2.0" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
@@ -87,8 +87,6 @@ struct SESSIONPARAMETERS {
     std::string IP;
     std::vector<std::string> MAC;
     std::string SessionKey;
-    bool PowerAuto = true;
-    bool AwayAuto = true;
     int PowerOnTimeout = 40;
     std::string Name;
     bool Enabled = true;
@@ -105,9 +103,7 @@ public:
     SESSIONPARAMETERS GetParams();
 private:
     bool ThreadedOperationsRunning = false;    
-    time_t TimeStamp = 0;
-    bool SuspendDisplayPowerEvents = false;
-    void TurnOnDisplay(void);
+     void TurnOnDisplay(void);
     void TurnOffDisplay(void);
     SESSIONPARAMETERS   Parameters;
 };

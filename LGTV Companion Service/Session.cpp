@@ -53,19 +53,21 @@ void CSession::TurnOnDisplay(void)
     while (!mMutex.try_lock())
         Sleep(MUTEX_WAIT);
 
-    //discard the event if thread is running or the event is too close to the previous
-    if (!ThreadedOperationsRunning && (time(0) - TimeStamp > THREAD_WAIT))
+    
+    if (!ThreadedOperationsRunning) 
     {
-        s = "Creating thread for "; s += Parameters.DeviceId; s += ": DisplayPowerOnThread";
+        s = Parameters.DeviceId;
+        s += ", spawning DisplayPowerOnThread().";
         
         ThreadedOperationsRunning = true;
-        TimeStamp = time(0);
+//        TimeStamp = time(0);
         thread thread_obj(DisplayPowerOnThread, &Parameters, &ThreadedOperationsRunning, Parameters.PowerOnTimeout);
         thread_obj.detach();
     }
     else
     {
-        s = "Thread omitted for "; s += Parameters.DeviceId; s += ": DisplayPowerOnThread";
+        s = Parameters.DeviceId; 
+        s+= ", omitted DisplayPowerOnThread().";
     }
     mMutex.unlock();
     Log(s);
@@ -79,30 +81,34 @@ void CSession::TurnOffDisplay(void)
     while (!mMutex.try_lock())
         Sleep(MUTEX_WAIT);
     
-    //discard the event if thread is running or the event is too close to the previous
-    if (!ThreadedOperationsRunning && (time(0) - TimeStamp > THREAD_WAIT) && Parameters.SessionKey !="")
+    if (!ThreadedOperationsRunning && Parameters.SessionKey != "") 
     {
-        s = "Creating thread for "; s += Parameters.DeviceId; s += ": DisplayPowerOffThread";
+        s = Parameters.DeviceId;
+        s += ", spawning DisplayPowerOffThread().";
 
         ThreadedOperationsRunning = true;
-        TimeStamp = time(0);
+ //       TimeStamp = time(0);
         thread thread_obj(DisplayPowerOffThread, &Parameters, &ThreadedOperationsRunning);
         thread_obj.detach();
     }
     else
     {
-        s = "Thread omitted for "; s += Parameters.DeviceId; s += ": DisplayPowerOffThread";
+        s = Parameters.DeviceId;
+        s += ", omitted DisplayPowerOffThread()";
         if (Parameters.SessionKey == "")
-            s += " (no session key)";
+            s += " (no session key).";
+        else
+            s += ".";
     }
 
     mMutex.unlock();
     Log(s);
     return;
 }
-//   Called when a display power event (on/off) has occured which the device should respond to
+//   This function contains the logic for when a display power event (on/off) has occured which the device shall respond to
 void CSession::SystemEvent(DWORD dwMsg)
 {
+    // forced events are always processed, i.e. the user has issued this command.
     if (dwMsg == SYSTEM_EVENT_FORCEON)
         TurnOnDisplay();
     if (dwMsg == SYSTEM_EVENT_FORCEOFF)
@@ -119,40 +125,41 @@ void CSession::SystemEvent(DWORD dwMsg)
     mMutex.unlock();
 
 
-    if (Parameters.AwayAuto && dwMsg == SYSTEM_EVENT_DISPLAYON)
-        if(!SuspendDisplayPowerEvents || time(0)-TimeStamp > 30 )
-            TurnOnDisplay();
-    if (Parameters.AwayAuto && dwMsg == SYSTEM_EVENT_DISPLAYOFF)
-        if(!SuspendDisplayPowerEvents || time(0) - TimeStamp > 30)
-            TurnOffDisplay();
-    if (Parameters.PowerAuto && dwMsg == SYSTEM_EVENT_RESUME)
+    switch (dwMsg)
     {
-        SuspendDisplayPowerEvents = false;
+    case SYSTEM_EVENT_REBOOT: 
+    {
+
+    }break;
+    case SYSTEM_EVENT_UNSURE: 
+    case SYSTEM_EVENT_SHUTDOWN:
+    {
+        TurnOffDisplay();
+    }break;
+    case SYSTEM_EVENT_SUSPEND:
+    {
+ 
+    }break;
+     case SYSTEM_EVENT_RESUME:
+    {
+ 
+    }break;
+    case SYSTEM_EVENT_RESUMEAUTO:
+    {
+
+    }break;
+
+    case SYSTEM_EVENT_DISPLAYON:
+    {
         TurnOnDisplay();
-    }
-   if (Parameters.PowerAuto && dwMsg == SYSTEM_EVENT_RESUMEAUTO) 
-       SuspendDisplayPowerEvents = false;
-
-//    if (Parameters.PowerAuto && dwMsg == SYSTEM_EVENT_REBOOT)
-//        TurnOffDisplay();
-
-    if (Parameters.PowerAuto && dwMsg == SYSTEM_EVENT_SHUTDOWN)
+    }break;
+    case SYSTEM_EVENT_DISPLAYOFF:
     {
-        SuspendDisplayPowerEvents = true;
         TurnOffDisplay();
-    }
-    if (Parameters.PowerAuto && dwMsg == SYSTEM_EVENT_SUSPEND)
-    {
-        SuspendDisplayPowerEvents = true;
-        TurnOffDisplay();
-    }
-    if (Parameters.PowerAuto && dwMsg == SYSTEM_EVENT_UNSURE)
-    {
-        SuspendDisplayPowerEvents = true;
-        TurnOffDisplay();
-    }      
+    }break;
 
-    
+    default:break;
+    }
 }
 //   THREAD: Spawned when the device should power ON. This thread manages the pairing key from the display and verifies that the display has been powered on
 void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * CallingSessionThreadRunning, int Timeout)
@@ -162,6 +169,8 @@ void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * C
 
     string hostip = CallingSessionParameters->IP;
     string key = CallingSessionParameters->SessionKey;
+    string device = CallingSessionParameters->DeviceId;
+    string logmsg;
     string ck = "CLIENTKEYx0x0x0";
     string handshake; 
     time_t origtim = time(0);
@@ -207,9 +216,11 @@ void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * C
             ws.handshake(host, "/");
             ws.write(net::buffer(std::string(handshake)));
             ws.read(buffer); // read the first response
-            string tts = "Response received: ";
-            tts += beast::buffers_to_string(buffer.data());
-            Log(tts);
+
+            logmsg = device;
+            logmsg += ", response received: ";
+            logmsg += beast::buffers_to_string(buffer.data());
+            Log(logmsg);
 
             // parse for pairing key if needed
             if (key == "")
@@ -223,27 +234,29 @@ void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * C
  
                     if (w != string::npos)
                     {
+                        key = t.substr(u + 13, w - u - 13);
+
+                        //thread safe section
                         while (!mMutex.try_lock())
                             Sleep(MUTEX_WAIT);
-
-                        key = t.substr(u + 13, w - u - 13);
                         CallingSessionParameters->SessionKey = key;
-                        SetSessionKey(key, CallingSessionParameters->DeviceId);
+                        SetSessionKey(key, device);
                         mMutex.unlock();
                     }
                 }
             }
             ws.close(websocket::close_code::normal);
-            string sd = "DisplayPowerOnThread established contact with ";
-            sd += CallingSessionParameters->DeviceId; sd += ". Display is powered ON.";
-            Log(sd);
+            logmsg = device; 
+            logmsg += ", established contact: Display is powered ON.  ";
+            Log(logmsg);
             break;
         }
         catch (std::exception const& e)
         {
-            string s = "WARNING! DisplayPowerOnThread: ";
-            s += e.what();
-            Log(s);
+            logmsg = device;
+            logmsg += ", WARNING! DisplayPowerOnThread(): ";
+            logmsg += e.what();
+            Log(logmsg);
         }
         time_t endtim = time(0);
         time_t execution_time = endtim - looptim;
@@ -265,7 +278,12 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
         return;
     if (CallingSessionParameters->MAC.size() < 1)
         return; 
+
+    vector<string> MACs = CallingSessionParameters->MAC;
+    string device = CallingSessionParameters->DeviceId;
     SOCKET WOLsocket = INVALID_SOCKET;
+    string logmsg;
+
     try
     {
         //WINSOCKET
@@ -273,8 +291,6 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
         LANDestination.sin_family = AF_INET;
         LANDestination.sin_port = htons(9);
         LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
-        vector<string> MACs;
-        MACs = CallingSessionParameters->MAC;
         time_t origtim = time(0);
 
         WOLsocket= socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -283,7 +299,8 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
         {
             int dw = WSAGetLastError();
             stringstream ss;
-            ss << "WOLthread ERROR! WS socket() error: ";
+            ss << device;
+            ss << ", ERROR! WOLthread WS socket(): ";
             ss << dw;
             Log(ss.str());
             return;
@@ -296,7 +313,8 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
                 closesocket(WOLsocket);
                 int dw = WSAGetLastError();
                 stringstream ss;
-                ss << "WOLthread ERROR! WS setsockopt() error: ";
+                ss << device;
+                ss << ", ERROR! WOLthread WS setsockopt(): ";
                 ss << dw;
                 Log(ss.str());
                 return;
@@ -304,12 +322,13 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
         }
         for (auto& MAC : MACs)
         {
-            string LogMessage = "WOL repeating broadcast started to MAC: ";
-            LogMessage += MAC;
-            Log(LogMessage);
+            logmsg = device;
+            logmsg += ", repeating WOL broadcast started to MAC: ";
+            logmsg += MAC;
+            Log(logmsg);
 
-            //remove ':', ' ' and'-' from MAC
-            char CharsToRemove[] = ":- ";
+            //remove filling from MAC
+            char CharsToRemove[] = ".:- ";
             for (int i = 0; i < strlen(CharsToRemove); ++i)
                 MAC.erase(remove(MAC.begin(), MAC.end(), CharsToRemove[i]), MAC.end());
         }
@@ -343,17 +362,26 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
                         {
                             int dw = WSAGetLastError();
                             stringstream ss;
-                            ss << "WOLthread WARNING! WS sendto() error: ";
+                            ss << device;
+                            ss << ", WARNING! WOLthread WS sendto(): ";
                             ss << dw;
                             Log(ss.str());
                         }
                     }
-                    else
-                        Log("WOLthread WARNING! Malformed MAC");
+                    else 
+                    {
+                        logmsg = device;
+                        logmsg += ", WARNING! WOLthread malformed MAC";
+                        Log(logmsg);
+                    }
                 }
             }
             else
-                Log("WOLthread WARNING! Illegal socket reference");
+            {
+                logmsg = device;
+                logmsg += ", WARNING! WOLthread illegal socket reference";
+                Log(logmsg);
+            }
            
             time_t endtim = time(0);
             time_t execution_time = endtim - looptim;
@@ -378,12 +406,15 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
     }
     catch (std::exception const& e)
     {
-        string s = "WOLthread ERROR: ";
-        s += e.what();
-        Log(s);
+        logmsg = device;
+        logmsg += ", ERROR! WOLthread: ";
+        logmsg += e.what();
+        Log(logmsg);
 
     }
-    Log("WOL repeating broadcast ended");
+    logmsg = device;
+    logmsg += ", repeating WOL broadcast ended";
+    Log(logmsg);
 
     if (WOLsocket != INVALID_SOCKET)
         closesocket(WOLsocket);
@@ -397,14 +428,17 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
         return;
     if (CallingSessionParameters->SessionKey != "") //assume we have paired here. Doe not make sense to try pairing when display shall turn off.
     {
+        string host = CallingSessionParameters->IP;
+        string key = CallingSessionParameters->SessionKey;
+        string device = CallingSessionParameters->DeviceId;
+        string logmsg;
+        string poweroffmess = "{ \"id\":\"0\",\"type\" : \"request\",\"uri\" : \"ssap://system/turnOff\"}";
+        string handshake = narrow(HANDSHAKE_PAIRED);
+        string ck = "CLIENTKEYx0x0x0";
+
         try
         {
-            string host = CallingSessionParameters->IP;
-            string key = CallingSessionParameters->SessionKey;
-            string poweroffmess = "{ \"id\":\"0\",\"type\" : \"request\",\"uri\" : \"ssap://system/turnOff\"}";
-            string handshake = narrow(HANDSHAKE_PAIRED);
-            string ck = "CLIENTKEYx0x0x0";
-            net::io_context ioc;
+             net::io_context ioc;
 
             size_t ckf = handshake.find(ck);
             handshake.replace(ckf, ck.length(), key);
@@ -431,17 +465,18 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
             ws.write(net::buffer(std::string(poweroffmess)));
             ws.read(buffer); // read the response
             ws.close(websocket::close_code::normal);
-           
-            string sd = "DisplayPowerOffThread established contact with ";
-            sd += CallingSessionParameters->DeviceId; sd += ". Display is powered OFF.";
-            Log(sd);
+   
+            logmsg = device;
+            logmsg += ", established contact: Display is powered OFF.  ";
+            Log(logmsg);
 
         }
         catch (std::exception const& e)
         {
-            string s = "WARNING: DisplayPowerOffThread failed: ";
-            s += e.what();
-            Log(s);
+            logmsg = device;
+            logmsg += ", WARNING! DisplayPowerOffThread(): ";
+            logmsg += e.what();
+            Log(logmsg);
         }
     }
     //thread safe section

@@ -81,22 +81,28 @@ COMMAND LINE ARGUMENTS
     -poweroff       - power off a device
     -autoenable     - temporarily enable the automatic management of a device, i.e. to respond to power events. This
                       is effective until next restart of the service. (I personally use this for my home automation system).
-    -autoenable     - temporarily disable the automatic management of a device, i.e. to respond to power events. This
+    -autodisable    - temporarily disable the automatic management of a device, i.e. to respond to power events. This
                       is effective until next restart of the service. 
 
     [DeviceX|Name]  - device identifier. Either use Device1, Device2, ..., DeviceX or the friendly device name as found 
                       in the User Interface, for example OLED48CX.
 
-    Example usage: LGTV Companion.exe -poweron Device1 Device2 OLED48CX -autodisable Device4 
+    Example usage: LGTV Companion.exe -poweron Device1 Device2 "LG OLED48CX" -autodisable Device4 
 
-    This command will power on device 1, device 2 and the device named OLED48CX, and additionally device4 is set to 
+    This command will power on device 1, device 2 and the device named LG OLED48CX, and additionally device4 is set to 
     temporarily not respond to automatic power events (on/off).
 
 ADDITIONAL NOTES
     N/A
 
 CHANGELOG
-    v 1.0.0            Initial release
+    v 1.0.0             - Initial release
+    
+    v 1.1.0             - Update logic for managing power events.
+                        - Removal of redundant options
+                        - More useful logging and error messages
+                        - fixed proper command line interpretation of arguments enclosed in "quotes"
+                        - Minor bug fixes
 
 LICENSE
     Copyright (c) 2021 Jörgen Persson
@@ -253,15 +259,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 
             CheckDlgButton(hWnd, IDC_CHECK_ENABLE, Devices[0].Enabled ? BST_CHECKED : BST_UNCHECKED);
-            CheckDlgButton(hWnd, IDC_CHECK_POWERAUTO, Devices[0].PowerAuto ? BST_CHECKED : BST_UNCHECKED);
-            CheckDlgButton(hWnd, IDC_CHECK_AWAYAUTO, Devices[0].AwayAuto ? BST_CHECKED : BST_UNCHECKED);
             EnableWindow(GetDlgItem(hWnd, IDC_COMBO), true);
             EnableWindow(GetDlgItem(hWnd, IDC_CHECK_ENABLE), true);
-            if (Devices[0].Enabled)
-            {
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_POWERAUTO), true);
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_AWAYAUTO), true);
-            }
+ 
             SetDlgItemText(hWnd, IDC_SPLIT, L"C&onfigure");
 
         }
@@ -305,6 +305,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
         bool RemoveCurrentDevices = (wParam == 0) ? true : false;
         bool ChangesWereMade = false;
+        int DevicesAdded = 0;
  
         HDEVINFO DeviceInfoSet = SetupDiGetClassDevs(NULL, NULL, NULL, DIGCF_ALLCLASSES);
         SP_DEVINFO_DATA DeviceInfoData;
@@ -394,6 +395,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                                 temp.MAC.push_back(MAC);
                                 Devices.push_back(temp);
                                 ChangesWereMade = true;
+                                DevicesAdded++;
                             }
                         }
                     }
@@ -407,6 +409,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         if (DeviceInfoSet) 
             SetupDiDestroyDeviceInfoList(DeviceInfoSet);
+ 
+        wstringstream mess;
+        mess << DevicesAdded;
+        mess << L" new devices found.";
+        MessageBox(hWnd, mess.str().c_str(), L"Scan results", MB_OK | MB_ICONINFORMATION);
+
     }break;  
     case APP_MESSAGE_REMOVE:
     {
@@ -415,11 +423,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             Devices.clear();
             CheckDlgButton(hWnd, IDC_CHECK_ENABLE, BST_UNCHECKED);
-            CheckDlgButton(hWnd, IDC_CHECK_POWERAUTO, BST_UNCHECKED);
-            CheckDlgButton(hWnd, IDC_CHECK_AWAYAUTO, BST_UNCHECKED);
             EnableWindow(GetDlgItem(hWnd, IDC_CHECK_ENABLE), false);
-            EnableWindow(GetDlgItem(hWnd, IDC_CHECK_POWERAUTO), false);
-            EnableWindow(GetDlgItem(hWnd, IDC_CHECK_AWAYAUTO), false);
             SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
             SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)-1, (LPARAM)0);
             SetDlgItemText(hWnd, IDC_SPLIT, L"&Scan");
@@ -437,22 +441,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 int j = sel < ind ? sel : sel - 1;
                 SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)j, (LPARAM)0);
                 CheckDlgButton(hWnd, IDC_CHECK_ENABLE, Devices[j].Enabled ? BST_CHECKED : BST_UNCHECKED);
-                CheckDlgButton(hWnd, IDC_CHECK_POWERAUTO, Devices[j].PowerAuto ? BST_CHECKED : BST_UNCHECKED);
-                CheckDlgButton(hWnd, IDC_CHECK_AWAYAUTO, Devices[j].AwayAuto ? BST_CHECKED : BST_UNCHECKED);
                 EnableWindow(GetDlgItem(hWnd, IDC_CHECK_ENABLE), true);
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_POWERAUTO), Devices[j].Enabled);
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_AWAYAUTO), Devices[j].Enabled);
-                SetDlgItemText(hWnd, IDC_SPLIT, L"C&onfigure");
+                 SetDlgItemText(hWnd, IDC_SPLIT, L"C&onfigure");
             }
             else
             {
                 CheckDlgButton(hWnd, IDC_CHECK_ENABLE, BST_UNCHECKED);
-                CheckDlgButton(hWnd, IDC_CHECK_POWERAUTO, BST_UNCHECKED);
-                CheckDlgButton(hWnd, IDC_CHECK_AWAYAUTO, BST_UNCHECKED);
                 EnableWindow(GetDlgItem(hWnd, IDC_CHECK_ENABLE), false);
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_POWERAUTO), false);
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_AWAYAUTO), false);
-                SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)-1, (LPARAM)0);
+                 SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)-1, (LPARAM)0);
                 SetDlgItemText(hWnd, IDC_SPLIT, L"&Scan");
             }
         }
@@ -525,18 +521,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             switch (LOWORD(wParam))
             {
             case IDC_CHECK_ENABLE:
-            case IDC_CHECK_POWERAUTO:
-            case IDC_CHECK_AWAYAUTO:
-            {
+             {
                 int sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
                 if (sel == CB_ERR)
                     break;
                 Devices[sel].Enabled = IsDlgButtonChecked(hWnd, IDC_CHECK_ENABLE) == BST_CHECKED ? true : false;
-                Devices[sel].PowerAuto = IsDlgButtonChecked(hWnd, IDC_CHECK_POWERAUTO) == BST_CHECKED ? true : false;
-                Devices[sel].AwayAuto = IsDlgButtonChecked(hWnd, IDC_CHECK_AWAYAUTO) == BST_CHECKED ? true : false;
- 
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_POWERAUTO), Devices[sel].Enabled);
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_AWAYAUTO), Devices[sel].Enabled);
                 EnableWindow(GetDlgItem(hWnd, IDOK), true);
  
             }break;
@@ -573,11 +562,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     break;
 
                 CheckDlgButton(hWnd, IDC_CHECK_ENABLE, Devices[sel].Enabled ? BST_CHECKED : BST_UNCHECKED);
-                CheckDlgButton(hWnd, IDC_CHECK_POWERAUTO, Devices[sel].PowerAuto ? BST_CHECKED : BST_UNCHECKED);
-                CheckDlgButton(hWnd, IDC_CHECK_AWAYAUTO, Devices[sel].AwayAuto ? BST_CHECKED : BST_UNCHECKED);
                 EnableWindow(GetDlgItem(hWnd, IDC_CHECK_ENABLE), true);
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_POWERAUTO), Devices[sel].Enabled);
-                EnableWindow(GetDlgItem(hWnd, IDC_CHECK_AWAYAUTO), Devices[sel].Enabled);
             }
         }break;
   
@@ -644,24 +629,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }break;
                 case ID_M_SCAN:
                 {
+                    
                     if (Devices.size() > 0)
                     {
-                        int ms;
-                        ms = MessageBoxW(hWnd, L"Scanning will discover and add network attached LG devices.\n\nDo you want to replace the current devices with any discovered devices?\n\nYES = clear current devices before adding, NO = add to current list of devices.", L"Remove device", MB_YESNOCANCEL | MB_ICONEXCLAMATION);
-                        switch (ms)
-                        {
-                        case IDYES:
-                            SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)0, (LPARAM)lParam);
+                        int ms = MessageBoxW(hWnd, L"Scanning will discover and add network attached LG devices.\n\nDo you want to replace the current devices with any discovered devices?\n\nYES = clear current devices before adding, \n\nNO = add to current list of devices.", L"Scanning", MB_YESNOCANCEL | MB_ICONEXCLAMATION);
+                        
+                        if (ms == IDCANCEL)
                             break;
-                        case IDNO:
-                            SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)1, (LPARAM)lParam);
-                            break;
-                        default:break;
-                        }
+
+                        SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)ms == IDYES ? 0 : 1, (LPARAM)lParam);
                     }
                     else
                         SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)0, (LPARAM)lParam);
-                }break;
+                 }break;
                 case ID_M_TEST:
                 {
                     if (Devices.size() > 0)
@@ -669,7 +649,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                         if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
                             if (MessageBox(hWnd, L"Please apply unsaved changes before attmpting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
                                 break;
-                        int ms = MessageBoxW(hWnd, L"You are about to test the ability to control this device?\n\nPlease click YES to power off the device. Then wait 5 seconds and press ENTER on your keyboard to power on the device again.", L"Test device", MB_YESNO | MB_ICONQUESTION);
+                        int ms = MessageBoxW(hWnd, L"You are about to test the ability to control this device?\n\nPlease click YES to power off the device. Then wait about 5 seconds, or until you hear an iinternal relay of the TV clicking, and press ENTER on your keyboard to power on the device again.", L"Test device", MB_YESNO | MB_ICONQUESTION);
                         switch (ms)
                         {
                         case IDYES:
@@ -714,7 +694,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
 
         HDC hdcStatic = (HDC)wParam;
-        if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE) || (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_AWAYAUTO) || (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_POWERAUTO) )
+        if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE) )
         {
             SetBkMode(hdcStatic, TRANSPARENT);
         }
@@ -868,11 +848,7 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             if (index != CB_ERR)
                             {
                                 SendMessage(GetDlgItem(hParentWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)index, (LPARAM)0);
-                                CheckDlgButton(hParentWnd, IDC_CHECK_AWAYAUTO, BST_CHECKED);
-                                CheckDlgButton(hParentWnd, IDC_CHECK_POWERAUTO, BST_CHECKED);
                                 CheckDlgButton(hParentWnd, IDC_CHECK_ENABLE, BST_CHECKED);
-                                EnableWindow(GetDlgItem(hParentWnd, IDC_CHECK_AWAYAUTO), true);
-                                EnableWindow(GetDlgItem(hParentWnd, IDC_CHECK_POWERAUTO), true);
                                 EnableWindow(GetDlgItem(hParentWnd, IDC_CHECK_ENABLE), true);
 
                                 SetDlgItemText(hParentWnd, IDC_SPLIT, L"C&onfigure");
@@ -934,11 +910,12 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         default:break;
         }
     }break;
+    
     case WM_CTLCOLORSTATIC:
     {
 
         HDC hdcStatic = (HDC)wParam;
-        if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE) || (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_AWAYAUTO) || (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_POWERAUTO))
+        if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE))
         {
             SetBkMode(hdcStatic, TRANSPARENT);
         }
@@ -1190,7 +1167,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     {
 
         HDC hdcStatic = (HDC)wParam;
-        if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE) || (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_AWAYAUTO) || (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_POWERAUTO))
+        if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE) )
         {
             SetBkMode(hdcStatic, TRANSPARENT);
         }
@@ -1400,13 +1377,7 @@ void ReadDeviceConfig()
         if (item.value()["IP"].is_string())
             params.IP = item.value()["IP"].get<string>();
 
-        if (item.value()["PowerAuto"].is_boolean())
-            params.PowerAuto = item.value()["PowerAuto"].get<bool>();
-
-        if (item.value()["AwayAuto"].is_boolean())
-            params.AwayAuto = item.value()["AwayAuto"].get<bool>();
-
-        if (item.value()["Enabled"].is_boolean())
+         if (item.value()["Enabled"].is_boolean())
             params.Enabled = item.value()["Enabled"].get<bool>();
 
         if (item.value()["SessionKey"].is_string())
@@ -1554,8 +1525,6 @@ void WriteConfigFile(void)
             prefs[dev.str()]["SessionKey"] = "";
 
 
-        prefs[dev.str()]["PowerAuto"] = (bool)item.PowerAuto;
-        prefs[dev.str()]["AwayAuto"] = (bool)item.AwayAuto;
         prefs[dev.str()]["Enabled"] = (bool)item.Enabled;
 
         for (auto& m : item.MAC)

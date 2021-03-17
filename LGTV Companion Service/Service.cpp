@@ -61,7 +61,7 @@ VOID SvcInstall()
 
     if (!GetModuleFileNameW(NULL, szPath, MAX_PATH))
     {
-        printf("Cannot install service (%d)\n", GetLastError());
+        printf("Failed to install service (%d).\n", GetLastError());
         return;
     }
     
@@ -72,7 +72,7 @@ VOID SvcInstall()
 
     if (!schSCManager)
     {
-        printf("Please run again as ADMIN. OpenSCManager failed (%d)\n", GetLastError());
+        printf("Failed to install service. Please run again as ADMIN. OpenSCManager failed (%d).\n", GetLastError());
         return;
     }
 
@@ -95,7 +95,7 @@ VOID SvcInstall()
 
     if (schService == NULL)
     {
-        printf("Cannot install service. CreateService failed (%d)\n", GetLastError());
+        printf("Failed to install service. CreateService failed (%d).\n", GetLastError());
         CloseServiceHandle(schSCManager);
         return;
     }
@@ -105,12 +105,12 @@ VOID SvcInstall()
 
         if (!ConvertStringSecurityDescriptorToSecurityDescriptor(sddl, SDDL_REVISION_1, &sd, NULL))
         {
-            printf("Failed to set security descriptor (%d)\n", GetLastError());
+            printf("Failed to set security descriptor (%d).\n", GetLastError());
         }
 
         if (!SetServiceObjectSecurity(schService, DACL_SECURITY_INFORMATION, sd))
         {
-            printf("Failed to set security descriptor(%d)\n", GetLastError());
+            printf("Failed to set security descriptor(%d).\n", GetLastError());
         }
 
         if (!StartService(
@@ -118,11 +118,11 @@ VOID SvcInstall()
             0,           // number of arguments 
             NULL))       // no arguments 
         {
-            printf("Installation of service was successful but the service could not be started (%d)\n", GetLastError());
+            printf("Installation of service was successful but the service failed to start (%d).\n", GetLastError());
             
         }
         else
-            printf("Service was successfully installed and started.\n");
+            printf("Service successfully installed and started.\n");
     }
 
     CloseServiceHandle(schService);
@@ -147,7 +147,7 @@ VOID SvcUninstall()
 
     if (NULL == schSCManager)
     {
-        printf("Please run again as ADMIN. OpenSCManager failed (%d)\n", GetLastError());
+        printf("Failed to uninstall service. Please run again as ADMIN. OpenSCManager failed (%d).\n", GetLastError());
         return;
     }
 
@@ -160,7 +160,7 @@ VOID SvcUninstall()
 
     if (!schService)
     {
-        printf("OpenService failed (%d)\n", GetLastError());
+        printf("Failed to uninstall service. OpenService failed (%d).\n", GetLastError());
         CloseServiceHandle(schSCManager);
         return;
     }
@@ -172,7 +172,7 @@ VOID SvcUninstall()
         sizeof(SERVICE_STATUS_PROCESS),
         &dwBytesNeeded))
     {
-        printf("QueryServiceStatusEx failed (%d)\n", GetLastError());
+        printf("QueryServiceStatusEx failed (%d).\n", GetLastError());
         CloseServiceHandle(schService);
         CloseServiceHandle(schSCManager);
         return;
@@ -203,7 +203,7 @@ VOID SvcUninstall()
 
                if ((DWORD)GetTickCount64() - dwStartTime > dwTimeout)
                {
-                   printf("Time out. Could not stop service.\n");
+                   printf("Failed to uninstall service. Timed out when stoppping service.\n");
                    CloseServiceHandle(schService);
                    CloseServiceHandle(schSCManager);
                    return;
@@ -212,7 +212,7 @@ VOID SvcUninstall()
        }
        else
        {
-           printf("Could not query service status.\n");
+           printf("Failed to uninstall service. Unable to query service status.\n");
            CloseServiceHandle(schService);
            CloseServiceHandle(schSCManager);
            return;
@@ -221,7 +221,7 @@ VOID SvcUninstall()
   
     if (!DeleteService(schService))
     {
-        printf("Cannot uninstall service. DeleteService failed (%d)\n", GetLastError());
+        printf("Failed to uninstall service. DeleteService failed (%d)\n", GetLastError());
     }
     else printf("Service uninstalled successfully\n");
 
@@ -268,7 +268,7 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
     }
     catch(std::exception const& e){
     
-        wstring s = L"Error when reading configuration. Service is terminating. Error: ";
+        wstring s = L"ERROR! Failed to read the configuration file. LGTV service is terminating. Error: ";
         s += widen(e.what());
         SvcReportEvent(EVENTLOG_ERROR_TYPE, s);
         ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
@@ -296,7 +296,7 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
     //register to receive power notifications
     gPs1 = RegisterPowerSettingNotification(gSvcStatusHandle, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_SERVICE_HANDLE);
 
-     SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has started");
+    SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has started.");
 
     // Wait until service stops
     WaitForSingleObject(ghSvcStopEvent, INFINITE);
@@ -308,8 +308,8 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
     WSACleanup();
 
     EvtClose(hSub);
-    Log("Service has ended.\n");
-    SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has ended");
+    Log("The service terminated.\n");
+    SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has ended.");
     ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
     return;
  
@@ -356,16 +356,37 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
         switch (dwEventType)
         {
         case PBT_APMRESUMEAUTOMATIC: 
-            Log("System was resumed from low power state (Automatic).");
+            EventCallbackStatus = NULL;;
+            Log("** System resumed from low power state (Automatic).");
             DispatchSystemPowerEvent(SYSTEM_EVENT_RESUMEAUTO);
             break;
         case PBT_APMRESUMESUSPEND: 
-            Log("System was resumed from low power state.");
+            EventCallbackStatus = NULL;;
+            Log("** System resumed from low power state.");
             DispatchSystemPowerEvent(SYSTEM_EVENT_RESUME);
             break;
         case PBT_APMSUSPEND: 
-            Log(EventCallbackStatus == SYSTEM_EVENT_REBOOT ? "System is restarting" : "System is entering low power state.");
-            DispatchSystemPowerEvent(EventCallbackStatus == SYSTEM_EVENT_REBOOT ? SYSTEM_EVENT_REBOOT : SYSTEM_EVENT_SUSPEND);
+            
+            if (EventCallbackStatus == SYSTEM_EVENT_REBOOT)
+            {
+                Log("** System is restarting.");
+                DispatchSystemPowerEvent(SYSTEM_EVENT_REBOOT);
+            }
+            else if (EventCallbackStatus == SYSTEM_EVENT_SHUTDOWN)
+            {
+                Log("** System is shutting down (low power mode).");
+                DispatchSystemPowerEvent(SYSTEM_EVENT_SUSPEND);
+            }
+            else if (EventCallbackStatus == SYSTEM_EVENT_UNSURE)
+            {
+                Log("WARNING! Unable to determine if system is shutting down or restarting. Please check 'additional settings' in the UI.");
+                DispatchSystemPowerEvent(SYSTEM_EVENT_UNSURE);
+            }
+            else
+            {
+                Log("** System is suspending to a low power state.");
+                DispatchSystemPowerEvent(SYSTEM_EVENT_SUSPEND);
+            }
             break;
         case PBT_POWERSETTINGCHANGE:           
             if (lpEventData)
@@ -375,7 +396,7 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
                 PBS = (POWERBROADCAST_SETTING*)lpEventData;
                 if (PBS->PowerSetting == GUID_CONSOLE_DISPLAY_STATE)
                 {
-                    text = (DWORD)PBS->Data[0] == 0 ? "Power event: display OFF." : "Power event: display ON.";
+                    text = (DWORD)PBS->Data[0] == 0 ? "** System requests displays OFF." : "** System requests displays ON.";
                     Log(text);
                     DispatchSystemPowerEvent(PBS->Data[0] == 0 ? SYSTEM_EVENT_DISPLAYOFF : SYSTEM_EVENT_DISPLAYON);
                 }
@@ -400,23 +421,27 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
         }
         break;
    case SERVICE_CONTROL_SHUTDOWN:
-//        Log("SERVICE_CONTROL_SHUTDOWN");
-    
         if (EventCallbackStatus == SYSTEM_EVENT_REBOOT)
         {
-            Log("System is restarting.");
+            Log("** System is restarting.");
             DispatchSystemPowerEvent(SYSTEM_EVENT_REBOOT);
         }
         else if (EventCallbackStatus == SYSTEM_EVENT_SHUTDOWN)
         {
-            Log("System is shutting down");
+            Log("** System is shutting down.");
             DispatchSystemPowerEvent(SYSTEM_EVENT_SHUTDOWN);
         }
+        else if (EventCallbackStatus == SYSTEM_EVENT_UNSURE)
+        {
+            Log("WARNING! Unable to determine if system is shutting down or restarting. Please check 'additional settings in the UI.");
+            DispatchSystemPowerEvent(SYSTEM_EVENT_UNSURE);
+        }    
         else
         {
-            Log("WARNING. Unable to determine if system is shutting down or restarting.");
+            //This does happen sometimes, probably for timing reasons when shutting down the system.  
+            Log("WARNING! The application did not receive an Event Subscription Callback prior to system shutting down. Unable to determine if system is shutting down or restarting.");
             DispatchSystemPowerEvent(SYSTEM_EVENT_UNSURE);
-        }       
+        }
        break;
     case SERVICE_CONTROL_INTERROGATE: 
         Log("SERVICE_CONTROL_INTERROGATE");
@@ -448,7 +473,7 @@ VOID SvcReportEvent(WORD Type, wstring string)
             break;
         case EVENTLOG_SUCCESS:
             s = string;
-            s += L" succeeded";
+            s += L" succeeded.";
             break;
         case EVENTLOG_INFORMATION_TYPE:
         default:
@@ -515,9 +540,8 @@ bool SetSessionKey(string Key, string deviceid)
   //          return true;
         } 
     }
-    string s = "Pairing key for ";
-    s += deviceid;
-    s += " received: ";
+    string s = deviceid;
+    s += ", pairing key received: ";
     s += Key;
     Log(s);
     return true;
@@ -528,7 +552,7 @@ bool ReadConfigFile()
     WCHAR szPath[MAX_PATH];
     if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, NULL, 0, szPath)))
     {
-        string st = "LGTV Companion Service has started (v ";
+        string st = "LGTV Companion Service started (v ";
         st += narrow(APPVERSION);
         st += ") ---------------------------";
         string ty = "Data path: ";
@@ -580,7 +604,7 @@ bool ReadConfigFile()
                 Prefs.Logging = j.get<bool>();
 
             Log(st);
-            Log("The configuration file was successfully read");
+            Log("Configuration file successfully read");
             Log(ty);
             return true;
         }
@@ -616,14 +640,6 @@ void InitDeviceSessions()
         if(item.value()["IP"].is_string())
             params.IP = item.value()["IP"].get<string>();
         s += params.IP; s += " initiated (";
-
-        if(item.value()["PowerAuto"].is_boolean())
-            params.PowerAuto = item.value()["PowerAuto"].get<bool>();
-        s += "PowerAuto:"; s += params.PowerAuto ? "yes" : "no"; s += ", ";
-        
-        if(item.value()["AwayAuto"].is_boolean())
-            params.AwayAuto = item.value()["AwayAuto"].get<bool>();
-        s += "AwayAuto:"; s += params.AwayAuto ? "yes" : "no"; s += ", ";
  
         if (item.value()["Enabled"].is_boolean())
             params.Enabled = item.value()["Enabled"].get<bool>();
@@ -659,7 +675,7 @@ bool DispatchSystemPowerEvent(DWORD dwMsg)
 {
     if (DeviceCtrlSessions.size() == 0)
     {
-        Log("WARNING.No Devices in DispatchSystemPowerEvent");
+        Log("WARNING! No Devices in DispatchSystemPowerEvent().");
         return false;
     }
     for (auto& value : DeviceCtrlSessions)
@@ -742,7 +758,7 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
         if (s.find(w) != wstring::npos)
         {
             EventCallbackStatus = SYSTEM_EVENT_SHUTDOWN;
-            Log("Subscription callback: PowerOff detected");
+            Log("Event subscription callback: system shut down detected.");
         }
 
     }
@@ -755,14 +771,14 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
         if (s.find(w) != wstring::npos)
         {
             EventCallbackStatus = SYSTEM_EVENT_REBOOT;
-            Log("Subscription callback: Restart detected");
+            Log("Event subscription callback: System restart detected.");
         }
 
     }
     if (EventCallbackStatus == NULL)
     {
         EventCallbackStatus = SYSTEM_EVENT_UNSURE;
-        Log("Subscription callback: Could not detect power off or restart");
+        Log("WARNING! Event subscription callback: Could not detect whether system is shutting down or restarting. Please check 'additional settings' in the UI.");
     }
    
     return 0;
@@ -815,7 +831,7 @@ void IPCThread(void)
     SetSecurityDescriptorDacl(psd, TRUE, (PACL)NULL, FALSE);
     SECURITY_ATTRIBUTES sa = { sizeof(sa), psd, FALSE };
 
-    Log("Creating named pipe");
+ //   Log("Creating named pipe");
     hPipe = CreateNamedPipe(PIPENAME,
         PIPE_ACCESS_DUPLEX,
         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,   // FILE_FLAG_FIRST_PIPE_INSTANCE is not needed but forces CreateNamedPipe(..) to fail if the pipe already exists...
@@ -828,12 +844,11 @@ void IPCThread(void)
     {
         if (ConnectNamedPipe(hPipe, NULL) != FALSE)   // wait for someone to connect to the pipe
         {
-//            Log("connectneamdpipe...");
             while (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &dwRead, NULL) != FALSE)
             {
                 /* add terminating zero */
                 buffer[dwRead] = '\0';
-                string s = "Commandline received via named pipe: ";
+                string s = "IPC command received: ";
                 string t = buffer;
                 s += t;
                 Log(s);
@@ -876,14 +891,14 @@ void IPCThread(void)
                                 {
                                     device.Run();
                                     string temp = s.DeviceId;
-                                    temp +=" management is temporarily enabled (effective until restart of service)";
+                                    temp +=", automatic management is temporarily enabled (effective until restart of service).";
                                     Log(temp);
                                 }
                                 else if (param1 == APP_CMDLINE_AUTODISABLE && (id == param || name == param))
                                 {
                                     device.Stop();
                                     string temp = s.DeviceId;
-                                    temp += " management is temporarily disabled (effective until restart of service)";
+                                    temp += ", automatic management is temporarily disabled (effective until restart of service).";
                                     Log(temp);
                                 }
 
@@ -898,20 +913,57 @@ void IPCThread(void)
     }
     return;
 }
-//   Split a string into a vector of strings
+//   Split a string into a vector of strings, modified to accept quotation marks
 vector<string> stringsplit(string str, string token) {
     vector<string>res;
-    while (str.size()) {
-        int index = (int)str.find(token);
-        if (index != string::npos) {
-            res.push_back(str.substr(0, index));
-            str = str.substr(index + token.size());
-            if (str.size() == 0)res.push_back(str);
+    while (str.size() > 0) 
+    {
+        size_t index;
+        if (str[0] == '\"') // quotation marks
+        {
+            index = str.find("\"", 1);
+            if (index != string::npos)
+            {
+                if (index - 2 > 0)
+                {
+                    string temp = str.substr(1, index - 1);
+                    res.push_back(temp);
+
+                }
+                size_t next = str.find_first_not_of(token, index + token.size());
+                if (next != string::npos)
+                    str = str.substr(next); //  str.substr(index + token.size());
+                else
+                    str = "";
+            }
+            else
+            {
+                res.push_back(str);
+                str = "";
+            }
         }
-        else {
-            res.push_back(str);
-            str = "";
+        else // not quotation marks
+        {
+            index = str.find(token);
+            if (index != string::npos) 
+            {
+                res.push_back(str.substr(0, index));
+
+                size_t next = str.find_first_not_of(token, index + token.size());
+                if (next != string::npos)
+                    str = str.substr(next); //  str.substr(index + token.size());
+                else
+                    str = "";
+
+
+            }
+            else {
+                res.push_back(str);
+                str = "";
+
+            }
         }
     }
+
     return res;
 }

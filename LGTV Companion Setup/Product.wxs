@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"><?define LGTV Companion Service_TargetDir=$(var.LGTV Companion Service.TargetDir)?><?define LGTV Companion UI_TargetDir=$(var.LGTV Companion UI.TargetDir)?>
-	<Product Id="C581D194-6107-4B8D-97CC-6F7AF032F4DC" Name="LGTV Companion" Language="1033" Version="1.0.0" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A">
+	<Product Id="CC249C3C-30B9-4303-AC84-9A374DC01765" Name="LGTV Companion" Language="1033" Version="1.2.0" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A">
 		<Package Id="*" InstallerVersion="301" Compressed="yes" InstallScope="perMachine" Platform='x64' Description="LGTV Companion installer" InstallPrivileges="elevated" AdminImage="yes"/>
     <Media Id="1" Cabinet="LGTVapp.cab" EmbedCab="yes" />
 
@@ -22,6 +22,7 @@
       </Directory>
       <Directory Id="ProgramMenuFolder" Name="Programs">
       </Directory>
+      <!--
       <Directory Id="CommonAppDataFolder" >
         <Directory Id="DataDir" Name="LGTV Companion">
           <Component Id="RemoveOrphanFiles" Guid="3B1B816B-471B-4D3B-B73B-B97802405A47" Win64="yes">
@@ -33,7 +34,7 @@
         </Directory>
  
       </Directory>
-      
+      -->
       
     </Directory>
 
@@ -45,7 +46,7 @@
       <Feature Id="MainProgram" Title="LGTV Companion Setup" Level="1" ConfigurableDirectory='INSTALLFOLDER'>
         <ComponentRef Id='LGTVService' />
         <ComponentRef Id='LGTVCompanionUI' />
-        <ComponentRef Id='RemoveOrphanFiles' />
+ <!--       <ComponentRef Id='RemoveOrphanFiles' /> -->
       </Feature>
 
     
