@@ -17,6 +17,7 @@ DWORD                   EventCallbackStatus = NULL;
 WSADATA                 WSAData;
 mutex                   g_mutex;
 wstring                 DataPath;
+vector<string>          HostIPs;
 
 wchar_t sddl[] = L"D:"
 L"(A;;CCLCSWRPWPDTLOCRRC;;;SY)"           // default permissions for local system
@@ -266,7 +267,8 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
         if (ReadConfigFile())
             InitDeviceSessions();
     }
-    catch(std::exception const& e){
+    catch(std::exception const& e)
+    {
     
         wstring s = L"ERROR! Failed to read the configuration file. LGTV service is terminating. Error: ";
         s += widen(e.what());
@@ -277,7 +279,26 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
         return;
 
     }
- 
+
+    //get local host IPs, if possible at this time
+    HostIPs = GetOwnIP();
+    if (HostIPs.size() > 0)
+    {
+        string logmsg;
+        if (HostIPs.size() == 1)
+            logmsg = "Host IP detected: ";
+        else
+            logmsg = "Host IPs detected: ";
+
+        for (int index = 0; index < HostIPs.size(); index++)
+        {
+            logmsg += HostIPs[index];
+            if (index != HostIPs.size() - 1)
+                logmsg += ", ";
+        }
+        Log(logmsg);
+    }
+
     //subscribe to EventID 1074, which contain information about whether user/system triggered restart or shutdown
     EVT_HANDLE hSub = NULL;
     hSub = EvtSubscribe(NULL,                           //local computer
@@ -680,6 +701,28 @@ bool DispatchSystemPowerEvent(DWORD dwMsg)
     }
     for (auto& value : DeviceCtrlSessions)
         value.SystemEvent(dwMsg);
+
+    //get local host IPs, if possible at this time
+    if (HostIPs.size() == 0)
+    {
+        HostIPs = GetOwnIP();
+        if (HostIPs.size() != 0)
+        {
+            string logmsg;
+            if(HostIPs.size() == 1)
+                logmsg = "Host IP detected: ";
+            else
+                logmsg = "Host IPs detected: ";
+
+            for (int index = 0; index < HostIPs.size(); index++)
+            {
+                logmsg += HostIPs[index];
+                if (index != HostIPs.size() - 1)
+                    logmsg += ", ";
+            }
+            Log(logmsg);
+        }
+    }
     return true;
 }
 //   Write to log file
@@ -966,4 +1009,26 @@ vector<string> stringsplit(string str, string token) {
     }
 
     return res;
+}
+// Get the local host ip, e.g 192.168.1.x
+vector <string> GetOwnIP(void)
+{
+    vector <string> IPs;
+    char host[256];
+    if (gethostname(host, sizeof(host)) != SOCKET_ERROR)
+    {
+        struct hostent* phent = gethostbyname(host);
+        if (phent != 0) 
+        {
+            for (int i = 0; phent->h_addr_list[i] != 0; ++i) 
+            {
+                string ip;
+                struct in_addr addr;
+                memcpy(&addr, phent->h_addr_list[i], sizeof(struct in_addr));
+                ip = inet_ntoa(addr);
+                IPs.push_back(ip);
+            }
+        }
+    }
+    return IPs;
 }
