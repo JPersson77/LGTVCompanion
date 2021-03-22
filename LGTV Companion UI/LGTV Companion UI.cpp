@@ -98,11 +98,15 @@ ADDITIONAL NOTES
 CHANGELOG
     v 1.0.0             - Initial release
     
-    v 1.1.0             - Update logic for managing power events.
+    v 1.2.0             - Update logic for managing power events.
                         - Removal of redundant options
                         - More useful logging and error messages
                         - fixed proper command line interpretation of arguments enclosed in "quotes"
                         - Minor bug fixes
+                        - Installer/upgrade bug fixed
+
+    v 1.3.0             - Output Host IP in log (for debugging purposes)
+                        - Display warning in UI when TV is configured on different subnet
 
 LICENSE
     Copyright (c) 2021 Jörgen Persson
@@ -148,6 +152,7 @@ HFONT                           hEditMediumfont;
 HMENU                           hPopupMeuMain;
 HICON                           hOptionsIcon;
 HANDLE                          hPipe = INVALID_HANDLE_VALUE;
+WSADATA                         WSAData;
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -213,6 +218,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 
     hOptionsIcon = (HICON)LoadImageW(hInstance, MAKEINTRESOURCE(IDI_ICON2), IMAGE_ICON, 25, 25, LR_DEFAULTCOLOR | LR_DEFAULTSIZE | LR_SHARED);
     
+    WSAStartup(MAKEWORD(2, 2), &WSAData);
+
     // create main window (dialog)
     hMainWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndProc);
     SetWindowText(hMainWnd, WindowTitle.c_str());
@@ -235,7 +242,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
     DeleteObject(hEditMediumfont);
     DestroyMenu(hPopupMeuMain);
     DestroyIcon(hOptionsIcon);
- 
+    WSACleanup();
+
     return (int) msg.wParam;
 }
 
@@ -476,6 +484,39 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     }break;
     case APP_MESSAGE_APPLY:
     {
+        if (Devices.size() > 0)
+        {
+            //check if devices are on other subnets and warn user
+            vector<string> HostIPs = GetOwnIP();
+            int found = 0;
+            if (HostIPs.size() > 0)
+            {
+                for (auto& Dev : Devices)
+                {
+                    for (auto& HostIP : HostIPs)
+                    {
+                        if (Dev.IP != "" && HostIP != "")
+                        {
+                            vector<string> DevIPcat = stringsplit(Dev.IP, ".");
+                            DevIPcat.pop_back();
+                            vector<string> HostIPcat = stringsplit(HostIP, ".");
+                            HostIPcat.pop_back();
+                            if (HostIPcat == DevIPcat)
+                                found++;
+                        }
+                    }
+                }
+                if (found < Devices.size())
+                {
+                    int mb = MessageBox(hWnd, L"One or several devices have been configured to a different subnet. Please note that this might cause problems with waking up the TV. Please check the documentation and the configuration.\n\n Do you want to continue anyway?", L"Warning", MB_YESNO | MB_ICONEXCLAMATION);
+                    if (mb == IDNO)
+                    {
+                        EnableWindow(hWnd, true);
+                        return 0;
+                    }
+                }
+            }
+        }
         WriteConfigFile();
 
         //restart the service
@@ -510,6 +551,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
         }
         EnableWindow(hWnd, true);
+        EnableWindow(GetDlgItem(hWnd, IDOK), false);
 
     }break;
     case WM_COMMAND:
@@ -532,7 +574,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case IDOK:
             {
                 EnableWindow(hWnd, false);
-                EnableWindow(GetDlgItem(hWnd, IDOK), false);
+                //EnableWindow(GetDlgItem(hWnd, IDOK), false);
                 PostMessage(hWnd, APP_MESSAGE_APPLY, (WPARAM) NULL, NULL);
 
             }break;
@@ -1545,4 +1587,27 @@ void WriteConfigFile(void)
         jsonPrefs = prefs;
     }
     
+}
+// Discover the local host ip, e.g 192.168.1.x
+vector <string> GetOwnIP(void)
+{
+    vector <string> IPs;
+    char host[256];
+    if (gethostname(host, sizeof(host)) != SOCKET_ERROR)
+    {
+        struct hostent* phent = gethostbyname(host);
+        if (phent != 0)
+        {
+            for (int i = 0; phent->h_addr_list[i] != 0; ++i)
+            {
+                string ip;
+                struct in_addr addr;
+                memcpy(&addr, phent->h_addr_list[i], sizeof(struct in_addr));
+                ip = inet_ntoa(addr);
+                if(ip != "127.0.0.1")
+                    IPs.push_back(ip);
+            }
+        }
+    }
+    return IPs;
 }

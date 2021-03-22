@@ -1,4 +1,6 @@
 #pragma once
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
 #include <SDKDDKVer.h>
 #include <boost/beast.hpp>
 #include <boost/asio.hpp>
@@ -29,7 +31,7 @@
 #pragma comment(lib, "Advapi32.lib")
 
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.2.0" 
+#define APPVERSION					    L"1.2.3" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
@@ -131,4 +133,4 @@ void DisplayPowerOffThread(SESSIONPARAMETERS*, bool *);
 void IPCThread(void);
 void WOLthread(SESSIONPARAMETERS*, bool*, int);
 std::vector<std::string> stringsplit(std::string str, std::string token);
-
+std::vector<std::string> GetOwnIP(void);
