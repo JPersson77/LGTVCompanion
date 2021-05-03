@@ -31,7 +31,7 @@
 #pragma comment(lib, "Advapi32.lib")
 
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.2.3" 
+#define APPVERSION					    L"1.3.0" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
@@ -45,7 +45,7 @@
 #define DEFAULT_RESTART                 {"restart"}
 #define DEFAULT_SHUTDOWN                {"shutdown","power off"}
 
-#define SERVICE_DEPENDENCIES		    NULL //L"Dhcp\0Dnscache\0\0" 
+#define SERVICE_DEPENDENCIES		    L"Dhcp\0Dnscache\0LanmanServer\0\0" 
 #define SERVICE_ACCOUNT				    NULL //L"NT AUTHORITY\\LocalService" 
 #define MUTEX_WAIT          		    10   // thread wait in ms
 #define THREAD_WAIT          		    5    // wait to spawn new thread (seconds)
@@ -103,9 +103,11 @@ public:
     void Stop();
     void SystemEvent(DWORD);
     SESSIONPARAMETERS GetParams();
+    bool IsBusy();
 private:
-    bool ThreadedOperationsRunning = false;    
-     void TurnOnDisplay(void);
+    bool ThreadedOpDisplayOn = false;    
+    bool ThreadedOpDisplayOff = false;
+    void TurnOnDisplay(void);
     void TurnOffDisplay(void);
     SESSIONPARAMETERS   Parameters;
 };

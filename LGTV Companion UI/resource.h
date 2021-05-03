@@ -25,9 +25,12 @@
 #define IDC_SPIN                        1009
 #define IDC_TIMEOUT                     1010
 #define IDC_LOGGING                     1011
+#define IDC_LOGGING2                    1012
+#define IDC_AUTOUPDATE                  1012
 #define IDC_SYSLINK                     1014
 #define IDC_LIST                        1018
 #define IDC_SYSLINK3                    1019
+#define IDC_NEWVERSION                  1021
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -54,7 +57,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        144
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1020
+#define _APS_NEXT_CONTROL_VALUE         1022
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

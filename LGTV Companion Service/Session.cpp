@@ -45,6 +45,16 @@ SESSIONPARAMETERS CSession::GetParams(void)
     mMutex.unlock();
     return copy;
 }
+bool CSession::IsBusy(void)
+{
+    bool ret;
+    //thread safe section
+    while (!mMutex.try_lock())
+        Sleep(MUTEX_WAIT);
+    ret = ThreadedOpDisplayOn||ThreadedOpDisplayOff;
+    mMutex.unlock();
+    return ret;
+}
 void CSession::TurnOnDisplay(void)
 {
     string s;
@@ -54,14 +64,15 @@ void CSession::TurnOnDisplay(void)
         Sleep(MUTEX_WAIT);
 
     
-    if (!ThreadedOperationsRunning) 
+    if (!ThreadedOpDisplayOn)
     {
         s = Parameters.DeviceId;
         s += ", spawning DisplayPowerOnThread().";
         
-        ThreadedOperationsRunning = true;
-//        TimeStamp = time(0);
-        thread thread_obj(DisplayPowerOnThread, &Parameters, &ThreadedOperationsRunning, Parameters.PowerOnTimeout);
+        ThreadedOpDisplayOn = true;
+ //       ThreadedOperationsTimeStamp = time(0);
+
+        thread thread_obj(DisplayPowerOnThread, &Parameters, &ThreadedOpDisplayOn, Parameters.PowerOnTimeout);
         thread_obj.detach();
     }
     else
@@ -81,14 +92,14 @@ void CSession::TurnOffDisplay(void)
     while (!mMutex.try_lock())
         Sleep(MUTEX_WAIT);
     
-    if (!ThreadedOperationsRunning && Parameters.SessionKey != "") 
+    if (!ThreadedOpDisplayOff && Parameters.SessionKey != "")
     {
         s = Parameters.DeviceId;
         s += ", spawning DisplayPowerOffThread().";
 
-        ThreadedOperationsRunning = true;
- //       TimeStamp = time(0);
-        thread thread_obj(DisplayPowerOffThread, &Parameters, &ThreadedOperationsRunning);
+        ThreadedOpDisplayOff = true;
+ //       ThreadedOperationsTimeStamp = time(0);
+        thread thread_obj(DisplayPowerOffThread, &Parameters, &ThreadedOpDisplayOff);
         thread_obj.detach();
     }
     else
@@ -424,8 +435,14 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
 //   THREAD: Spawned when the device should power OFF.
 void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning)
 {
+    time_t origtim = time(0);
+
+ //   Log("DEBUG INFO: DisplayPowerOffThread() running...");
     if (!CallingSessionParameters)
+    {
+//        Log("DEBUG INFO: DisplayPowerOffThread() :: CallingSessionParameters is zero");
         return;
+    }
     if (CallingSessionParameters->SessionKey != "") //assume we have paired here. Doe not make sense to try pairing when display shall turn off.
     {
         string host = CallingSessionParameters->IP;
@@ -438,16 +455,28 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 
         try
         {
-             net::io_context ioc;
+//            Log("DEBUG INFO: DisplayPowerOffThread() creating websocket...");
+
+            net::io_context ioc;
 
             size_t ckf = handshake.find(ck);
             handshake.replace(ckf, ck.length(), key);
             tcp::resolver resolver{ ioc };
             websocket::stream<tcp::socket> ws{ ioc };
+//            Log("DEBUG INFO: DisplayPowerOffThread() resolving...");
+
             auto const results = resolver.resolve(host, SERVICE_PORT);
+ //           Log("DEBUG INFO: DisplayPowerOffThread() connecting...");
+
             auto ep = net::connect(ws.next_layer(), results);
 
             host += ':' + std::to_string(ep.port());
+            if (time(0) - origtim > 10) // this thread should not run too long
+            {
+                Log("DisplayPowerOffThread() forced exit.");
+                goto threadoffend;
+            }
+//            Log("DEBUG INFO: DisplayPowerOffThread() setting options...");
 
             // Set a decorator to change the User-Agent of the handshake
             ws.set_option(websocket::stream_base::decorator(
@@ -457,13 +486,32 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
                         std::string(BOOST_BEAST_VERSION_STRING) +
                         " websocket-client-LGTVsvc");
                 }));
+            if (time(0) - origtim > 10) // this thread should not run too long
+            {
+                Log("DisplayPowerOffThread() forced exit.");
+                goto threadoffend;
+            }
+
+ //           Log("DEBUG INFO: DisplayPowerOffThread() handshake...");
+
             ws.handshake(host, "/");
- 
+  
+            if (time(0) - origtim > 10) // this thread should not run too long
+            {
+                Log("WARNING! DisplayPowerOffThread() - forced exit");
+                goto threadoffend;
+            }
+
+//            Log("DEBUG INFO: DisplayPowerOffThread() sending...");
+
             beast::flat_buffer buffer;
+
             ws.write(net::buffer(std::string(handshake)));
             ws.read(buffer); // read the response
             ws.write(net::buffer(std::string(poweroffmess)));
             ws.read(buffer); // read the response
+//            Log("DEBUG INFO: DisplayPowerOffThread() closing...");
+
             ws.close(websocket::close_code::normal);
    
             logmsg = device;
@@ -479,6 +527,11 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
             Log(logmsg);
         }
     }
+    else
+        Log("WARNING! DisplayPowerOffThread() - no pairing key");
+
+threadoffend:
+
     //thread safe section
     while (!mMutex.try_lock())
         Sleep(MUTEX_WAIT);

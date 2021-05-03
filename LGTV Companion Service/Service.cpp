@@ -15,7 +15,7 @@ PREFS                   Prefs;                              //App preferences
 vector <CSession>       DeviceCtrlSessions;                 //CSession objects manage network connections with Display
 DWORD                   EventCallbackStatus = NULL;
 WSADATA                 WSAData;
-mutex                   g_mutex;
+//mutex                   g_mutex;
 wstring                 DataPath;
 vector<string>          HostIPs;
 
@@ -313,6 +313,15 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
     thread thread_obj(IPCThread);
     thread_obj.detach();
 
+    if (SetProcessShutdownParameters(0x1E1, 0)) 
+        Log("Setting shutdown parameter level 0x1E1");
+//    else if (SetProcessShutdownParameters(0x3ff, 0)) 
+ //       Log("Setting shutdown parameter level 0x3FF");
+    else
+        Log("Could not set shutdown parameter level");
+
+    SetProcessShutdownParameters(0x3FF,0);
+
     ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
     //register to receive power notifications
     gPs1 = RegisterPowerSettingNotification(gSvcStatusHandle, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_SERVICE_HANDLE);
@@ -348,7 +357,7 @@ VOID ReportSvcStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHi
 
     if (dwCurrentState == SERVICE_START_PENDING)
         gSvcStatus.dwControlsAccepted = 0;
-    else gSvcStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN |  SERVICE_ACCEPT_POWEREVENT;// | SERVICE_ACCEPT_USERMODEREBOOT; //does not work
+    else gSvcStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_PRESHUTDOWN | SERVICE_ACCEPT_POWEREVENT; //SERVICE_ACCEPT_PRESHUTDOWN | // | SERVICE_ACCEPT_USERMODEREBOOT; //does not work
 
     if ((dwCurrentState == SERVICE_RUNNING) ||
         (dwCurrentState == SERVICE_STOPPED))
@@ -361,10 +370,26 @@ VOID ReportSvcStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHi
 //   Called by SCM whenever a control code is sent to the service using the ControlService function. dwCtrl - control code
 DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOID lpContext)
 {
+   bool bThreadNotFinished;
+
    switch (dwCtrl)
     {
-    case SERVICE_CONTROL_STOP: // works
-        ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 0);
+    case SERVICE_CONTROL_STOP:
+        ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000);
+
+        do
+        {
+            bThreadNotFinished = false;
+
+            for (auto& dev : DeviceCtrlSessions)
+            {
+                if (dev.IsBusy())
+                    bThreadNotFinished = true;
+            }
+            if (bThreadNotFinished)
+                Sleep(100);
+        } while (bThreadNotFinished);
+        
  
         // Signal the service to stop.
         SetEvent(ghSvcStopEvent);
@@ -441,7 +466,7 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
         default:break;
         }
         break;
-   case SERVICE_CONTROL_SHUTDOWN:
+   case SERVICE_CONTROL_PRESHUTDOWN:
         if (EventCallbackStatus == SYSTEM_EVENT_REBOOT)
         {
             Log("** System is restarting.");
@@ -463,7 +488,29 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
             Log("WARNING! The application did not receive an Event Subscription Callback prior to system shutting down. Unable to determine if system is shutting down or restarting.");
             DispatchSystemPowerEvent(SYSTEM_EVENT_UNSURE);
         }
+
+        //copy paste from the STOP event below
+        ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000);
+
+        do
+        {
+            bThreadNotFinished = false;
+
+            for (auto& dev : DeviceCtrlSessions)
+            {
+                if (dev.IsBusy())
+                    bThreadNotFinished = true;
+            }
+            if(bThreadNotFinished)
+                Sleep(100);
+        } while (bThreadNotFinished);
+
+
+        // Signal the service to stop.
+        SetEvent(ghSvcStopEvent);
+        ReportSvcStatus(gSvcStatus.dwCurrentState, NO_ERROR, 0);
        break;
+
     case SERVICE_CONTROL_INTERROGATE: 
         Log("SERVICE_CONTROL_INTERROGATE");
        break;

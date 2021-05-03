@@ -20,7 +20,7 @@ INSTALLATION AND USAGE
         a) Power ON all TVs
         b) Ensure that the TV can be woken via the network. For the CX line of displays this is 
           accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->
-          Mobile Connection Management->TV On with Mobile and enable ''Turn On via Wi-Fi'.
+          Mobile Connection Management->TV On with Mobile and enable 'Turn On via Wi-Fi'.
         c) Open the admin interface of your router, and set a static DHCP lease for your WebOS 
           devices, i.e. to ensure that the displays always have the same IP-address on your LAN.
 
@@ -105,8 +105,12 @@ CHANGELOG
                         - Minor bug fixes
                         - Installer/upgrade bug fixed
 
-    v 1.3.0             - Output Host IP in log (for debugging purposes)
-                        - Display warning in UI when TV is configured on different subnet
+    v 1.3.0             - Output Host IP in log (for debugging purposes) and additional logging
+                        - Display warning in UI when TV is configured on a subnet different from PC
+                        - Add service dependencies
+                        - Set service shutdown priority
+                        - Implemented option to automatically check for new application version (off by default)
+                        - Bug fixes and optimisations
 
 LICENSE
     Copyright (c) 2021 Jörgen Persson
@@ -226,6 +230,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
     ShowWindow(hMainWnd, SW_SHOW);
     UpdateWindow(hMainWnd);
 
+    // spawn thread to check for updated version of the app.
+    if (Prefs.AutoUpdate)
+    {
+        thread thread_obj(VersionCheckThread, hMainWnd);
+        thread_obj.detach();
+    }
+
     // message loop:
     while (GetMessage(&msg, NULL, 0, 0))
     {
@@ -276,6 +287,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         else
             SetDlgItemText(hWnd, IDC_SPLIT, L"&Scan");
         SendMessageW(GetDlgItem(hWnd, IDC_OPTIONS), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hOptionsIcon);
+    }break;
+    case APP_NEW_VERSION:
+    {
+        ShowWindow(GetDlgItem(hWnd, IDC_NEWVERSION), SW_SHOW);
     }break;
     case APP_MESSAGE_ADD:
     {
@@ -611,10 +626,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         default:break;
         }
     }break;
+
     case WM_NOTIFY:
     {
         switch (((NMHDR*)lParam)->code)
         {
+        case NM_CLICK:
+        {
+            //download new version
+            if (wParam == IDC_NEWVERSION)
+            {
+                 ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
+            }
+        }
         case BCN_DROPDOWN:
         {
             NMBCDROPDOWN* pDropDown = (NMBCDROPDOWN*)lParam;
@@ -1094,7 +1118,8 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             i++;
         }
         CheckDlgButton(hWnd, IDC_LOGGING, Prefs.Logging ? BST_CHECKED : BST_UNCHECKED);
-        EnableWindow(GetDlgItem(hWnd, IDOK), true); 
+        CheckDlgButton(hWnd, IDC_AUTOUPDATE, Prefs.AutoUpdate ? BST_CHECKED : BST_UNCHECKED);
+        EnableWindow(GetDlgItem(hWnd, IDOK), true);
     }break;
     case WM_COMMAND:
     {
@@ -1105,6 +1130,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             switch (LOWORD(wParam))
             {
             case IDC_LOGGING:
+            case IDC_AUTOUPDATE:
             {
                 EnableWindow(GetDlgItem(hWnd, IDOK), true);
             }break;
@@ -1117,6 +1143,14 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                 {
                     Prefs.PowerOnTimeout = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_TIMEOUT))).c_str());
                     Prefs.Logging = IsDlgButtonChecked(hWnd, IDC_LOGGING);
+                    
+                    bool TempAutoUpdate = IsDlgButtonChecked(hWnd, IDC_AUTOUPDATE);
+                    if (TempAutoUpdate && !Prefs.AutoUpdate)
+                    {
+                        thread thread_obj(VersionCheckThread, hMainWnd);
+                        thread_obj.detach();
+                    }
+                    Prefs.AutoUpdate = IsDlgButtonChecked(hWnd, IDC_AUTOUPDATE);
 
                     int count = ListView_GetItemCount(GetDlgItem(hWnd, IDC_LIST));
                     Prefs.EventLogRestartString.clear();
@@ -1313,7 +1347,11 @@ bool ReadConfigFile()
             j = jsonPrefs[JSON_PREFS_NODE][JSON_LOGGING];
             if (!j.empty() && j.is_boolean())
                 Prefs.Logging = j.get<bool>();
-   
+ 
+            j = jsonPrefs[JSON_PREFS_NODE][JSON_AUTOUPDATE];
+            if (!j.empty() && j.is_boolean())
+                Prefs.AutoUpdate = j.get<bool>();
+
             return true;
         }
     }
@@ -1539,6 +1577,7 @@ void WriteConfigFile(void)
     prefs[JSON_PREFS_NODE][JSON_VERSION] = (int)1;
     prefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT] = (int)Prefs.PowerOnTimeout;
     prefs[JSON_PREFS_NODE][JSON_LOGGING] = (bool)Prefs.Logging;
+    prefs[JSON_PREFS_NODE][JSON_AUTOUPDATE] = (bool)Prefs.AutoUpdate;
 
     for (auto& item : Prefs.EventLogRestartString)
         prefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS].push_back(item);
@@ -1610,4 +1649,61 @@ vector <string> GetOwnIP(void)
         }
     }
     return IPs;
+}
+
+void VersionCheckThread(HWND hWnd)
+{
+    IStream* stream;
+    char buff[100];
+    string s;
+    unsigned long bytesRead;
+
+
+    if (URLOpenBlockingStream(0, VERSIONCHECKLINK, &stream, 0, 0))
+        return;// error
+
+    while (true)
+    {
+        stream->Read(buff, 100, &bytesRead);
+
+        if (0U == bytesRead)
+            break;
+        s.append(buff, bytesRead);
+
+    };
+
+    stream->Release();
+
+    size_t find = s.find("\"tag_name\":", 0);
+    if (find != string::npos)
+    {
+        size_t begin = s.find_first_of("0123456789", find);
+        if (begin != string::npos)
+        {
+            size_t end = s.find("\"", begin);
+            string lastver = s.substr(begin, end - begin);
+
+            vector <string> local_ver = stringsplit(narrow(APP_VERSION), ".");
+            vector <string> remote_ver = stringsplit(lastver, ".");
+
+            if (local_ver.size() < 3 || remote_ver.size() < 3)
+                return;
+            int local_ver_major = atoi(local_ver[0].c_str());
+            int local_ver_minor = atoi(local_ver[1].c_str());
+            int local_ver_patch = atoi(local_ver[2].c_str());
+
+            int remote_ver_major = atoi(remote_ver[0].c_str());
+            int remote_ver_minor = atoi(remote_ver[1].c_str());
+            int remote_ver_patch = atoi(remote_ver[2].c_str());
+
+
+            if ((remote_ver_major > local_ver_major) ||
+                (remote_ver_major == local_ver_major) && (remote_ver_minor > local_ver_minor) ||
+                (remote_ver_major == local_ver_major) && (remote_ver_minor == local_ver_minor) && (remote_ver_patch > local_ver_patch))
+            {
+                PostMessage(hWnd, APP_NEW_VERSION, 0, 0);
+            }
+        }
+    }
+    return;
 }

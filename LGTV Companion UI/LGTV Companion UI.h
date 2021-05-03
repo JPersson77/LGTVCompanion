@@ -3,6 +3,7 @@
 #pragma comment(lib, "wevtapi.lib")
 #pragma comment(lib, "SetupAPI.lib")
 #pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "urlmon.lib")
 
 #if defined _M_IX86
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
@@ -36,6 +37,7 @@
 #include <vector>
 #include <CommCtrl.h>
 #include <winevt.h>
+#include <thread>
 #include <shellapi.h>
 #include <initguid.h>   
 #include <functiondiscoverykeys.h>
@@ -44,6 +46,7 @@
 #include <strsafe.h>
 //#include <winsock.h>
 #include <winsock2.h>
+#include <urlmon.h>
 
 #include "resource.h"
 #include "nlohmann/json.hpp"
@@ -51,7 +54,7 @@
 
 #define			APPNAME_SHORT					L"LGTVcomp"
 #define			APPNAME_FULL					L"LGTV Companion"
-#define         APP_VERSION                     L"1.2.3"
+#define         APP_VERSION                     L"1.3.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_COMMANDLINE			1
 
@@ -60,6 +63,7 @@
 #define         JSON_EVENT_SHUTDOWN_STRINGS     "LocalEventLogShutdownString"
 #define         JSON_VERSION                    "Version"
 #define         JSON_LOGGING                    "ExtendedLog"
+#define         JSON_AUTOUPDATE                 "AutoUpdate"
 #define         JSON_PWRONTIMEOUT               "PowerOnTimeOut"
 #define         DEFAULT_RESTART                 {"restart"}
 #define         DEFAULT_SHUTDOWN                {"shutdown","power off"}
@@ -72,6 +76,7 @@
 #define         APP_MESSAGE_TURNOFF             WM_USER+6
 #define         APP_MESSAGE_REMOVE              WM_USER+7
 #define         APP_MESSAGE_APPLY               WM_USER+8
+#define         APP_NEW_VERSION                 WM_USER+9
 
 #define         APP_CMDLINE_ON                  1
 #define         APP_CMDLINE_OFF                 2
@@ -82,6 +87,8 @@
 #define         DEVICEWINDOW_TITLE_MANAGE       L"Configure device"
 
 #define         PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
+#define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
+#define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases"
 
 struct PREFS {
     std::vector<std::string> EventLogRestartString = DEFAULT_RESTART;
@@ -89,6 +96,7 @@ struct PREFS {
     bool Logging = false;
     int version = 1;
     int PowerOnTimeout = 40;
+    bool AutoUpdate = false;
 };
 struct SESSIONPARAMETERS {
     std::string DeviceId;
@@ -121,3 +129,4 @@ std::vector<std::string> stringsplit(std::string, std::string);
 void                CommunicateWithService(std::string);
 void                WriteConfigFile(void);
 std::vector<std::string> GetOwnIP(void);
+void                VersionCheckThread(HWND);
