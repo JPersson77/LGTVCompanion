@@ -109,8 +109,10 @@ CHANGELOG
                         - Display warning in UI when TV is configured on a subnet different from PC
                         - Add service dependencies
                         - Set service shutdown priority
-                        - Implemented option to automatically check for new application version (off by default)
+                        - Implementation of option to automatically check for new application version (off by default)
                         - Bug fixes and optimisations
+
+    v 1.4.0             - Additional device network options for powering on via WOL
 
 LICENSE
     Copyright (c) 2021 Jörgen Persson
@@ -261,6 +263,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 //   Process messages for the main window.
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    wstring str;
     switch (message)
     {
     case WM_INITDIALOG:
@@ -297,6 +300,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         HWND hDeviceWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEVICE), hWnd, (DLGPROC)DeviceWndProc);
         SetWindowText(hDeviceWnd, DEVICEWINDOW_TITLE_ADD);
         SetWindowText(GetDlgItem(hDeviceWnd, IDOK), L"&Add");
+        CheckDlgButton(hDeviceWnd, IDC_RADIO1, BST_CHECKED);
+        EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), false);
+        SetWindowText(GetDlgItem(hDeviceWnd, IDC_SUBNET), WOL_DEFAULTSUBNET);
+
+        EnableWindow(GetDlgItem(hDeviceWnd, IDOK), false);
+
         EnableWindow(hWnd, false);
         ShowWindow(hDeviceWnd, SW_SHOW);
     }break;
@@ -311,7 +320,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         SetWindowText(GetDlgItem(hDeviceWnd, IDOK), L"&Save");
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_DEVICENAME), widen(Devices[sel].Name).c_str());
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_DEVICEIP), widen(Devices[sel].IP).c_str());
-        wstring str;
+
+        str = L"";
         for (const auto& item : Devices[sel].MAC)
         {
             str += widen(item);
@@ -319,6 +329,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 str += L"\r\n";
         }
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_DEVICEMACS), str.c_str());
+        EnableWindow(GetDlgItem(hDeviceWnd, IDOK), false);
+
+        switch (Devices[sel].WOLtype)
+        {
+            case 1:
+            {
+                CheckDlgButton(hDeviceWnd, IDC_RADIO1, BST_CHECKED);
+                EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), false);
+            }break;
+            case 2:
+            {
+                CheckDlgButton(hDeviceWnd, IDC_RADIO2, BST_CHECKED);
+                EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), false);
+            }break;
+            case 3:
+            {
+                CheckDlgButton(hDeviceWnd, IDC_RADIO3, BST_CHECKED);
+                EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), true);
+
+            }break;
+            default:break;
+        }
+        if(Devices[sel].Subnet != "")
+            SetWindowText(GetDlgItem(hDeviceWnd, IDC_SUBNET), widen(Devices[sel].Subnet).c_str());
+        else
+            SetWindowText(GetDlgItem(hDeviceWnd, IDC_SUBNET), WOL_DEFAULTSUBNET);
+
         EnableWindow(GetDlgItem(hDeviceWnd, IDOK), false);
 
         EnableWindow(hWnd, false);
@@ -416,6 +453,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                                 temp.Name = narrow(FriendlyName);
                                 temp.IP = narrow(IP);
                                 temp.MAC.push_back(MAC);
+                                temp.Subnet = narrow(WOL_DEFAULTSUBNET);
+                                temp.WOLtype = WOL_NETWORKBROADCAST;
                                 Devices.push_back(temp);
                                 ChangesWereMade = true;
                                 DevicesAdded++;
@@ -523,7 +562,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 if (found < Devices.size())
                 {
-                    int mb = MessageBox(hWnd, L"One or several devices have been configured to a different subnet. Please note that this might cause problems with waking up the TV. Please check the documentation and the configuration.\n\n Do you want to continue anyway?", L"Warning", MB_YESNO | MB_ICONEXCLAMATION);
+                    int mb = MessageBox(hWnd, L"One or several devices have been configured to a subnet different from the PC. Please note that this might cause problems with waking up the TV. Please check the documentation and the configuration.\n\n Do you want to continue anyway?", L"Warning", MB_YESNO | MB_ICONEXCLAMATION);
                     if (mb == IDNO)
                     {
                         EnableWindow(hWnd, true);
@@ -828,6 +867,21 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SendDlgItemMessage(hWnd, IDC_DEVICENAME, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
         SendDlgItemMessage(hWnd, IDC_DEVICEIP, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
         SendDlgItemMessage(hWnd, IDC_DEVICEMACS, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+        SendDlgItemMessage(hWnd, IDC_SUBNET, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+    }break;
+    case WM_NOTIFY:
+    {
+        switch (((NMHDR*)lParam)->code)
+        {
+        case NM_CLICK:
+        {
+            // explain the WOL options
+            if (wParam == IDC_SYSLINK4)
+            {
+                MessageBox(hWnd, L"Devices are powered on by means of sending wake-on-Lan magic packets. Depending on your network environment and operating system you may need to adjust these settings.\n\nTypically the application should send to either of:\n\na) the network broadcast address 255.255.255.255 or,\nb) the broadcast address according to device IP and subnet.\n\nThe current subnet mask of the subnet(s) of your PC can be found by using the \"IPCONFIG /all\" command in the command prompt.\n\nIf your devices have difficulties powering on try adjustig these settings.", L"Information", MB_OK | MB_ICONINFORMATION);
+            }
+        }break;
+        }
     }break;
     case WM_COMMAND:
     {
@@ -837,7 +891,20 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         {
             switch (LOWORD(wParam))
             {
+            case IDC_RADIO1:
+            case IDC_RADIO2:
+            {
+                EnableWindow(GetDlgItem(hWnd, IDC_SUBNET), false);
+                EnableWindow(GetDlgItem(hWnd, IDOK), true);
 
+            }break;
+            case IDC_RADIO3:
+            {
+                EnableWindow(GetDlgItem(hWnd, IDC_SUBNET), true);
+                EnableWindow(GetDlgItem(hWnd, IDOK), true);
+
+
+            }break;
             case IDOK:
             {
                 HWND hParentWnd = GetParent(hWnd);
@@ -890,6 +957,14 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             Devices[sel].MAC = maclines;
                             Devices[sel].Name = narrow(GetWndText(GetDlgItem(hWnd, IDC_DEVICENAME)));
                             Devices[sel].IP = narrow(GetWndText(GetDlgItem(hWnd, IDC_DEVICEIP)));
+                            Devices[sel].Subnet = narrow(GetWndText(GetDlgItem(hWnd, IDC_SUBNET)));
+
+                            if (IsDlgButtonChecked(hWnd, IDC_RADIO3))
+                                Devices[sel].WOLtype = WOL_SUBNETBROADCAST;
+                            else if (IsDlgButtonChecked(hWnd, IDC_RADIO2))
+                                Devices[sel].WOLtype = WOL_IPSEND;
+                            else
+                                Devices[sel].WOLtype = WOL_NETWORKBROADCAST;
 
                             int ind = (int)SendMessage(GetDlgItem(hParentWnd, IDC_COMBO), (UINT)CB_DELETESTRING, (WPARAM)sel, (LPARAM)0);
                             SendMessage(GetDlgItem(hParentWnd, IDC_COMBO), (UINT)CB_INSERTSTRING, (WPARAM)sel, (LPARAM)widen(Devices[sel].Name).c_str());
@@ -908,6 +983,16 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             sess.MAC = maclines;
                             sess.Name = narrow(GetWndText(GetDlgItem(hWnd, IDC_DEVICENAME)));
                             sess.IP = narrow(GetWndText(GetDlgItem(hWnd, IDC_DEVICEIP)));
+
+                            sess.Subnet = narrow(GetWndText(GetDlgItem(hWnd, IDC_SUBNET)));
+
+                            if (IsDlgButtonChecked(hWnd, IDC_RADIO3))
+                                sess.WOLtype = WOL_SUBNETBROADCAST;
+                            else if (IsDlgButtonChecked(hWnd, IDC_RADIO2))
+                                sess.WOLtype = WOL_IPSEND;
+                            else
+                                sess.WOLtype = WOL_NETWORKBROADCAST;
+
                             Devices.push_back(sess);
 
                             int index = (int)SendMessage(GetDlgItem(hParentWnd, IDC_COMBO), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)widen(sess.Name).c_str());
@@ -966,6 +1051,8 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             case IDC_DEVICENAME:
             case IDC_DEVICEIP:
             case IDC_DEVICEMACS:
+            case IDC_SUBNET:
+
             {
                 EnableWindow(GetDlgItem(hWnd, IDOK), true);
 
@@ -1463,6 +1550,12 @@ void ReadDeviceConfig()
         if (item.value()["SessionKey"].is_string())
             params.SessionKey = item.value()["SessionKey"].get<string>();
 
+        if (item.value()["Subnet"].is_string())
+            params.Subnet = item.value()["Subnet"].get<string>();
+
+        if (item.value()["WOL"].is_number())
+            params.WOLtype = item.value()["WOL"].get<int>();
+
         j = item.value()["MAC"];
         if (!j.empty() && j.size() > 0)
         {
@@ -1605,11 +1698,17 @@ void WriteConfigFile(void)
         else
             prefs[dev.str()]["SessionKey"] = "";
 
+        if (item.Subnet != "")
+            prefs[dev.str()]["Subnet"] = item.Subnet;
+ 
+        prefs[dev.str()]["WOL"] = item.WOLtype;
 
         prefs[dev.str()]["Enabled"] = (bool)item.Enabled;
 
         for (auto& m : item.MAC)
             prefs[dev.str()]["MAC"].push_back(m);
+
+ 
 
 
         deviceid++;

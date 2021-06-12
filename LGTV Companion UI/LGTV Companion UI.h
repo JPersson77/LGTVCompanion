@@ -54,7 +54,7 @@
 
 #define			APPNAME_SHORT					L"LGTVcomp"
 #define			APPNAME_FULL					L"LGTV Companion"
-#define         APP_VERSION                     L"1.3.0"
+#define         APP_VERSION                     L"1.4.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_COMMANDLINE			1
 
@@ -83,6 +83,12 @@
 #define         APP_CMDLINE_AUTOENABLE          3
 #define         APP_CMDLINE_AUTODISABLE         4
 
+#define         WOL_NETWORKBROADCAST            1
+#define         WOL_IPSEND                      2
+#define         WOL_SUBNETBROADCAST             3
+
+#define         WOL_DEFAULTSUBNET               L"255.255.255.0"
+
 #define         DEVICEWINDOW_TITLE_ADD          L"Add device"
 #define         DEVICEWINDOW_TITLE_MANAGE       L"Configure device"
 
@@ -108,6 +114,8 @@ struct SESSIONPARAMETERS {
  //   bool AwayAuto = true;
     bool Enabled = true;
     int PowerOnTimeout = 40;
+    int WOLtype = WOL_NETWORKBROADCAST;
+    std::string Subnet;
 
 
 };

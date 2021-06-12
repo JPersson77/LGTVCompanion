@@ -22,15 +22,20 @@
 #define IDC_DEVICEIP                    1005
 #define IDC_DEVICEMACS                  1006
 #define IDC_DEVICENAME                  1007
+#define IDC_DEVICEIP2                   1008
+#define IDC_SUBNET                      1008
 #define IDC_SPIN                        1009
 #define IDC_TIMEOUT                     1010
 #define IDC_LOGGING                     1011
-#define IDC_LOGGING2                    1012
 #define IDC_AUTOUPDATE                  1012
 #define IDC_SYSLINK                     1014
 #define IDC_LIST                        1018
 #define IDC_SYSLINK3                    1019
 #define IDC_NEWVERSION                  1021
+#define IDC_RADIO1                      1022
+#define IDC_RADIO2                      1023
+#define IDC_RADIO3                      1024
+#define IDC_SYSLINK4                    1025
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -57,7 +62,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        144
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1022
+#define _APS_NEXT_CONTROL_VALUE         1026
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

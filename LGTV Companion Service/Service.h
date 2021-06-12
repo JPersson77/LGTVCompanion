@@ -21,6 +21,7 @@
 #include <AccCtrl.h>
 #include <sddl.h>
 #include <Aclapi.h>
+#include <WinSock2.h>
 
 #include "nlohmann/json.hpp"
 #include "Handshake.h"
@@ -31,7 +32,7 @@
 #pragma comment(lib, "Advapi32.lib")
 
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.3.0" 
+#define APPVERSION					    L"1.4.0" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
@@ -65,6 +66,13 @@
 #define APP_CMDLINE_AUTOENABLE          3
 #define APP_CMDLINE_AUTODISABLE         4
 
+#define         WOL_NETWORKBROADCAST            1
+#define         WOL_IPSEND                      2
+#define         WOL_SUBNETBROADCAST             3
+
+#define         WOL_DEFAULTSUBNET               L"255.255.255.0"
+
+
 #define PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
 
 
@@ -92,6 +100,8 @@ struct SESSIONPARAMETERS {
     int PowerOnTimeout = 40;
     std::string Name;
     bool Enabled = true;
+    std::string Subnet;
+    int WOLtype = 1;
 };
 
 class CSession {

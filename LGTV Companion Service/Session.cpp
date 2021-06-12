@@ -199,7 +199,7 @@ void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * C
         handshake.replace(ckf, ck.length(), key);
     }
 
-    //try waking up the display ten times
+    //try waking up the display ten times, but not longer than timeout user preference
     while (time(0) - origtim < (Timeout+1))
     {
         time_t looptim = time(0);
@@ -291,7 +291,11 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
         return; 
 
     vector<string> MACs = CallingSessionParameters->MAC;
+    string IP = CallingSessionParameters->IP;
     string device = CallingSessionParameters->DeviceId;
+    string subnet = CallingSessionParameters->Subnet;
+    int WOLtype = CallingSessionParameters->WOLtype;
+
     SOCKET WOLsocket = INVALID_SOCKET;
     string logmsg;
 
@@ -301,10 +305,68 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
         struct sockaddr_in LANDestination {};
         LANDestination.sin_family = AF_INET;
         LANDestination.sin_port = htons(9);
-        LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
+
+        stringstream wolstr;
+
+        if (WOLtype == WOL_SUBNETBROADCAST && subnet != "")
+        {
+            vector<string> vIP = stringsplit(IP, ".");
+            vector<string> vSubnet = stringsplit(subnet, ".");
+            stringstream broadcastaddress;
+
+            if (vIP.size() == 4 && vSubnet.size() == 4)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    int a = atoi(vIP[i].c_str());
+                    int b = atoi(vSubnet[i].c_str());
+                    int c = 256 + (a | (~b));
+
+                    broadcastaddress << c;
+                    if (i < 3)
+                        broadcastaddress << ".";
+                }
+
+                stringstream ss;
+                
+                wolstr << " using broadcast address: " << broadcastaddress.str();
+ 
+                LANDestination.sin_addr.s_addr = inet_addr(broadcastaddress.str().c_str());
+
+            }
+            else
+            {
+                stringstream ss;
+                ss << device;
+                ss << ", ERROR! WOLthread malformed subnet/IP";
+                Log(ss.str());
+                return;
+            }
+
+
+            LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
+        }
+        else if (WOLtype == WOL_IPSEND)
+        {
+            LANDestination.sin_addr.s_addr = inet_addr(IP.c_str());
+            wolstr << " using IP address: " << IP;
+
+        }
+        else
+        {
+            LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
+            wolstr << " using network broadcast: 255.255.255.255";
+        }
+
+        /* test test test
+        sockaddr_in host_interface;
+        host_interface.sin_family = AF_INET;
+        host_interface.sin_port = htons(0);
+        host_interface.sin_addr.s_addr = inet_addr("192.168.1.100");
+        */
         time_t origtim = time(0);
 
-        WOLsocket= socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        WOLsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
         if (WOLsocket == INVALID_SOCKET)
         {
@@ -318,6 +380,20 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
         }
         else
         {
+            /* test test test
+            int iRes = ::bind(WOLsocket, (SOCKADDR*)&host_interface, sizeof(host_interface));
+            if ( iRes == SOCKET_ERROR)
+            {
+                closesocket(WOLsocket);
+                int dw = WSAGetLastError();
+                stringstream ss;
+                ss << device;
+                ss << ", ERROR! WOLthread WS bind(): ";
+                ss << dw;
+                Log(ss.str());
+                return;
+            }
+            */
             const bool optval = TRUE;
             if (setsockopt(WOLsocket, SOL_SOCKET, SO_BROADCAST, (char*)&optval, sizeof(optval)) == SOCKET_ERROR)
             {
@@ -336,6 +412,8 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
             logmsg = device;
             logmsg += ", repeating WOL broadcast started to MAC: ";
             logmsg += MAC;
+            if (wolstr.str() != "")
+                logmsg += wolstr.str();
             Log(logmsg);
 
             //remove filling from MAC
@@ -473,7 +551,7 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
             host += ':' + std::to_string(ep.port());
             if (time(0) - origtim > 10) // this thread should not run too long
             {
-                Log("DisplayPowerOffThread() forced exit.");
+                Log("DisplayPowerOffThread() - forced exit");
                 goto threadoffend;
             }
 //            Log("DEBUG INFO: DisplayPowerOffThread() setting options...");
@@ -488,7 +566,7 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
                 }));
             if (time(0) - origtim > 10) // this thread should not run too long
             {
-                Log("DisplayPowerOffThread() forced exit.");
+                Log("DisplayPowerOffThread() - forced exit");
                 goto threadoffend;
             }
 

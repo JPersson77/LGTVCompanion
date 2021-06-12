@@ -695,27 +695,34 @@ void InitDeviceSessions()
         json j;
         if (item.key() == JSON_PREFS_NODE)
             break;
-        string s;
+        stringstream s;
 
         SESSIONPARAMETERS params;
 
         params.DeviceId = item.key();
-        s += params.DeviceId; s += ", ";
+        s << params.DeviceId << ", ";
         if (item.value()["Name"].is_string())
             params.Name = item.value()["Name"].get<string>();
-        s += params.Name;
-        s += ", with IP ";
+        s << params.Name << ", with IP ";
+
         if(item.value()["IP"].is_string())
             params.IP = item.value()["IP"].get<string>();
-        s += params.IP; s += " initiated (";
- 
+        s << params.IP << " initiated (";
+
         if (item.value()["Enabled"].is_boolean())
             params.Enabled = item.value()["Enabled"].get<bool>();
-        s += "Enabled:"; s += params.Enabled ? "yes" : "no"; s += ", ";
+        s << "Enabled:" << (params.Enabled?"yes":"no") << ", ";
 
+        if (item.value()["Subnet"].is_string())
+            params.Subnet = item.value()["Subnet"].get<string>();
+        if (item.value()["WOL"].is_number())
+            params.WOLtype = item.value()["WOL"].get<int>();
+        s << "WOL:" << params.WOLtype << ", ";
+        if (params.WOLtype == WOL_SUBNETBROADCAST && params.Subnet != "")
+            s << "SubnetMask:" << params.Subnet << ", ";
         if(item.value()["SessionKey"].is_string())
             params.SessionKey = item.value()["SessionKey"].get<string>();
-        s += "Pairing key:"; s += params.SessionKey =="" ? "n/a" : params.SessionKey; s += ", MAC: ";
+        s << "Pairing key:" << (params.SessionKey =="" ? "n/a" : params.SessionKey) << ", MAC: ";
         
         j = item.value()["MAC"];
         if (!j.empty() && j.size() > 0)
@@ -723,18 +730,18 @@ void InitDeviceSessions()
             for (auto& m : j.items())
             {
                 params.MAC.push_back(m.value().get<string>());
-                s += m.value().get<string>(); s += " ";
+                s << m.value().get<string>()<< " ";
             }
-            s += ")";
+            s << ")";
         }
         else
-            s += "n/a )";
+            s << "n/a )";
         
         params.PowerOnTimeout = Prefs.PowerOnTimeout;
         
         CSession S(&params);
         DeviceCtrlSessions.push_back(S);
-        Log(s);
+        Log(s.str());
     }
     return;
 }
