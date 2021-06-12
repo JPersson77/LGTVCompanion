@@ -18,17 +18,17 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 2. Download the setup package and install. This will install and start the service (LGTVsvc.exe), and also install the user interface (LGTV Companion.exe).
 3. Open the user interface from the Windows start menu.
 
-![image](https://user-images.githubusercontent.com/77928210/110210490-371e7500-7e92-11eb-9552-a50b404a60d4.png)
+![mainwnd](https://user-images.githubusercontent.com/77928210/121790553-df09b400-cbe0-11eb-8922-0e84f7e1ad27.JPG)
 
 4. Click the 'Scan' button to let the application try and automatically find network attached WebOs devices (TVs) (This button is called 'Configure' in the screenshot above)
-5. Optionally, click the drop down button to manually add, remove, configure the parameters of respective devices, this includes the network IP-address, and the physical address, i.e. the MAC(s). This information can easily be found in the network settings of the TV.
+5. Optionally, click the drop down button to manually add, remove, configure the parameters of respective devices, this includes the network IP-address, the physical address, i.e. the MAC(s). This information can easily be found in the network settings of the TV. Also, the default wake-on-lan network options should work for most configurations, but if your TV has difficulties powering on try the other options. Click the 'What's this?' link in the app to read more.
 
-![image](https://user-images.githubusercontent.com/77928210/110210517-4ac9db80-7e92-11eb-9d74-678fea1f535a.png)
+![devicewnd](https://user-images.githubusercontent.com/77928210/121790559-f5177480-cbe0-11eb-9e71-127e5a5928b8.JPG)
 
-6. In the main application window, use the checkboxes to select what power events (shutdown, restart, suspend, resume, idle) the respective devices shall respond to.
+6. In the main application window, ensure the 'Manage this device' checkbox is checked tso the application will automatically respond to power events (shutdown, restart, suspend, resume, idle) for the respective devices.
 7. Optionally, tweak additional settings, by clicking on the hamburger icon. Note that enabling logging can be very useful if you are facing any issues.
 
-![image](https://user-images.githubusercontent.com/77928210/110210530-5917f780-7e92-11eb-81af-32866203ae41.png)
+![optionswnd](https://user-images.githubusercontent.com/77928210/121790644-9dc5d400-cbe1-11eb-85a4-57e726ff10e9.JPG)
     
 >if your OS is not localised in english, you must in the 'additional settings' dialog click the correct checkboxes to indicate what words refer to the system restarting/rebooting (as opposed to shutting down). This is needed because there is no better (at least known to me) way for a service to know if the system is being restarted or shut down than looking at a certain event in the event log. But the event log is localised, and this approach saves me from having to build a language table for all languages in the world. Note that if you don't do this on a non-english OS the application will not be able to determine if the system is being restarted or shut down. The difference is of course that the displays should not power off when the system is restarted.
 
@@ -43,11 +43,12 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 ## Limitations
 - LG OLED displays cannot be turned on via network when an automatic pixel refresh is being performed. You can hear an internal relay click after the pixel refresh, when the display is actually powered down, at which point it can be turned on again at any time by this application.
 - The WebOS displays can only be turned on/off when both the PC and the display is connected to a network. 
-- The TV cannnot be on a different subnet/VLAN from your PC. This is because the TV is powerd on by means of broadcasting a magic packet, aka Wake-on-lan, which is restricted to layer 2, i.e. same subnet only. (Let me know if you really want this implemented and if you are prepared help me test implementation of a directed subnet broadcast)
+- The TV cannnot be on a different subnet/VLAN from your PC. This is because the TV is powerd on by means of broadcasting a magic packet, aka Wake-on-lan, which is restricted to layer 2, i.e. same subnet only. There are ways to bypass this limitation but it is outside the scope of this application, even though you can probably make it work. Let me know if you need help to make it work for you.
 
 ## Troubleshooting
 If your display has trouble powering on, these are the things to check first:
 - When connecting the TV via Wi-Fi it seems some users must enable "Quickstart+" and disable "HDD Eco mode" to avoid the NIC becoming inactive. (physical network cable does ot seem to need this)
+- Try reconfiguring the device and use on of the other wak-on-lan network options.
 - Ensure the network is not dropping WOL-broadcasts.
 - The MAC-address configuration for the device in the application is erroneous.
 
