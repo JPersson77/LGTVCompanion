@@ -32,7 +32,7 @@
 #pragma comment(lib, "Advapi32.lib")
 
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.4.0" 
+#define APPVERSION					    L"1.4.1" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
@@ -117,6 +117,7 @@ public:
 private:
     bool ThreadedOpDisplayOn = false;    
     bool ThreadedOpDisplayOff = false;
+    int ThreadedOpDisplayOffTime = 0;
     void TurnOnDisplay(void);
     void TurnOffDisplay(void);
     SESSIONPARAMETERS   Parameters;

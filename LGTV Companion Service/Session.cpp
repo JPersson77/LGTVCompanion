@@ -91,14 +91,17 @@ void CSession::TurnOffDisplay(void)
     //thread safe section
     while (!mMutex.try_lock())
         Sleep(MUTEX_WAIT);
-    
-    if (!ThreadedOpDisplayOff && Parameters.SessionKey != "")
+
+    if (ThreadedOpDisplayOffTime == 0)
+        ThreadedOpDisplayOffTime = time(0);
+
+    if ((!ThreadedOpDisplayOff || (time(0) - ThreadedOpDisplayOffTime > 5)) && Parameters.SessionKey != "")
     {
         s = Parameters.DeviceId;
         s += ", spawning DisplayPowerOffThread().";
 
         ThreadedOpDisplayOff = true;
- //       ThreadedOperationsTimeStamp = time(0);
+        ThreadedOpDisplayOffTime = time(0);
         thread thread_obj(DisplayPowerOffThread, &Parameters, &ThreadedOpDisplayOff);
         thread_obj.detach();
     }
@@ -358,12 +361,6 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
             wolstr << " using network broadcast: 255.255.255.255";
         }
 
-        /* test test test
-        sockaddr_in host_interface;
-        host_interface.sin_family = AF_INET;
-        host_interface.sin_port = htons(0);
-        host_interface.sin_addr.s_addr = inet_addr("192.168.1.100");
-        */
         time_t origtim = time(0);
 
         WOLsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -380,20 +377,6 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
         }
         else
         {
-            /* test test test
-            int iRes = ::bind(WOLsocket, (SOCKADDR*)&host_interface, sizeof(host_interface));
-            if ( iRes == SOCKET_ERROR)
-            {
-                closesocket(WOLsocket);
-                int dw = WSAGetLastError();
-                stringstream ss;
-                ss << device;
-                ss << ", ERROR! WOLthread WS bind(): ";
-                ss << dw;
-                Log(ss.str());
-                return;
-            }
-            */
             const bool optval = TRUE;
             if (setsockopt(WOLsocket, SOL_SOCKET, SO_BROADCAST, (char*)&optval, sizeof(optval)) == SOCKET_ERROR)
             {
