@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- When publishing updated version, make sure to generate new GUID for "Product Id", and update "Version" -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"><?define LGTV Companion Service_TargetDir=$(var.LGTV Companion Service.TargetDir)?><?define LGTV Companion UI_TargetDir=$(var.LGTV Companion UI.TargetDir)?>
-	<Product Id="21FE1FEC-2E13-4FBB-A75E-60E43BD52B0E" Name="LGTV Companion" Language="1033" Version="1.4.1" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A">
+	<Product Id="CE343ED5-2183-43DE-B323-E6E683952D50" Name="LGTV Companion" Language="1033" Version="1.4.2" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A">
 		<Package Id="*" InstallerVersion="301" Compressed="yes" InstallScope="perMachine" Platform='x64' Description="LGTV Companion installer" InstallPrivileges="elevated" AdminImage="yes"/>
     <Media Id="1" Cabinet="LGTVapp.cab" EmbedCab="yes" />
 

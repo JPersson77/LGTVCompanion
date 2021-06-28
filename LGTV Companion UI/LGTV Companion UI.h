@@ -54,7 +54,7 @@
 
 #define			APPNAME_SHORT					L"LGTVcomp"
 #define			APPNAME_FULL					L"LGTV Companion"
-#define         APP_VERSION                     L"1.4.1"
+#define         APP_VERSION                     L"1.4.2"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_COMMANDLINE			1
 

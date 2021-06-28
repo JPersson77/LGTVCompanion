@@ -347,7 +347,7 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
             }
 
 
-            LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
+//            LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
         }
         else if (WOLtype == WOL_IPSEND)
         {
