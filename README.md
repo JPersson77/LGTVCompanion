@@ -59,7 +59,7 @@ If your display has trouble powering off it is most likely because:
 HOT tip! Enable the built in logger and check the output, it can be very useful for understanding where problems are.
 
 ## System requirements
-- The application must be run in a modern windows environment, and any potato running Windows 10 is fine.
+- The application must be run in a modern windows environment, and any potato running Windows 10/11 is fine.
 - A Local Area Network (LAN)
 
 ## Commandline arguments
