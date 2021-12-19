@@ -2,6 +2,10 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
     steps:
       - uses: actions/checkout@v2
       - uses: microsoft/setup-msbuild@v1.1
@@ -10,4 +14,5 @@ jobs:
       - run: 7z x boost.7z
       - run: msbuild LGTVCompanion.sln
         env:
+          Configuration: ${{ matrix.configuration }}
           IncludePath: ${{ github.workspace }}\boost_1_78_0
