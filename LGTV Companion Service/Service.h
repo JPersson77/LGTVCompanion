@@ -117,7 +117,7 @@ public:
 private:
     bool ThreadedOpDisplayOn = false;    
     bool ThreadedOpDisplayOff = false;
-    int ThreadedOpDisplayOffTime = 0;
+    time_t ThreadedOpDisplayOffTime = 0;
     void TurnOnDisplay(void);
     void TurnOffDisplay(void);
     SESSIONPARAMETERS   Parameters;
