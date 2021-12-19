@@ -1,0 +1,13 @@
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: microsoft/setup-msbuild@v1.1
+      - run: Invoke-WebRequest https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.7z -OutFile boost.7z
+        shell: powershell
+      - run: 7z x boost.7z
+      - run: msbuild LGTVCompanion.sln
+        env:
+          IncludePath: ${{ github.workspace }}\boost_1_78_0
