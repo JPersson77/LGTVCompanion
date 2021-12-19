@@ -16,3 +16,11 @@ jobs:
         env:
           Configuration: ${{ matrix.configuration }}
           IncludePath: ${{ github.workspace }}\boost_1_78_0
+      - uses: actions/upload-artifact@v2
+        with:
+          name: LGTVCompanion-${{ matrix.configuration }}
+          path: x64/${{ matrix.configuration }}/
+      - uses: actions/upload-artifact@v2
+        with:
+          name: LGTVCompanion-Setup-${{ matrix.configuration }}
+          path: LGTV Companion Setup/bin/${{ matrix.configuration }}/
