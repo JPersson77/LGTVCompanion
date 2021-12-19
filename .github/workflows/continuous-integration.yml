@@ -1,0 +1,26 @@
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: microsoft/setup-msbuild@v1.1
+      - run: Invoke-WebRequest https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.7z -OutFile boost.7z
+        shell: powershell
+      - run: 7z x boost.7z
+      - run: msbuild LGTVCompanion.sln
+        env:
+          Configuration: ${{ matrix.configuration }}
+          IncludePath: ${{ github.workspace }}\boost_1_78_0
+      - uses: actions/upload-artifact@v2
+        with:
+          name: LGTVCompanion-${{ matrix.configuration }}
+          path: x64/${{ matrix.configuration }}/
+      - uses: actions/upload-artifact@v2
+        with:
+          name: LGTVCompanion-Setup-${{ matrix.configuration }}
+          path: LGTV Companion Setup/bin/${{ matrix.configuration }}/
