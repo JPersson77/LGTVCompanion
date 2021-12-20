@@ -36,6 +36,9 @@
 #define IDC_RADIO2                      1023
 #define IDC_RADIO3                      1024
 #define IDC_SYSLINK4                    1025
+#define IDC_HDMI_INPUT_NUMBER_CHECKBOX  1026
+#define IDC_HDMI_INPUT_NUMBER           1027
+#define IDC_HDMI_INPUT_NUMBER_SPIN      1028
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -62,7 +65,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        144
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1026
+#define _APS_NEXT_CONTROL_VALUE         1029
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif
