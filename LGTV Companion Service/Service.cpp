@@ -442,12 +442,15 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
                 PBS = (POWERBROADCAST_SETTING*)lpEventData;
                 if (PBS->PowerSetting == GUID_CONSOLE_DISPLAY_STATE)
                 {
+
+                    /* DEBUG
                     if (PBS->Data[0] == 0)
                         Log("GUID_CONSOLE_DISPLAY_STATE 0x0 (off)");
                     else if (PBS->Data[0] == 1)
                         Log("GUID_CONSOLE_DISPLAY_STATE 0x1 (on)");
                     else if (PBS->Data[0] == 2)
                         Log("GUID_CONSOLE_DISPLAY_STATE 0x2 (dimmed)");
+                        */
                     text = (DWORD)PBS->Data[0] == 0 ? "** System requests displays OFF." : "** System requests displays ON.";
                     Log(text);
                     DispatchSystemPowerEvent(PBS->Data[0] == 0 ? SYSTEM_EVENT_DISPLAYOFF : SYSTEM_EVENT_DISPLAYON);
@@ -738,14 +741,22 @@ void InitDeviceSessions()
                 params.MAC.push_back(m.value().get<string>());
                 s << m.value().get<string>()<< " ";
             }
-            s << "), ";
+            s << ", HDMI input control:";
         }
         else
-            s << "n/a ), ";
+            s << "n/a, HDMI input control:";
+
+        if (item.value()["HDMIinputcontrol"].is_boolean())
+            params.HDMIinputcontrol = item.value()["HDMIinputcontrol"].get<bool>();
 
         if (item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].is_number())
             params.OnlyTurnOffIfCurrentHDMIInputNumberIs = item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].get<int>();
-        s << "Only turn off if current HDMI input number is:" << params.OnlyTurnOffIfCurrentHDMIInputNumberIs;
+        if (params.HDMIinputcontrol)
+            s << params.OnlyTurnOffIfCurrentHDMIInputNumberIs;
+            
+        else
+            s << "off";
+        s << ")";
         
         params.PowerOnTimeout = Prefs.PowerOnTimeout;
         

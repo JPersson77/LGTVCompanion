@@ -32,7 +32,7 @@
 #pragma comment(lib, "Advapi32.lib")
 
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.4.2" 
+#define APPVERSION					    L"1.4.3" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
@@ -102,7 +102,8 @@ struct SESSIONPARAMETERS {
     bool Enabled = true;
     std::string Subnet;
     int WOLtype = 1;
-    int OnlyTurnOffIfCurrentHDMIInputNumberIs = 0;
+    bool HDMIinputcontrol = false;
+    int OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
 };
 
 class CSession {

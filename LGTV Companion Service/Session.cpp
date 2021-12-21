@@ -573,10 +573,9 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
             ws.read(buffer); // read the response
 
             bool shouldPowerOff = true;
-            if (CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs > 0)
+            if (CallingSessionParameters->HDMIinputcontrol)
             {
                 shouldPowerOff = false;
-                Log("Determining current HDMI input number...");
                 ws.write(net::buffer(std::string(R"({"id": "1", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})")));
                 beast::flat_buffer response;
                 ws.read(response);
@@ -588,7 +587,14 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
                 {
                     appId.remove_prefix(prefix.size());
                     if (std::to_string(CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs) == appId) {
+                        logmsg = device;
+                        logmsg += ", HDMI input control match. Device will be powered off.";
                         shouldPowerOff = true;
+                    }
+                    else
+                    {
+                        logmsg = device;
+                        logmsg += ", HDMI input control did not match. Deveice will NOT be powered off.";
                     }
                 }
             }

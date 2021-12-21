@@ -305,6 +305,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         CheckDlgButton(hDeviceWnd, IDC_RADIO1, BST_CHECKED);
         EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), false);
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_SUBNET), WOL_DEFAULTSUBNET);
+        
+        CheckDlgButton(hDeviceWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX, BST_UNCHECKED);
+        EnableWindow(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), false);
+        SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), L"1");
 
         EnableWindow(GetDlgItem(hDeviceWnd, IDOK), false);
 
@@ -322,11 +326,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         SetWindowText(GetDlgItem(hDeviceWnd, IDOK), L"&Save");
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_DEVICENAME), widen(Devices[sel].Name).c_str());
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_DEVICEIP), widen(Devices[sel].IP).c_str());
-        const bool OnlyTurnOffIfCurrentHDMIInputNumberIsEnabled = Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs > 0;
-        CheckDlgButton(hDeviceWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX, OnlyTurnOffIfCurrentHDMIInputNumberIsEnabled ? BST_CHECKED : BST_UNCHECKED);
-        EnableWindow(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), OnlyTurnOffIfCurrentHDMIInputNumberIsEnabled);
-        SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), OnlyTurnOffIfCurrentHDMIInputNumberIsEnabled ? widen(std::to_string(Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs)).c_str() : L"");
-        SendDlgItemMessage(hWnd, IDC_HDMI_INPUT_NUMBER_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs);
+
+        CheckDlgButton(hDeviceWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX, Devices[sel].HDMIinputcontrol);
+        EnableWindow(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), Devices[sel].HDMIinputcontrol?true:false);
+        SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), widen(std::to_string(Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs)).c_str());
+        SendDlgItemMessage(hDeviceWnd, IDC_HDMI_INPUT_NUMBER_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs);
 
         str = L"";
         for (const auto& item : Devices[sel].MAC)
@@ -972,10 +976,10 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             Devices[sel].Name = narrow(GetWndText(GetDlgItem(hWnd, IDC_DEVICENAME)));
                             Devices[sel].IP = narrow(GetWndText(GetDlgItem(hWnd, IDC_DEVICEIP)));
                             Devices[sel].Subnet = narrow(GetWndText(GetDlgItem(hWnd, IDC_SUBNET)));
-                            Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs =
-                                IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED ?
-                                atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER))).c_str()) : 0;
 
+                            Devices[sel].HDMIinputcontrol = IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED;
+                            Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER))).c_str());
+                            
                             if (IsDlgButtonChecked(hWnd, IDC_RADIO3))
                                 Devices[sel].WOLtype = WOL_SUBNETBROADCAST;
                             else if (IsDlgButtonChecked(hWnd, IDC_RADIO2))
@@ -1009,6 +1013,9 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                                 sess.WOLtype = WOL_IPSEND;
                             else
                                 sess.WOLtype = WOL_NETWORKBROADCAST;
+                           
+                            sess.HDMIinputcontrol = IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED;
+                            sess.OnlyTurnOffIfCurrentHDMIInputNumberIs = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER))).c_str());
 
                             Devices.push_back(sess);
 
@@ -1562,6 +1569,9 @@ void ReadDeviceConfig()
         if (item.value()["IP"].is_string())
             params.IP = item.value()["IP"].get<string>();
 
+        if (item.value()["HDMIinputcontrol"].is_boolean())
+            params.HDMIinputcontrol = item.value()["HDMIinputcontrol"].get<bool>();
+        
         if (item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].is_number())
             params.OnlyTurnOffIfCurrentHDMIInputNumberIs = item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].get<int>();
 
@@ -1719,8 +1729,9 @@ void WriteConfigFile(void)
         else
             prefs[dev.str()]["SessionKey"] = "";
 
-        if (item.OnlyTurnOffIfCurrentHDMIInputNumberIs > 0)
-            prefs[dev.str()]["OnlyTurnOffIfCurrentHDMIInputNumberIs"] = item.OnlyTurnOffIfCurrentHDMIInputNumberIs;
+        prefs[dev.str()]["HDMIinputcontrol"] = (bool)item.HDMIinputcontrol;
+
+        prefs[dev.str()]["OnlyTurnOffIfCurrentHDMIInputNumberIs"] = item.OnlyTurnOffIfCurrentHDMIInputNumberIs;
 
         if (item.Subnet != "")
             prefs[dev.str()]["Subnet"] = item.Subnet;
