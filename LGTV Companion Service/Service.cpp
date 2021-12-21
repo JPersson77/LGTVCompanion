@@ -442,6 +442,12 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
                 PBS = (POWERBROADCAST_SETTING*)lpEventData;
                 if (PBS->PowerSetting == GUID_CONSOLE_DISPLAY_STATE)
                 {
+                    if (PBS->Data[0] == 0)
+                        Log("GUID_CONSOLE_DISPLAY_STATE 0x0 (off)");
+                    else if (PBS->Data[0] == 1)
+                        Log("GUID_CONSOLE_DISPLAY_STATE 0x1 (on)");
+                    else if (PBS->Data[0] == 2)
+                        Log("GUID_CONSOLE_DISPLAY_STATE 0x2 (dimmed)");
                     text = (DWORD)PBS->Data[0] == 0 ? "** System requests displays OFF." : "** System requests displays ON.";
                     Log(text);
                     DispatchSystemPowerEvent(PBS->Data[0] == 0 ? SYSTEM_EVENT_DISPLAYOFF : SYSTEM_EVENT_DISPLAYON);

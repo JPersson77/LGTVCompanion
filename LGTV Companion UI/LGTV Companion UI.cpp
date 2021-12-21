@@ -114,6 +114,8 @@ CHANGELOG
 
     v 1.4.0             - Additional device network options for powering on via WOL
 
+    v 1.5.0             - Implementation of options for controlling power on/off logic
+
 LICENSE
     Copyright (c) 2021 Jörgen Persson
     
