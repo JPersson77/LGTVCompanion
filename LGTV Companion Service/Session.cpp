@@ -1,6 +1,8 @@
 // See LGTV Companion UI.cpp for additional details
 #include "Service.h"
 
+#include <boost/utility/string_view.hpp>
+
 using namespace std;
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -569,16 +571,39 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 
             ws.write(net::buffer(std::string(handshake)));
             ws.read(buffer); // read the response
-            ws.write(net::buffer(std::string(poweroffmess)));
-            ws.read(buffer); // read the response
+
+            bool shouldPowerOff = true;
+            if (CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs > 0)
+            {
+                shouldPowerOff = false;
+                Log("Determining current HDMI input number...");
+                ws.write(net::buffer(std::string(R"({"id": "1", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})")));
+                beast::flat_buffer response;
+                ws.read(response);
+                const json j = json::parse(static_cast<const char*>(response.data().data()), static_cast<const char*>(response.data().data()) + response.size());
+                boost::string_view appId = j["payload"]["appId"];
+                Log(std::string("Current AppId: ") + std::string(appId));
+                const boost::string_view prefix = "com.webos.app.hdmi";
+                if (appId.starts_with(prefix))
+                {
+                    appId.remove_prefix(prefix.size());
+                    if (std::to_string(CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs) == appId) {
+                        shouldPowerOff = true;
+                    }
+                }
+            }
+
+            if (shouldPowerOff)
+            {
+                ws.write(net::buffer(std::string(poweroffmess)));
+                ws.read(buffer); // read the response
+                logmsg = device;
+                logmsg += ", established contact: Display is powered OFF.  ";
+                Log(logmsg);
+            }
+
 //            Log("DEBUG INFO: DisplayPowerOffThread() closing...");
-
-            ws.close(websocket::close_code::normal);
-   
-            logmsg = device;
-            logmsg += ", established contact: Display is powered OFF.  ";
-            Log(logmsg);
-
+             ws.close(websocket::close_code::normal);
         }
         catch (std::exception const& e)
         {

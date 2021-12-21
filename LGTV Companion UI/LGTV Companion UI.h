@@ -116,7 +116,7 @@ struct SESSIONPARAMETERS {
     int PowerOnTimeout = 40;
     int WOLtype = WOL_NETWORKBROADCAST;
     std::string Subnet;
-
+    int OnlyTurnOffIfCurrentHDMIInputNumberIs = 0;
 
 };
 
