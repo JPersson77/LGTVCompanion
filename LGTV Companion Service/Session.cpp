@@ -97,7 +97,7 @@ void CSession::TurnOffDisplay(void)
     if (ThreadedOpDisplayOffTime == 0)
         ThreadedOpDisplayOffTime = time(0);
 
-    if ((!ThreadedOpDisplayOff || (time(0) - ThreadedOpDisplayOffTime > 5)) && Parameters.SessionKey != "")
+    if ((!ThreadedOpDisplayOff || (time(0) - ThreadedOpDisplayOffTime > THREAD_WAIT)) && Parameters.SessionKey != "")
     {
         s = Parameters.DeviceId;
         s += ", spawning DisplayPowerOffThread().";
