@@ -102,6 +102,7 @@ struct SESSIONPARAMETERS {
     bool Enabled = true;
     std::string Subnet;
     int WOLtype = 1;
+    int OnlyTurnOffIfCurrentHDMIInputNumberIs = 0;
 };
 
 class CSession {

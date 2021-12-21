@@ -738,10 +738,14 @@ void InitDeviceSessions()
                 params.MAC.push_back(m.value().get<string>());
                 s << m.value().get<string>()<< " ";
             }
-            s << ")";
+            s << "), ";
         }
         else
-            s << "n/a )";
+            s << "n/a ), ";
+
+        if (item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].is_number())
+            params.OnlyTurnOffIfCurrentHDMIInputNumberIs = item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].get<int>();
+        s << "Only turn off if current HDMI input number is:" << params.OnlyTurnOffIfCurrentHDMIInputNumberIs;
         
         params.PowerOnTimeout = Prefs.PowerOnTimeout;
         
