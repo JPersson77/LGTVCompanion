@@ -443,17 +443,22 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
                 if (PBS->PowerSetting == GUID_CONSOLE_DISPLAY_STATE)
                 {
 
-                    /* DEBUG
+
                     if (PBS->Data[0] == 0)
-                        Log("GUID_CONSOLE_DISPLAY_STATE 0x0 (off)");
-                    else if (PBS->Data[0] == 1)
-                        Log("GUID_CONSOLE_DISPLAY_STATE 0x1 (on)");
+                    {
+                        Log("** System requests displays OFF.");
+                        DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
+                    }
                     else if (PBS->Data[0] == 2)
-                        Log("GUID_CONSOLE_DISPLAY_STATE 0x2 (dimmed)");
-                        */
-                    text = (DWORD)PBS->Data[0] == 0 ? "** System requests displays OFF." : "** System requests displays ON.";
-                    Log(text);
-                    DispatchSystemPowerEvent(PBS->Data[0] == 0 ? SYSTEM_EVENT_DISPLAYOFF : SYSTEM_EVENT_DISPLAYON);
+                    {
+                        Log("** System requests displays OFF(DIMMED).");
+                        DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYDIMMED);
+                    }
+                   else
+                    {
+                        Log("** System requests displays ON.");
+                        DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYON);
+                    }
                 }
                 else
                 {

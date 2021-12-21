@@ -50,6 +50,7 @@
 #define SERVICE_ACCOUNT				    NULL //L"NT AUTHORITY\\LocalService" 
 #define MUTEX_WAIT          		    10   // thread wait in ms
 #define THREAD_WAIT          		    5    // wait to spawn new thread (seconds)
+#define DIMMED_OFF_DELAY_WAIT           20    // delay after a screen dim request
 #define MAX_RECORD_BUFFER_SIZE          0x10000  // 64K
 #define SYSTEM_EVENT_SHUTDOWN           0x0001
 #define SYSTEM_EVENT_REBOOT             0x0002
@@ -61,6 +62,8 @@
 #define SYSTEM_EVENT_UNSURE             0x0080
 #define SYSTEM_EVENT_FORCEON            0x0100
 #define SYSTEM_EVENT_FORCEOFF           0x0200
+#define SYSTEM_EVENT_DISPLAYDIMMED      0x0400
+
 #define APP_CMDLINE_ON                  1
 #define APP_CMDLINE_OFF                 2
 #define APP_CMDLINE_AUTOENABLE          3
@@ -117,11 +120,12 @@ public:
     SESSIONPARAMETERS GetParams();
     bool IsBusy();
 private:
+    time_t ScreenDimmedRequestTime = 0;
     bool ThreadedOpDisplayOn = false;    
     bool ThreadedOpDisplayOff = false;
     time_t ThreadedOpDisplayOffTime = 0;
     void TurnOnDisplay(void);
-    void TurnOffDisplay(void);
+    void TurnOffDisplay(bool forced, bool dimmed);
     SESSIONPARAMETERS   Parameters;
 };
 
@@ -144,7 +148,7 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 std::wstring widen(std::string);
 std::string narrow(std::wstring);
 void DisplayPowerOnThread(SESSIONPARAMETERS *, bool *, int);
-void DisplayPowerOffThread(SESSIONPARAMETERS*, bool *);
+void DisplayPowerOffThread(SESSIONPARAMETERS*, bool *, bool);
 void IPCThread(void);
 void WOLthread(SESSIONPARAMETERS*, bool*, int);
 std::vector<std::string> stringsplit(std::string str, std::string token);

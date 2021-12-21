@@ -65,6 +65,8 @@ void CSession::TurnOnDisplay(void)
     while (!mMutex.try_lock())
         Sleep(MUTEX_WAIT);
 
+    ScreenDimmedRequestTime = 0;
+
     
     if (!ThreadedOpDisplayOn)
     {
@@ -86,7 +88,7 @@ void CSession::TurnOnDisplay(void)
     Log(s);
     return;
 }
-void CSession::TurnOffDisplay(void)
+void CSession::TurnOffDisplay(bool forced, bool dimmed)
 {
     string s;
 
@@ -97,15 +99,20 @@ void CSession::TurnOffDisplay(void)
     if (ThreadedOpDisplayOffTime == 0)
         ThreadedOpDisplayOffTime = time(0);
 
-    if ((!ThreadedOpDisplayOff || (time(0) - ThreadedOpDisplayOffTime > THREAD_WAIT)) && Parameters.SessionKey != "")
+ 
+    if (
+        (!ThreadedOpDisplayOff || (time(0) - ThreadedOpDisplayOffTime > THREAD_WAIT)) && 
+        Parameters.SessionKey != "" &&
+        (time(0)-ScreenDimmedRequestTime > DIMMED_OFF_DELAY_WAIT))
     {
         s = Parameters.DeviceId;
         s += ", spawning DisplayPowerOffThread().";
 
         ThreadedOpDisplayOff = true;
         ThreadedOpDisplayOffTime = time(0);
-        thread thread_obj(DisplayPowerOffThread, &Parameters, &ThreadedOpDisplayOff);
+        thread thread_obj(DisplayPowerOffThread, &Parameters, &ThreadedOpDisplayOff, forced);
         thread_obj.detach();
+        
     }
     else
     {
@@ -116,7 +123,8 @@ void CSession::TurnOffDisplay(void)
         else
             s += ".";
     }
-
+   if (dimmed)
+        ScreenDimmedRequestTime = time(0);
     mMutex.unlock();
     Log(s);
     return;
@@ -128,7 +136,7 @@ void CSession::SystemEvent(DWORD dwMsg)
     if (dwMsg == SYSTEM_EVENT_FORCEON)
         TurnOnDisplay();
     if (dwMsg == SYSTEM_EVENT_FORCEOFF)
-        TurnOffDisplay();
+        TurnOffDisplay(true,false);
     
     //thread safe section
     while (!mMutex.try_lock())
@@ -150,7 +158,7 @@ void CSession::SystemEvent(DWORD dwMsg)
     case SYSTEM_EVENT_UNSURE: 
     case SYSTEM_EVENT_SHUTDOWN:
     {
-        TurnOffDisplay();
+        TurnOffDisplay(false,false);
     }break;
     case SYSTEM_EVENT_SUSPEND:
     {
@@ -171,9 +179,12 @@ void CSession::SystemEvent(DWORD dwMsg)
     }break;
     case SYSTEM_EVENT_DISPLAYOFF:
     {
-        TurnOffDisplay();
+        TurnOffDisplay(false,false);
     }break;
-
+    case SYSTEM_EVENT_DISPLAYDIMMED:
+    {
+        TurnOffDisplay(false,true);
+    }break;
     default:break;
     }
 }
@@ -496,7 +507,7 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
 
 }
 //   THREAD: Spawned when the device should power OFF.
-void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning)
+void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, bool UserForced)
 {
     time_t origtim = time(0);
 
@@ -573,7 +584,7 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
             ws.read(buffer); // read the response
 
             bool shouldPowerOff = true;
-            if (CallingSessionParameters->HDMIinputcontrol)
+            if (!UserForced && CallingSessionParameters->HDMIinputcontrol)
             {
                 shouldPowerOff = false;
                 ws.write(net::buffer(std::string(R"({"id": "1", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})")));
