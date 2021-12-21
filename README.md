@@ -90,4 +90,4 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 - @Maassoft for initial inspo and helping me understand the WebSocket/WebOS comms - https://github.com/Maassoft
 
 ## Copyright
-Copyright © 2021 Jörgen Persson
+Copyright © 2022 Jörgen Persson
