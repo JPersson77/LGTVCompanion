@@ -95,6 +95,7 @@ Please use the Github issue tracker for potential bug reports
 - Boost libs - Boost and Beast https://www.boost.org/
 - @Maassoft for initial inspo and helping me understand the WebSocket/WebOS comms - https://github.com/Maassoft
 - @mohabouje - Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
+- Contributors
 
 ## Copyright
 Copyright © 2021-2022 Jörgen Persson
