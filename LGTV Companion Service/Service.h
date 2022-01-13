@@ -22,6 +22,8 @@
 #include <sddl.h>
 #include <Aclapi.h>
 #include <WinSock2.h>
+#include <dbt.h>
+
 
 #include "nlohmann/json.hpp"
 #include "Handshake.h"
@@ -31,8 +33,9 @@
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Advapi32.lib")
 
+
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.4.3" 
+#define APPVERSION					    L"1.5.0" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
@@ -45,11 +48,13 @@
 #define JSON_PWRONTIMEOUT               "PowerOnTimeOut"
 #define DEFAULT_RESTART                 {"restart"}
 #define DEFAULT_SHUTDOWN                {"shutdown","power off"}
+#define JSON_IDLEBLANK                  "BlankWhenIdle"
+#define JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
 
 #define SERVICE_DEPENDENCIES		    L"Dhcp\0Dnscache\0LanmanServer\0\0" 
 #define SERVICE_ACCOUNT				    NULL //L"NT AUTHORITY\\LocalService" 
 #define MUTEX_WAIT          		    10   // thread wait in ms
-#define THREAD_WAIT          		    5    // wait to spawn new thread (seconds)
+#define THREAD_WAIT          		    1    // wait to spawn new thread (seconds)
 #define DIMMED_OFF_DELAY_WAIT           20    // delay after a screen dim request
 #define MAX_RECORD_BUFFER_SIZE          0x10000  // 64K
 #define SYSTEM_EVENT_SHUTDOWN           0x0001
@@ -63,11 +68,17 @@
 #define SYSTEM_EVENT_FORCEON            0x0100
 #define SYSTEM_EVENT_FORCEOFF           0x0200
 #define SYSTEM_EVENT_DISPLAYDIMMED      0x0400
+#define SYSTEM_EVENT_FORCESCREENOFF     0x0800
+#define SYSTEM_EVENT_USERBUSY           0x1000
+#define SYSTEM_EVENT_USERIDLE           0x2000
 
 #define APP_CMDLINE_ON                  1
 #define APP_CMDLINE_OFF                 2
 #define APP_CMDLINE_AUTOENABLE          3
 #define APP_CMDLINE_AUTODISABLE         4
+#define APP_CMDLINE_SCREENON            5
+#define APP_CMDLINE_SCREENOFF           6
+#define APP_IPC_DAEMON                  7
 
 #define         WOL_NETWORKBROADCAST            1
 #define         WOL_IPSEND                      2
@@ -76,7 +87,9 @@
 #define         WOL_DEFAULTSUBNET               L"255.255.255.0"
 
 
-#define PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
+#define         PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
+
+#define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
 
 
 #ifndef SERVICE_CONTROL_USERMODEREBOOT	//not defined. Unclear diz
@@ -91,8 +104,10 @@ struct PREFS {
     std::vector<std::string> EventLogRestartString = DEFAULT_RESTART;
     std::vector<std::string> EventLogShutdownString = DEFAULT_SHUTDOWN;
     bool Logging = false;
-    int version = 1;
+    int version = 2;
     int PowerOnTimeout = 40;
+    bool BlankWhenIdle = false;
+    int BlankScreenWhenIdleDelay = 10;
 };
 
 struct SESSIONPARAMETERS {
@@ -107,6 +122,8 @@ struct SESSIONPARAMETERS {
     int WOLtype = 1;
     bool HDMIinputcontrol = false;
     int OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
+    bool BlankWhenIdle = false;
+    int BlankScreenWhenIdleDelay = 10;
 };
 
 class CSession {
@@ -125,7 +142,7 @@ private:
     bool ThreadedOpDisplayOff = false;
     time_t ThreadedOpDisplayOffTime = 0;
     void TurnOnDisplay(void);
-    void TurnOffDisplay(bool forced, bool dimmed);
+    void TurnOffDisplay(bool forced, bool dimmed, bool blankscreen);
     SESSIONPARAMETERS   Parameters;
 };
 
@@ -148,7 +165,7 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 std::wstring widen(std::string);
 std::string narrow(std::wstring);
 void DisplayPowerOnThread(SESSIONPARAMETERS *, bool *, int);
-void DisplayPowerOffThread(SESSIONPARAMETERS*, bool *, bool);
+void DisplayPowerOffThread(SESSIONPARAMETERS*, bool *, bool, bool);
 void IPCThread(void);
 void WOLthread(SESSIONPARAMETERS*, bool*, int);
 std::vector<std::string> stringsplit(std::string str, std::string token);

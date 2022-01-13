@@ -9,6 +9,8 @@ using json = nlohmann::json;
 SERVICE_STATUS          gSvcStatus;
 SERVICE_STATUS_HANDLE   gSvcStatusHandle;
 HANDLE                  ghSvcStopEvent = NULL;
+DEV_BROADCAST_DEVICEINTERFACE filter;
+HDEVNOTIFY              gDevEvents;
 HPOWERNOTIFY            gPs1;
 json                    jsonPrefs;                          //contains the user preferences in json
 PREFS                   Prefs;                              //App preferences 
@@ -132,7 +134,6 @@ VOID SvcInstall()
 //   Uninstall service in the SCM database
 VOID SvcUninstall()
 {
-
     SC_HANDLE schSCManager;
     SC_HANDLE schService;
     SERVICE_STATUS_PROCESS ssp;
@@ -233,6 +234,7 @@ VOID SvcUninstall()
 //   Service entrypoint
 VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 {
+    //Register seervice handler
     gSvcStatusHandle = RegisterServiceCtrlHandlerExW(SVCNAME,SvcCtrlHandler, NULL);
     if (!gSvcStatusHandle)
     {
@@ -247,14 +249,16 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
     // Report SERVICE_START_PENDING status to the SCM
     ReportSvcStatus(SERVICE_START_PENDING, NO_ERROR, 3000);
 
+    // need a stop event
     ghSvcStopEvent = CreateEvent( NULL, TRUE, FALSE, NULL); 
-
     if (!ghSvcStopEvent)
     {
         SvcReportEvent(EVENTLOG_ERROR_TYPE, L"CreateEvent");
         ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
         return;
     }
+
+    // starting up winsock
     if (WSAStartup(MAKEWORD(2, 2), &WSAData) != 0)
     {
         SvcReportEvent(EVENTLOG_ERROR_TYPE, L"WSAStartup");
@@ -274,7 +278,7 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
         s += widen(e.what());
         SvcReportEvent(EVENTLOG_ERROR_TYPE, s);
         ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
-        UnregisterPowerSettingNotification(gPs1);
+ //       UnregisterPowerSettingNotification(gPs1);
         WSACleanup();
         return;
 
@@ -310,19 +314,18 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
         (EVT_SUBSCRIBE_CALLBACK)SubCallback,            //callback
         EvtSubscribeToFutureEvents);
 
+    //spawn a thread for managing intra process communication
     thread thread_obj(IPCThread);
     thread_obj.detach();
 
-    if (SetProcessShutdownParameters(0x1E1, 0)) 
-        Log("Setting shutdown parameter level 0x1E1");
-//    else if (SetProcessShutdownParameters(0x3ff, 0)) 
- //       Log("Setting shutdown parameter level 0x3FF");
+    //make sure the process is shutdown as early as possible
+    if (SetProcessShutdownParameters(0x3FF, 0)) 
+        Log("Setting shutdown parameter level 0x3FF");
     else
         Log("Could not set shutdown parameter level");
 
-    SetProcessShutdownParameters(0x3FF,0);
-
     ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
+    
     //register to receive power notifications
     gPs1 = RegisterPowerSettingNotification(gSvcStatusHandle, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_SERVICE_HANDLE);
 
@@ -442,8 +445,6 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
                 PBS = (POWERBROADCAST_SETTING*)lpEventData;
                 if (PBS->PowerSetting == GUID_CONSOLE_DISPLAY_STATE)
                 {
-
-
                     if (PBS->Data[0] == 0)
                     {
                         Log("** System requests displays OFF.");
@@ -528,9 +529,7 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
     case SERVICE_CONTROL_INTERROGATE: 
         Log("SERVICE_CONTROL_INTERROGATE");
        break;
-
-    default:
-        break;
+    default:break;
     }
     return NO_ERROR;
 
@@ -685,6 +684,14 @@ bool ReadConfigFile()
             if (!j.empty() && j.is_boolean())
                 Prefs.Logging = j.get<bool>();
 
+            j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANK];
+            if (!j.empty() && j.is_boolean())
+                Prefs.BlankWhenIdle = j.get<bool>();
+
+            j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY];
+            if (!j.empty() && j.is_number())
+                Prefs.BlankScreenWhenIdleDelay = j.get<int>();
+
             Log(st);
             Log("Configuration file successfully read");
             Log(ty);
@@ -746,23 +753,35 @@ void InitDeviceSessions()
                 params.MAC.push_back(m.value().get<string>());
                 s << m.value().get<string>()<< " ";
             }
-            s << ", HDMI input control:";
         }
         else
-            s << "n/a, HDMI input control:";
-
+            s << "n/a";
+        s << ", HDMI input control:";
         if (item.value()["HDMIinputcontrol"].is_boolean())
             params.HDMIinputcontrol = item.value()["HDMIinputcontrol"].get<bool>();
 
         if (item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].is_number())
             params.OnlyTurnOffIfCurrentHDMIInputNumberIs = item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].get<int>();
-        if (params.HDMIinputcontrol)
+        if (params.HDMIinputcontrol) {
             s << params.OnlyTurnOffIfCurrentHDMIInputNumberIs;
-            
+        }           
         else
             s << "off";
+        s << ", Blank when idle:";
+
+        params.BlankWhenIdle = Prefs.BlankWhenIdle;
+        params.BlankScreenWhenIdleDelay = Prefs.BlankScreenWhenIdleDelay;
+
+        if (params.BlankWhenIdle) {
+            s << "on(";
+            s << params.BlankScreenWhenIdleDelay;
+            s << "m)";
+        }
+        else
+            s << "off";
+
         s << ")";
-        
+
         params.PowerOnTimeout = Prefs.PowerOnTimeout;
         
         CSession S(&params);
@@ -971,10 +990,7 @@ void IPCThread(void)
             {
                 /* add terminating zero */
                 buffer[dwRead] = '\0';
-                string s = "IPC command received: ";
                 string t = buffer;
-                s += t;
-                Log(s);
                 transform(t.begin(), t.end(), t.begin(), ::tolower);
 
                 vector <string> cmd = stringsplit(t, " ");
@@ -984,6 +1000,8 @@ void IPCThread(void)
 
                     for (auto& param : cmd)
                     {
+                        if (param == "-daemon")
+                            param1 = APP_IPC_DAEMON;
                         if (param == "-poweron")
                             param1 = APP_CMDLINE_ON;
                         else if (param == "-poweroff")
@@ -992,39 +1010,93 @@ void IPCThread(void)
                             param1 = APP_CMDLINE_AUTOENABLE;
                         else if (param == "-autodisable")
                             param1 = APP_CMDLINE_AUTODISABLE;
+                        else if (param == "-screenon")
+                            param1 = APP_CMDLINE_SCREENON;
+                        else if (param == "-screenoff")
+                            param1 = APP_CMDLINE_SCREENOFF;
                         else if (param1 > 0)
                         {
-                            for (auto& device : DeviceCtrlSessions)
+                            if (param1 == APP_IPC_DAEMON)
                             {
-                                SESSIONPARAMETERS s = device.GetParams();
-                                string id = s.DeviceId;
-                                string name = s.Name;
-                                transform(id.begin(), id.end(), id.begin(), ::tolower);
-                                transform(name.begin(), name.end(), name.begin(), ::tolower);
-
-                                if (param1 == APP_CMDLINE_ON && (id == param || name == param))
+                                if (param == "errorconfig")
+                                    Log("IPC, Daemon, Could not read configuration file. Daemon exiting!");
+                                else if (param == "started")
+                                    Log("IPC, Daemon has started.");
+                                else if (param == "newversion")
                                 {
-                                    device.SystemEvent(SYSTEM_EVENT_FORCEON);
+                                    wstring s = L"IPC, Daemon, a new version of this app is available for download here: ";
+                                    s += NEWRELEASELINK;
+                                    Log(narrow(s));
                                 }
-                                else if (param1 == APP_CMDLINE_OFF && (id == param || name == param))
+                                else if (param == "userbusy")
                                 {
-                                    device.SystemEvent(SYSTEM_EVENT_FORCEOFF);
+                                    Log("IPC, User is not idle.");
+                                    DispatchSystemPowerEvent(SYSTEM_EVENT_USERBUSY);
+ 
                                 }
-                                else if (param1 == APP_CMDLINE_AUTOENABLE && (id == param || name == param))
+                                else if (param == "useridle")
                                 {
-                                    device.Run();
-                                    string temp = s.DeviceId;
-                                    temp +=", automatic management is temporarily enabled (effective until restart of service).";
-                                    Log(temp);
-                                }
-                                else if (param1 == APP_CMDLINE_AUTODISABLE && (id == param || name == param))
-                                {
-                                    device.Stop();
-                                    string temp = s.DeviceId;
-                                    temp += ", automatic management is temporarily disabled (effective until restart of service).";
-                                    Log(temp);
+                                    Log("IPC, User is idle.");
+                                    DispatchSystemPowerEvent(SYSTEM_EVENT_USERIDLE);
                                 }
 
+                            }
+                            else
+                            {
+                                for (auto& device : DeviceCtrlSessions)
+                                {
+                                    SESSIONPARAMETERS s = device.GetParams();
+                                    string id = s.DeviceId;
+                                    string name = s.Name;
+                                    transform(id.begin(), id.end(), id.begin(), ::tolower);
+                                    transform(name.begin(), name.end(), name.begin(), ::tolower);
+
+                                    if (param1 == APP_CMDLINE_ON && (id == param || name == param))
+                                    {
+                                        string w = "IPC, force power ON: ";
+                                        w += param;
+                                        Log(w);
+                                        device.SystemEvent(SYSTEM_EVENT_FORCEON);
+                                    }
+                                    else if (param1 == APP_CMDLINE_OFF && (id == param || name == param))
+                                    {
+                                        string w = "IPC, force power OFF: ";
+                                        w += param;
+                                        Log(w);
+                                        device.SystemEvent(SYSTEM_EVENT_FORCEOFF);
+                                    }
+                                    else if (param1 == APP_CMDLINE_SCREENON && (id == param || name == param))
+                                    {
+                                        string w = "IPC, force screen ON: ";
+                                        w += param;
+                                        Log(w);
+                                        device.SystemEvent(SYSTEM_EVENT_FORCEON);
+                                    }
+                                    else if (param1 == APP_CMDLINE_SCREENOFF && (id == param || name == param))
+                                    {
+                                        string w = "IPC, force screen OFF: ";
+                                        w += param;
+                                        Log(w);
+                                        device.SystemEvent(SYSTEM_EVENT_FORCESCREENOFF);
+                                    }
+                                    else if (param1 == APP_CMDLINE_AUTOENABLE && (id == param || name == param))
+                                    {
+                                        string w = "IPC, automatic management is temporarily enabled (effective until restart of service): ";
+                                        w += param;
+                                        Log(w);
+
+                                        device.Run();
+
+                                    }
+                                    else if (param1 == APP_CMDLINE_AUTODISABLE && (id == param || name == param))
+                                    {
+                                        string w = "IPC, automatic management is temporarily disabled (effective until restart of service): ";
+                                        w += param;
+                                        Log(w);
+                                        device.Stop();
+
+                                    }
+                                }
                             }
 
                         }
@@ -1113,3 +1185,5 @@ vector <string> GetOwnIP(void)
     }
     return IPs;
 }
+
+

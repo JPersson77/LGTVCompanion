@@ -51,10 +51,9 @@
 #include "resource.h"
 #include "nlohmann/json.hpp"
 
-
 #define			APPNAME_SHORT					L"LGTVcomp"
 #define			APPNAME_FULL					L"LGTV Companion"
-#define         APP_VERSION                     L"1.4.3"
+#define         APP_VERSION                     L"1.5.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_COMMANDLINE			1
 
@@ -65,6 +64,8 @@
 #define         JSON_LOGGING                    "ExtendedLog"
 #define         JSON_AUTOUPDATE                 "AutoUpdate"
 #define         JSON_PWRONTIMEOUT               "PowerOnTimeOut"
+#define         JSON_IDLEBLANK                  "BlankWhenIdle"
+#define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
 #define         DEFAULT_RESTART                 {"restart"}
 #define         DEFAULT_SHUTDOWN                {"shutdown","power off"}
 
@@ -95,14 +96,18 @@
 #define         PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
 #define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
 #define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases"
+#define         DONATELINK                      L"https://www.paypal.com/donate/?hosted_button_id=TGZRPAHV4QC62"
 
 struct PREFS {
     std::vector<std::string> EventLogRestartString = DEFAULT_RESTART;
     std::vector<std::string> EventLogShutdownString = DEFAULT_SHUTDOWN;
     bool Logging = false;
-    int version = 1;
+    int version = 2;
     int PowerOnTimeout = 40;
     bool AutoUpdate = false;
+    bool ResetAPIkeys = false;
+    bool BlankScreenWhenIdle = false;
+    int BlankScreenWhenIdleDelay = 10;
 };
 struct SESSIONPARAMETERS {
     std::string DeviceId;

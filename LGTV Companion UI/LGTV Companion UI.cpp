@@ -75,10 +75,12 @@ SYSTEM REQUIREMENTS
 
 COMMAND LINE ARGUMENTS
 
-    LGTV Companion.exe -[poweron|poweroff|autoenable|autodisable] [Device1|Name] [Device2|Name] ... [DeviceX|Name]
+    LGTV Companion.exe -[poweron|poweroff|screenon|screenoff|autoenable|autodisable] [Device1|Name] [Device2|Name] ... [DeviceX|Name]
 
     -poweron        - power on a device.
-    -poweroff       - power off a device
+    -screenon       - power on a device
+    -poweroff       - power off a device.
+    -screenoff      - disable emitters, i.e. enter power saving mode where screen is blanked.
     -autoenable     - temporarily enable the automatic management of a device, i.e. to respond to power events. This
                       is effective until next restart of the service. (I personally use this for my home automation system).
     -autodisable    - temporarily disable the automatic management of a device, i.e. to respond to power events. This
@@ -114,10 +116,14 @@ CHANGELOG
 
     v 1.4.0             - Additional device network options for powering on via WOL
 
-    v 1.5.0             - Implementation of options for controlling power on/off logic
+    v 1.5.0             - Implementation of more options for controlling power on/off logic
+                        - Option to utilise capability for blanking TV (screen off)when user is idle
+                        - Extended command line options to include blanking of screen.
+
+    Todo:                 Option to  manage on active display outputs only
 
 LICENSE
-    Copyright (c) 2021 Jörgen Persson
+    Copyright (c) 2021-2022 Jörgen Persson
     
     Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation 
     files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, 
@@ -134,16 +140,18 @@ LICENSE
 THANKS TO
     - Niels Lohmann - JSON for Modern CPP https://github.com/nlohmann/json
     - Boost libs - Boost and Beast https://www.boost.org/
-    - Maassoft for initial inspo and helping me understand the WebSocket/WebOS comms - https://github.com/Maassoft
+    - Maassoft for initial inspo and understanding re the WebOS comms - https://github.com/Maassoft
+    - Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
 
 COPYRIGHT
-    Copyright (c) 2021 Jörgen Persson
+    Copyright (c) 2021-2022 Jörgen Persson
 */
 
 #include "LGTV Companion UI.h"
 
 using namespace std;
 using json = nlohmann::json;
+
 
 // Global Variables:
 HINSTANCE                       hInstance;  // current instance
@@ -157,6 +165,7 @@ vector <SESSIONPARAMETERS>      Devices;                 //CSession objects mana
 HBRUSH                          hBackbrush; 
 HFONT                           hEditfont; 
 HFONT                           hEditMediumfont;
+HFONT                           hEditSmallfont;
 HMENU                           hPopupMeuMain;
 HICON                           hOptionsIcon;
 HANDLE                          hPipe = INVALID_HANDLE_VALUE;
@@ -216,6 +225,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
     hBackbrush = CreateSolidBrush(0x00ffffff);
     hEditfont = CreateFont(26, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
     hEditMediumfont = CreateFont(20, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
+    hEditSmallfont = CreateFont(18, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
     hPopupMeuMain = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_BUTTONMENU));
 
     INITCOMMONCONTROLSEX icex;           // Structure for control initialization.
@@ -241,6 +251,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
         thread_obj.detach();
     }
 
+
     // message loop:
     while (GetMessage(&msg, NULL, 0, 0))
     {
@@ -255,6 +266,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
     DeleteObject(hBackbrush);
     DeleteObject(hEditfont);
     DeleteObject(hEditMediumfont);
+    DeleteObject(hEditSmallfont);
     DestroyMenu(hPopupMeuMain);
     DestroyIcon(hOptionsIcon);
     WSACleanup();
@@ -271,6 +283,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_INITDIALOG:
     {
         SendDlgItemMessage(hWnd, IDC_COMBO, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+        SendDlgItemMessage(hWnd, IDC_CHECK_ENABLE, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+        SendDlgItemMessage(hWnd, IDC_NEWVERSION, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+        SendDlgItemMessage(hWnd, IDC_DONATE, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+        SendDlgItemMessage(hWnd, IDC_SPLIT, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+        SendDlgItemMessage(hWnd, IDOK, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+
         SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
         SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)-1, (LPARAM)0);
 
@@ -305,7 +323,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         CheckDlgButton(hDeviceWnd, IDC_RADIO1, BST_CHECKED);
         EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), false);
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_SUBNET), WOL_DEFAULTSUBNET);
-        
+ 
+
         CheckDlgButton(hDeviceWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX, BST_UNCHECKED);
         EnableWindow(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), false);
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), L"1");
@@ -615,6 +634,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             CloseServiceHandle(serviceDbHandle);
 
         }
+        //restart the daemon
+        TCHAR buffer[MAX_PATH] = { 0 };
+        GetModuleFileName(NULL, buffer, MAX_PATH);
+        wstring path = buffer;
+        wstring exe;
+        std::wstring::size_type pos = path.find_last_of(L"\\/");
+        path = path.substr(0, pos+1);
+        exe = path;
+        exe += L"LGTVdaemon.exe";
+        ShellExecute(NULL, L"open", exe.c_str(), L"-hide", path.c_str(), SW_SHOWNORMAL);
+        
         EnableWindow(hWnd, true);
         EnableWindow(GetDlgItem(hWnd, IDOK), false);
 
@@ -687,6 +717,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (wParam == IDC_NEWVERSION)
             {
                  ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
+            }
+            //care to support your coder
+            if (wParam == IDC_DONATE)
+            {
+                if (MessageBox(hWnd, L"This is free software, but in case you would like to show a token of appreciation there is a donation page set up over at PayPal. PayPal allows you to use a credit- or debit card or your PayPal balance to make a donation, even without a PayPal account.\n\nClick 'Yes' to continue to the PayPal donation web page!", L"Donate via PayPal?", MB_YESNO | MB_ICONQUESTION) == IDYES)
+                    ShellExecute(0, 0, DONATELINK, 0, 0, SW_SHOW);
             }
         }
         case BCN_DROPDOWN:
@@ -1143,7 +1179,10 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
         SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE , (WPARAM)NULL, MAKELPARAM(100, 1));
         SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.PowerOnTimeout);
-        
+        SendDlgItemMessage(hWnd, IDC_EDIT_BLANK, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+        SendDlgItemMessage(hWnd, IDC_SPIN2, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(240, 1));
+        SendDlgItemMessage(hWnd, IDC_SPIN2, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.BlankScreenWhenIdleDelay);
+
         for (auto& item : Prefs.EventLogRestartString)
             str.push_back(widen(item));
         for (auto& item : Prefs.EventLogShutdownString)
@@ -1231,6 +1270,9 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         }
         CheckDlgButton(hWnd, IDC_LOGGING, Prefs.Logging ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(hWnd, IDC_AUTOUPDATE, Prefs.AutoUpdate ? BST_CHECKED : BST_UNCHECKED);
+        CheckDlgButton(hWnd, IDC_CHECK_BLANK, Prefs.BlankScreenWhenIdle ? BST_CHECKED : BST_UNCHECKED);
+        EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), Prefs.BlankScreenWhenIdle);
+
         EnableWindow(GetDlgItem(hWnd, IDOK), true);
     }break;
     case WM_COMMAND:
@@ -1241,6 +1283,37 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             switch (LOWORD(wParam))
             {
+            case IDC_CHECK_BLANK:
+            {
+                if (Prefs.version < 2 && !Prefs.ResetAPIkeys)
+                {
+                    int mess = MessageBox(hWnd, L"Enabling this option will enforce re-pairing of all your devices.\n\n Do you want to enable this option?", L"Device pairing", MB_YESNO | MB_ICONQUESTION);
+                    if (mess == IDNO)
+                    {
+                        CheckDlgButton(hWnd, IDC_CHECK_BLANK, BST_UNCHECKED);
+                        EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), false);
+
+                    }
+                    if (mess == IDYES)
+                    {
+                        CheckDlgButton(hWnd, IDC_CHECK_BLANK, BST_CHECKED);
+                        EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), true);
+
+                        Prefs.ResetAPIkeys = true;
+                        EnableWindow(GetDlgItem(hWnd, IDOK), true);
+                    }
+                }
+                else
+                {
+                    if(IsDlgButtonChecked(hWnd, IDC_CHECK_BLANK))
+                        EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), true);
+                    else
+                        EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), false);
+
+                    EnableWindow(GetDlgItem(hWnd, IDOK), true);
+                }
+
+            }break;
             case IDC_LOGGING:
             case IDC_AUTOUPDATE:
             {
@@ -1263,6 +1336,8 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                         thread_obj.detach();
                     }
                     Prefs.AutoUpdate = IsDlgButtonChecked(hWnd, IDC_AUTOUPDATE);
+                    Prefs.BlankScreenWhenIdle = IsDlgButtonChecked(hWnd, IDC_CHECK_BLANK) == BST_CHECKED;
+                    Prefs.BlankScreenWhenIdleDelay = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_EDIT_BLANK))).c_str());
 
                     int count = ListView_GetItemCount(GetDlgItem(hWnd, IDC_LIST));
                     Prefs.EventLogRestartString.clear();
@@ -1290,6 +1365,8 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
               case IDCANCEL:
             {
+                  Prefs.ResetAPIkeys = false;
+
                   EndDialog(hWnd, 0);
                   EnableWindow(GetParent(hWnd), true);
 
@@ -1464,6 +1541,14 @@ bool ReadConfigFile()
             if (!j.empty() && j.is_boolean())
                 Prefs.AutoUpdate = j.get<bool>();
 
+            j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANK];
+            if (!j.empty() && j.is_boolean())
+                Prefs.BlankScreenWhenIdle = j.get<bool>();
+
+            j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY];
+            if (!j.empty() && j.is_number())
+                Prefs.BlankScreenWhenIdleDelay = j.get<int>();
+
             return true;
         }
     }
@@ -1578,7 +1663,7 @@ void ReadDeviceConfig()
          if (item.value()["Enabled"].is_boolean())
             params.Enabled = item.value()["Enabled"].get<bool>();
 
-        if (item.value()["SessionKey"].is_string())
+         if (item.value()["SessionKey"].is_string())
             params.SessionKey = item.value()["SessionKey"].get<string>();
 
         if (item.value()["Subnet"].is_string())
@@ -1660,36 +1745,49 @@ void WriteConfigFile(void)
     CreateDirectory(DataPath.c_str(), NULL);
     path += L"config.json";
 
-    //load sessionkeys from config.json and add it to the device list
-    ifstream i(path.c_str());
-    if (i.is_open())
+    // do we need to upgrade the api key version
+    if (Prefs.ResetAPIkeys)
     {
-        i >> p;
-        i.close();
-
-        for (const auto& item : p.items())
+        for (auto& k : Devices)
         {
-            if (item.key() == JSON_PREFS_NODE)
-                break;
+            k.SessionKey = "";    
+        }
+        Prefs.ResetAPIkeys = false;
+        Prefs.version = 2;
+    }
+    else
+    {
+        //load sessionkeys from config.json and add it to the device list
+        ifstream i(path.c_str());
+        if (i.is_open())
+        {
+            i >> p;
+            i.close();
 
-            json j;
-            string key = "";
-
-            if (item.value()["SessionKey"].is_string())
-                key = item.value()["SessionKey"].get<string>();
-
-            j = item.value()["MAC"];
-            if (!j.empty() && j.size() > 0)
+            for (const auto& item : p.items())
             {
-                for (auto& m : j.items())
+                if (item.key() == JSON_PREFS_NODE)
+                    break;
+
+                json j;
+                string key = "";
+
+                if (item.value()["SessionKey"].is_string())
+                    key = item.value()["SessionKey"].get<string>();
+
+                j = item.value()["MAC"];
+                if (!j.empty() && j.size() > 0)
                 {
-                    for (auto& k : Devices)
+                    for (auto& m : j.items())
                     {
-                        for (auto& l : k.MAC)
+                        for (auto& k : Devices)
                         {
-                            if (l == m.value().get<string>())
+                            for (auto& l : k.MAC)
                             {
-                                k.SessionKey = key;
+                                if (l == m.value().get<string>())
+                                {
+                                    k.SessionKey = key;
+                                }
                             }
                         }
                     }
@@ -1697,11 +1795,12 @@ void WriteConfigFile(void)
             }
         }
     }
-      
-    prefs[JSON_PREFS_NODE][JSON_VERSION] = (int)1;
+    prefs[JSON_PREFS_NODE][JSON_VERSION] = (int)Prefs.version;
     prefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT] = (int)Prefs.PowerOnTimeout;
     prefs[JSON_PREFS_NODE][JSON_LOGGING] = (bool)Prefs.Logging;
     prefs[JSON_PREFS_NODE][JSON_AUTOUPDATE] = (bool)Prefs.AutoUpdate;
+    prefs[JSON_PREFS_NODE][JSON_IDLEBLANK] = (bool)Prefs.BlankScreenWhenIdle;
+    prefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY] = (int)Prefs.BlankScreenWhenIdleDelay;
 
     for (auto& item : Prefs.EventLogRestartString)
         prefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS].push_back(item);
@@ -1791,7 +1890,6 @@ void VersionCheckThread(HWND hWnd)
     char buff[100];
     string s;
     unsigned long bytesRead;
-
 
     if (URLOpenBlockingStream(0, VERSIONCHECKLINK, &stream, 0, 0))
         return;// error

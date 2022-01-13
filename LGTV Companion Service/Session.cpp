@@ -88,7 +88,7 @@ void CSession::TurnOnDisplay(void)
     Log(s);
     return;
 }
-void CSession::TurnOffDisplay(bool forced, bool dimmed)
+void CSession::TurnOffDisplay(bool forced, bool dimmed, bool blankscreen)
 {
     string s;
 
@@ -110,7 +110,7 @@ void CSession::TurnOffDisplay(bool forced, bool dimmed)
 
         ThreadedOpDisplayOff = true;
         ThreadedOpDisplayOffTime = time(0);
-        thread thread_obj(DisplayPowerOffThread, &Parameters, &ThreadedOpDisplayOff, forced);
+        thread thread_obj(DisplayPowerOffThread, &Parameters, &ThreadedOpDisplayOff, forced, blankscreen);
         thread_obj.detach();
         
     }
@@ -136,8 +136,10 @@ void CSession::SystemEvent(DWORD dwMsg)
     if (dwMsg == SYSTEM_EVENT_FORCEON)
         TurnOnDisplay();
     if (dwMsg == SYSTEM_EVENT_FORCEOFF)
-        TurnOffDisplay(true,false);
-    
+        TurnOffDisplay(true, false, false);
+    if (dwMsg == SYSTEM_EVENT_FORCESCREENOFF)
+        TurnOffDisplay(true, false, true);
+
     //thread safe section
     while (!mMutex.try_lock())
         Sleep(MUTEX_WAIT);
@@ -158,11 +160,11 @@ void CSession::SystemEvent(DWORD dwMsg)
     case SYSTEM_EVENT_UNSURE: 
     case SYSTEM_EVENT_SHUTDOWN:
     {
-        TurnOffDisplay(false,false);
+        TurnOffDisplay(false,false,false);
     }break;
     case SYSTEM_EVENT_SUSPEND:
     {
- 
+
     }break;
      case SYSTEM_EVENT_RESUME:
     {
@@ -179,11 +181,21 @@ void CSession::SystemEvent(DWORD dwMsg)
     }break;
     case SYSTEM_EVENT_DISPLAYOFF:
     {
-        TurnOffDisplay(false,false);
+        TurnOffDisplay(false,false, false);
     }break;
     case SYSTEM_EVENT_DISPLAYDIMMED:
     {
-        TurnOffDisplay(false,true);
+        TurnOffDisplay(false,true, false);
+    }break;
+    case SYSTEM_EVENT_USERIDLE:
+    {
+        if (Parameters.BlankWhenIdle)
+            TurnOffDisplay(false, false, true);
+    }break;
+    case SYSTEM_EVENT_USERBUSY:
+    {
+        if(Parameters.BlankWhenIdle)
+            TurnOnDisplay();
     }break;
     default:break;
     }
@@ -191,6 +203,8 @@ void CSession::SystemEvent(DWORD dwMsg)
 //   THREAD: Spawned when the device should power ON. This thread manages the pairing key from the display and verifies that the display has been powered on
 void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * CallingSessionThreadRunning, int Timeout)
 {
+    string screenonmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://com.webos.service.tvpower/power/turnOnScreen\"}";
+
     if (!CallingSessionParameters)
         return;
 
@@ -244,10 +258,10 @@ void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * C
             ws.write(net::buffer(std::string(handshake)));
             ws.read(buffer); // read the first response
 
-            logmsg = device;
-            logmsg += ", response received: ";
-            logmsg += beast::buffers_to_string(buffer.data());
-            Log(logmsg);
+ //           logmsg = device;
+ //           logmsg += ", response received: ";
+ //           logmsg += beast::buffers_to_string(buffer.data());
+ //           Log(logmsg);
 
             // parse for pairing key if needed
             if (key == "")
@@ -272,9 +286,12 @@ void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * C
                     }
                 }
             }
+
+            ws.write(net::buffer(std::string(screenonmess)));
+ 
             ws.close(websocket::close_code::normal);
             logmsg = device; 
-            logmsg += ", established contact: Display is powered ON.  ";
+            logmsg += ", established contact: Display is ON.  ";
             Log(logmsg);
             break;
         }
@@ -507,7 +524,7 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
 
 }
 //   THREAD: Spawned when the device should power OFF.
-void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, bool UserForced)
+void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, bool UserForced, bool BlankScreen)
 {
     time_t origtim = time(0);
 
@@ -523,7 +540,9 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
         string key = CallingSessionParameters->SessionKey;
         string device = CallingSessionParameters->DeviceId;
         string logmsg;
-        string poweroffmess = "{ \"id\":\"0\",\"type\" : \"request\",\"uri\" : \"ssap://system/turnOff\"}";
+        string poweroffmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://system/turnOff\"}";
+        string screenoffmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://com.webos.service.tvpower/power/turnOffScreen\"}";
+
         string handshake = narrow(HANDSHAKE_PAIRED);
         string ck = "CLIENTKEYx0x0x0";
 
@@ -586,36 +605,46 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
             bool shouldPowerOff = true;
             if (!UserForced && CallingSessionParameters->HDMIinputcontrol)
             {
+                string app;
                 shouldPowerOff = false;
                 ws.write(net::buffer(std::string(R"({"id": "1", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})")));
                 beast::flat_buffer response;
                 ws.read(response);
                 const json j = json::parse(static_cast<const char*>(response.data().data()), static_cast<const char*>(response.data().data()) + response.size());
                 boost::string_view appId = j["payload"]["appId"];
-                Log(std::string("Current AppId: ") + std::string(appId));
+                app = std::string("Current AppId: ") + std::string(appId);
                 const boost::string_view prefix = "com.webos.app.hdmi";
                 if (appId.starts_with(prefix))
                 {
                     appId.remove_prefix(prefix.size());
                     if (std::to_string(CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs) == appId) {
                         logmsg = device;
-                        logmsg += ", HDMI input control match. Device will be powered off.";
+                        logmsg += ", HDMI";
+                        logmsg += std::string(appId); 
+                        logmsg += " input active.";
+                        Log(logmsg);
                         shouldPowerOff = true;
                     }
                     else
                     {
                         logmsg = device;
-                        logmsg += ", HDMI input control did not match. Deveice will NOT be powered off.";
+                        logmsg += ", HDMI";
+                        logmsg += std::to_string(CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs);
+                        logmsg += " input inactive.";
+                        Log(logmsg);
                     }
                 }
             }
 
             if (shouldPowerOff)
             {
-                ws.write(net::buffer(std::string(poweroffmess)));
+                ws.write(net::buffer(std::string(BlankScreen?screenoffmess:poweroffmess)));
                 ws.read(buffer); // read the response
                 logmsg = device;
-                logmsg += ", established contact: Display is powered OFF.  ";
+                if (BlankScreen)
+                    logmsg += ", established contact: Screen is OFF. ";
+                else
+                    logmsg += ", established contact: Device is OFF.";
                 Log(logmsg);
             }
 

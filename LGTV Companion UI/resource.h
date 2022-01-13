@@ -28,11 +28,16 @@
 #define IDC_TIMEOUT                     1010
 #define IDC_LOGGING                     1011
 #define IDC_AUTOUPDATE                  1012
+#define IDC_CHECK_BLANK                 1013
 #define IDC_SYSLINK                     1014
+#define IDC_TIMEOUT2                    1015
+#define IDC_EDIT_BLANK                  1015
+#define IDC_SPIN2                       1016
 #define IDC_LIST                        1018
 #define IDC_SYSLINK3                    1019
 #define IDC_NEWVERSION                  1021
 #define IDC_RADIO1                      1022
+#define IDC_DONATE                      1022
 #define IDC_RADIO2                      1023
 #define IDC_RADIO3                      1024
 #define IDC_SYSLINK4                    1025
