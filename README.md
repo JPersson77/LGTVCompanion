@@ -93,7 +93,7 @@ Please use the Github issue tracker for potential bug reports
 ## Thanks to
 - @nlohmann - Niels Lohmann, author of JSON for Modern CPP https://github.com/nlohmann/json
 - Boost libs - Boost and Beast https://www.boost.org/
-- @Maassoft for initial inspo and helping me understand the WebSocket/WebOS comms - https://github.com/Maassoft
+- @Maassoft for initial helpi with understanding the WebOS comms - https://github.com/Maassoft
 - @mohabouje - Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
 - Contributors
 
