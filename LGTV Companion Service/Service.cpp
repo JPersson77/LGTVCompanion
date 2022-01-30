@@ -1135,14 +1135,14 @@ void IPCThread(void)
                                         Log(w);
                                         device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 2);
                                     }
-                                    else if (param1 == APP_CMDLINE_SETHDMI1 && (id == param || name == param))
+                                    else if (param1 == APP_CMDLINE_SETHDMI3 && (id == param || name == param))
                                     {
                                         string w = "IPC, set HDMI input 3:";
                                         w += param;
                                         Log(w);
                                         device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 3);
                                     }
-                                    else if (param1 == APP_CMDLINE_SETHDMI1 && (id == param || name == param))
+                                    else if (param1 == APP_CMDLINE_SETHDMI4 && (id == param || name == param))
                                     {
                                         string w = "IPC, set HDMI input 4:";
                                         w += param;
