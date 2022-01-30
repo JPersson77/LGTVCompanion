@@ -64,11 +64,15 @@ HOT tip! Enable the built in logger and check the output, it can be very useful 
 
 ## Commandline arguments
 
-*LGTV Companion.exe -[poweron|poweroff|screenon|screenoff|autoenable|autodisable] [Device1|Name] [Device2|Name] ... [DeviceX|Name]*
+*LGTV Companion.exe -[poweron|poweroff|screenon|screenoff|autoenable|autodisable|sethdmi1|sethdmi2|sethdmi3|sethdmi4] [Device1|Name] [Device2|Name] ... [DeviceX|Name]*
 - *-poweron* - power on a device.
 - *-poweroff* - power off a device
 - *-screenon* - power on a device.
 - *-screenoff* - disable emitters, i.e. enter power saving mode where screen is blanked.
+- *-sethdmi1 - set HDMI input 1
+- *-sethdmi2 - set HDMI input 2
+- *-sethdmi3 - set HDMI input 3
+- *-sethdmi4 - set HDMI input 4
 - *-autoenable* - temporarily enable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. (I personally use this for my home automation system).
 - *-autodisable* - temporarily disable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. 
 - *[DeviceX|Name]* - device identifier. Either use Device1, Device2, ..., DeviceX or the friendly device name as determined in the User Interface, for example OLED48CX.
