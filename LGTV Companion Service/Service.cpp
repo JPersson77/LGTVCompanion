@@ -331,6 +331,8 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 
     SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has started.");
 
+    DispatchSystemPowerEvent(SYSTEM_EVENT_BOOT);
+
     // Wait until service stops
     WaitForSingleObject(ghSvcStopEvent, INFINITE);
 
@@ -504,7 +506,6 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
             DispatchSystemPowerEvent(SYSTEM_EVENT_UNSURE);
         }
 
-        //copy paste from the STOP event below
         ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000);
 
         do
@@ -720,20 +721,23 @@ void InitDeviceSessions()
 
         SESSIONPARAMETERS params;
 
+        //DEVICEID
         params.DeviceId = item.key();
         s << params.DeviceId << ", ";
+        //NAME
         if (item.value()["Name"].is_string())
             params.Name = item.value()["Name"].get<string>();
-        s << params.Name << ", with IP ";
-
+        s << params.Name;       
+        //IP
+        s << ", with IP ";
         if(item.value()["IP"].is_string())
             params.IP = item.value()["IP"].get<string>();
         s << params.IP << " initiated (";
-
+        //ENABLED
         if (item.value()["Enabled"].is_boolean())
             params.Enabled = item.value()["Enabled"].get<bool>();
         s << "Enabled:" << (params.Enabled?"yes":"no") << ", ";
-
+        //SUBNET AND WOL TYPE
         if (item.value()["Subnet"].is_string())
             params.Subnet = item.value()["Subnet"].get<string>();
         if (item.value()["WOL"].is_number())
@@ -741,10 +745,12 @@ void InitDeviceSessions()
         s << "WOL:" << params.WOLtype << ", ";
         if (params.WOLtype == WOL_SUBNETBROADCAST && params.Subnet != "")
             s << "SubnetMask:" << params.Subnet << ", ";
+        //PAIRING KEY
         if(item.value()["SessionKey"].is_string())
             params.SessionKey = item.value()["SessionKey"].get<string>();
-        s << "Pairing key:" << (params.SessionKey =="" ? "n/a" : params.SessionKey) << ", MAC: ";
-        
+        s << "PairingKey:" << (params.SessionKey == "" ? "n/a" : params.SessionKey);      
+        //MAC
+        s << ", MAC: ";       
         j = item.value()["MAC"];
         if (!j.empty() && j.size() > 0)
         {
@@ -756,10 +762,10 @@ void InitDeviceSessions()
         }
         else
             s << "n/a";
-        s << ", HDMI input control:";
+        //POWER OFF HDMI INPUT VERIFICATION
+        s << ", VerifyHdmiInput:";
         if (item.value()["HDMIinputcontrol"].is_boolean())
             params.HDMIinputcontrol = item.value()["HDMIinputcontrol"].get<bool>();
-
         if (item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].is_number())
             params.OnlyTurnOffIfCurrentHDMIInputNumberIs = item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].get<int>();
         if (params.HDMIinputcontrol) {
@@ -767,11 +773,22 @@ void InitDeviceSessions()
         }           
         else
             s << "off";
-        s << ", Blank when idle:";
-
+        //SET HDMI INPUT ON BOOT/RESUME
+        s << ", SetHdmiInput:";
+        if (item.value()["SetHDMIInputOnResume"].is_boolean())
+            params.SetHDMIInputOnResume = item.value()["SetHDMIInputOnResume"].get<bool>();
+        if (item.value()["SetHDMIInputOnResumeToNumber"].is_number())
+            params.SetHDMIInputOnResumeToNumber = item.value()["SetHDMIInputOnResumeToNumber"].get<int>();
+        if (params.SetHDMIInputOnResume) 
+        {
+            s << params.SetHDMIInputOnResumeToNumber;
+        }
+        else
+            s << "off";
+        //SCREEN BLANKING ON USER IDLE
+        s << ", BlankOnIdle:";
         params.BlankWhenIdle = Prefs.BlankWhenIdle;
         params.BlankScreenWhenIdleDelay = Prefs.BlankScreenWhenIdleDelay;
-
         if (params.BlankWhenIdle) {
             s << "on(";
             s << params.BlankScreenWhenIdleDelay;
@@ -1014,6 +1031,14 @@ void IPCThread(void)
                             param1 = APP_CMDLINE_SCREENON;
                         else if (param == "-screenoff")
                             param1 = APP_CMDLINE_SCREENOFF;
+                        else if (param == "-sethdmi1")
+                            param1 = APP_CMDLINE_SETHDMI1;
+                        else if (param == "-sethdmi2")
+                            param1 = APP_CMDLINE_SETHDMI2;
+                        else if (param == "-sethdmi3")
+                            param1 = APP_CMDLINE_SETHDMI3;
+                        else if (param == "-sethdmi4")
+                            param1 = APP_CMDLINE_SETHDMI4;
                         else if (param1 > 0)
                         {
                             if (param1 == APP_IPC_DAEMON)
@@ -1095,6 +1120,34 @@ void IPCThread(void)
                                         Log(w);
                                         device.Stop();
 
+                                    }
+                                    else if (param1 == APP_CMDLINE_SETHDMI1 && (id == param || name == param))
+                                    {
+                                        string w = "IPC, set HDMI input 1:";
+                                        w += param;
+                                        Log(w);
+                                        device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 1);
+                                    }
+                                    else if (param1 == APP_CMDLINE_SETHDMI2 && (id == param || name == param))
+                                    {
+                                        string w = "IPC, set HDMI input 2:";
+                                        w += param;
+                                        Log(w);
+                                        device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 2);
+                                    }
+                                    else if (param1 == APP_CMDLINE_SETHDMI1 && (id == param || name == param))
+                                    {
+                                        string w = "IPC, set HDMI input 3:";
+                                        w += param;
+                                        Log(w);
+                                        device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 3);
+                                    }
+                                    else if (param1 == APP_CMDLINE_SETHDMI1 && (id == param || name == param))
+                                    {
+                                        string w = "IPC, set HDMI input 4:";
+                                        w += param;
+                                        Log(w);
+                                        device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 4);
                                     }
                                 }
                             }

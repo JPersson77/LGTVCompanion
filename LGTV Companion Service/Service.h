@@ -35,7 +35,7 @@
 
 
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.5.0" 
+#define APPVERSION					    L"1.6.0" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
@@ -57,20 +57,22 @@
 #define THREAD_WAIT          		    1    // wait to spawn new thread (seconds)
 #define DIMMED_OFF_DELAY_WAIT           20    // delay after a screen dim request
 #define MAX_RECORD_BUFFER_SIZE          0x10000  // 64K
-#define SYSTEM_EVENT_SHUTDOWN           0x0001
-#define SYSTEM_EVENT_REBOOT             0x0002
-#define SYSTEM_EVENT_RESUME             0x0004
-#define SYSTEM_EVENT_RESUMEAUTO         0x0008
-#define SYSTEM_EVENT_SUSPEND            0x0010
-#define SYSTEM_EVENT_DISPLAYOFF         0x0020
-#define SYSTEM_EVENT_DISPLAYON          0x0040
-#define SYSTEM_EVENT_UNSURE             0x0080
-#define SYSTEM_EVENT_FORCEON            0x0100
-#define SYSTEM_EVENT_FORCEOFF           0x0200
-#define SYSTEM_EVENT_DISPLAYDIMMED      0x0400
-#define SYSTEM_EVENT_FORCESCREENOFF     0x0800
-#define SYSTEM_EVENT_USERBUSY           0x1000
-#define SYSTEM_EVENT_USERIDLE           0x2000
+#define SYSTEM_EVENT_SHUTDOWN           1
+#define SYSTEM_EVENT_REBOOT             2
+#define SYSTEM_EVENT_RESUME             3
+#define SYSTEM_EVENT_RESUMEAUTO         4
+#define SYSTEM_EVENT_SUSPEND            5
+#define SYSTEM_EVENT_DISPLAYOFF         6
+#define SYSTEM_EVENT_DISPLAYON          7
+#define SYSTEM_EVENT_UNSURE             8
+#define SYSTEM_EVENT_FORCEON            9
+#define SYSTEM_EVENT_FORCEOFF           10
+#define SYSTEM_EVENT_DISPLAYDIMMED      11
+#define SYSTEM_EVENT_FORCESCREENOFF     12
+#define SYSTEM_EVENT_USERBUSY           13
+#define SYSTEM_EVENT_USERIDLE           14
+#define SYSTEM_EVENT_FORCESETHDMI       15
+#define SYSTEM_EVENT_BOOT               16
 
 #define APP_CMDLINE_ON                  1
 #define APP_CMDLINE_OFF                 2
@@ -79,6 +81,10 @@
 #define APP_CMDLINE_SCREENON            5
 #define APP_CMDLINE_SCREENOFF           6
 #define APP_IPC_DAEMON                  7
+#define APP_CMDLINE_SETHDMI1            8
+#define APP_CMDLINE_SETHDMI2            9
+#define APP_CMDLINE_SETHDMI3            10
+#define APP_CMDLINE_SETHDMI4            11
 
 #define         WOL_NETWORKBROADCAST            1
 #define         WOL_IPSEND                      2
@@ -124,6 +130,8 @@ struct SESSIONPARAMETERS {
     int OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
     bool BlankWhenIdle = false;
     int BlankScreenWhenIdleDelay = 10;
+    bool SetHDMIInputOnResume = false;
+    int SetHDMIInputOnResumeToNumber = 1;
 };
 
 class CSession {
@@ -133,16 +141,19 @@ public:
     ~CSession();
     void Run();
     void Stop();
-    void SystemEvent(DWORD);
+    void SystemEvent(DWORD, int param = 0);
     SESSIONPARAMETERS GetParams();
     bool IsBusy();
 private:
     time_t ScreenDimmedRequestTime = 0;
     bool ThreadedOpDisplayOn = false;    
     bool ThreadedOpDisplayOff = false;
+    bool ThreadedOpDisplaySetHdmiInput = false;
     time_t ThreadedOpDisplayOffTime = 0;
     void TurnOnDisplay(void);
     void TurnOffDisplay(bool forced, bool dimmed, bool blankscreen);
+    void SetDisplayHdmiInput(int HdmiInput);
+
     SESSIONPARAMETERS   Parameters;
 };
 
@@ -166,6 +177,8 @@ std::wstring widen(std::string);
 std::string narrow(std::wstring);
 void DisplayPowerOnThread(SESSIONPARAMETERS *, bool *, int);
 void DisplayPowerOffThread(SESSIONPARAMETERS*, bool *, bool, bool);
+void SetDisplayHdmiInputThread(SESSIONPARAMETERS*, bool*, int, int);
+
 void IPCThread(void);
 void WOLthread(SESSIONPARAMETERS*, bool*, int);
 std::vector<std::string> stringsplit(std::string str, std::string token);

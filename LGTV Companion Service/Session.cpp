@@ -53,11 +53,38 @@ bool CSession::IsBusy(void)
     //thread safe section
     while (!mMutex.try_lock())
         Sleep(MUTEX_WAIT);
-    ret = ThreadedOpDisplayOn||ThreadedOpDisplayOff;
+    ret = ThreadedOpDisplayOn||ThreadedOpDisplayOff||ThreadedOpDisplaySetHdmiInput;
     mMutex.unlock();
     return ret;
 }
-void CSession::TurnOnDisplay(void)
+void CSession::SetDisplayHdmiInput(int HdmiInput)
+{
+    string s;
+
+    //thread safe section
+    while (!mMutex.try_lock())
+        Sleep(MUTEX_WAIT);
+  
+    if (!ThreadedOpDisplaySetHdmiInput)
+    {
+        ThreadedOpDisplaySetHdmiInput = true;
+        s = Parameters.DeviceId;
+        s += ", spawning DisplaySetHdmiInputThread().";
+
+        thread thread_obj(SetDisplayHdmiInputThread, &Parameters, &ThreadedOpDisplaySetHdmiInput, Parameters.PowerOnTimeout, HdmiInput);
+        thread_obj.detach();
+    }
+    else
+    {
+        s = Parameters.DeviceId;
+        s += ", omitted DisplaySetHdmiInputThread().";
+    }
+ 
+    mMutex.unlock();
+    Log(s);
+    return;
+}
+void CSession::TurnOnDisplay()
 {
     string s;
 
@@ -130,7 +157,7 @@ void CSession::TurnOffDisplay(bool forced, bool dimmed, bool blankscreen)
     return;
 }
 //   This function contains the logic for when a display power event (on/off) has occured which the device shall respond to
-void CSession::SystemEvent(DWORD dwMsg)
+void CSession::SystemEvent(DWORD dwMsg, int param)
 {
     // forced events are always processed, i.e. the user has issued this command.
     if (dwMsg == SYSTEM_EVENT_FORCEON)
@@ -139,6 +166,8 @@ void CSession::SystemEvent(DWORD dwMsg)
         TurnOffDisplay(true, false, false);
     if (dwMsg == SYSTEM_EVENT_FORCESCREENOFF)
         TurnOffDisplay(true, false, true);
+    if (dwMsg == SYSTEM_EVENT_FORCESETHDMI)
+        SetDisplayHdmiInput(param);
 
     //thread safe section
     while (!mMutex.try_lock())
@@ -172,7 +201,8 @@ void CSession::SystemEvent(DWORD dwMsg)
     }break;
     case SYSTEM_EVENT_RESUMEAUTO:
     {
-
+        if (Parameters.SetHDMIInputOnResume)
+            SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
     }break;
 
     case SYSTEM_EVENT_DISPLAYON:
@@ -197,6 +227,11 @@ void CSession::SystemEvent(DWORD dwMsg)
         if(Parameters.BlankWhenIdle)
             TurnOnDisplay();
     }break;
+    case SYSTEM_EVENT_BOOT:
+    {
+        if (Parameters.SetHDMIInputOnResume)
+            SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
+    }break;
     default:break;
     }
 }
@@ -204,7 +239,7 @@ void CSession::SystemEvent(DWORD dwMsg)
 void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * CallingSessionThreadRunning, int Timeout)
 {
     string screenonmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://com.webos.service.tvpower/power/turnOnScreen\"}";
-
+    
     if (!CallingSessionParameters)
         return;
 
@@ -258,11 +293,6 @@ void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * C
             ws.write(net::buffer(std::string(handshake)));
             ws.read(buffer); // read the first response
 
- //           logmsg = device;
- //           logmsg += ", response received: ";
- //           logmsg += beast::buffers_to_string(buffer.data());
- //           Log(logmsg);
-
             // parse for pairing key if needed
             if (key == "")
             {
@@ -288,7 +318,8 @@ void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * C
             }
 
             ws.write(net::buffer(std::string(screenonmess)));
- 
+//          ws.read(buffer);
+
             ws.close(websocket::close_code::normal);
             logmsg = device; 
             logmsg += ", established contact: Display is ON.  ";
@@ -670,4 +701,96 @@ threadoffend:
     *CallingSessionThreadRunning = false;
     mMutex.unlock();
     return ;
+}
+
+//   THREAD: Spawned when the device should select an HDMI input.
+void SetDisplayHdmiInputThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, int Timeout, int HdmiInput)
+{
+    string setinputmess = "{ \"id\":\"3\",\"type\" : \"request\",\"uri\" : \"ssap://system.launcher/launch\", \"payload\" :{\"id\":\"com.webos.app.hdmiHDMIINPUT\"}}";
+
+    if (!CallingSessionParameters)
+        return;
+    if (HdmiInput < 1 || HdmiInput>4)
+        return;
+    if (CallingSessionParameters->SessionKey == "")
+        return;
+
+    string hostip = CallingSessionParameters->IP;
+    string key = CallingSessionParameters->SessionKey;
+    string device = CallingSessionParameters->DeviceId;
+    string logmsg;
+    time_t origtim = time(0);
+    string hdmino = "HDMIINPUT";
+    string ck = "CLIENTKEYx0x0x0";
+    string handshake;
+    size_t ckf = NULL;
+
+    //build handshake
+    handshake = narrow(HANDSHAKE_PAIRED);
+    ckf = handshake.find(ck);
+    handshake.replace(ckf, ck.length(), key);
+
+    // build the message to set HDMI input
+    string inp = std::to_string(HdmiInput);
+    ckf = setinputmess.find(hdmino);
+    setinputmess.replace(ckf, hdmino.length(), inp);
+    
+     //try ten times, but not longer than timeout user preference
+    while (time(0) - origtim < (Timeout + 1))
+    {
+        time_t looptim = time(0);
+        try
+        {
+            //BOOST::BEAST
+            net::io_context ioc;
+            tcp::resolver resolver{ ioc };
+            websocket::stream<tcp::socket> ws{ ioc };
+            beast::flat_buffer buffer;
+            string host = hostip;
+
+            // try communicating with the display
+            auto const results = resolver.resolve(host, SERVICE_PORT);
+            auto ep = net::connect(ws.next_layer(), results);
+            host += ':' + std::to_string(ep.port());
+
+            ws.set_option(websocket::stream_base::decorator(
+                [](websocket::request_type& req)
+                {
+                    req.set(http::field::user_agent,
+                        std::string(BOOST_BEAST_VERSION_STRING) +
+                        " websocket-client-LGTVsvc");
+                }));
+            ws.handshake(host, "/");
+            ws.write(net::buffer(std::string(handshake)));
+            ws.read(buffer); // read the first response
+
+            ws.write(net::buffer(std::string(setinputmess)));
+            ws.read(buffer);
+
+            ws.close(websocket::close_code::normal);
+            logmsg = device;
+            logmsg += ", established contact. Set HDMI input: ";
+            logmsg += std::to_string(HdmiInput);
+            Log(logmsg);
+            break;
+        }
+        catch (std::exception const& e)
+        {
+            logmsg = device;
+            logmsg += ", WARNING! SetDisplayHdmiInputThread(): ";
+            logmsg += e.what();
+            Log(logmsg);
+        }
+        time_t endtim = time(0);
+        time_t execution_time = endtim - looptim;
+        if (execution_time < 6)
+            Sleep((6 - (DWORD)execution_time) * 1000);
+    }
+
+    while (!mMutex.try_lock())
+        Sleep(MUTEX_WAIT);
+    *CallingSessionThreadRunning = false;
+    mMutex.unlock();
+    return;
+
 }

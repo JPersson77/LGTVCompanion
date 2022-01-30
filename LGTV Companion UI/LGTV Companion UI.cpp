@@ -81,6 +81,10 @@ COMMAND LINE ARGUMENTS
     -screenon       - power on a device
     -poweroff       - power off a device.
     -screenoff      - disable emitters, i.e. enter power saving mode where screen is blanked.
+    -sethdmi1       - set HDMI input 1
+    -sethdmi1       - set HDMI input 2
+    -sethdmi1       - set HDMI input 3
+    -sethdmi1       - set HDMI input 4
     -autoenable     - temporarily enable the automatic management of a device, i.e. to respond to power events. This
                       is effective until next restart of the service. (I personally use this for my home automation system).
     -autodisable    - temporarily disable the automatic management of a device, i.e. to respond to power events. This
@@ -118,8 +122,11 @@ CHANGELOG
 
     v 1.5.0             - Implementation of more options for controlling power on/off logic
                         - Option to utilise capability for blanking TV (screen off)when user is idle
-                        - Extended command line options to include blanking of screen.
+                        - Extended command line parameters to include blanking of screen.
 
+    v 1.6.0             - Implementation of option for setting HDMI input on system start / resume from low power mode
+                        - Command line parameter to set HDMI input added
+    
     Todo:                 Option to  manage on active display outputs only
 
 LICENSE
@@ -329,6 +336,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         EnableWindow(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), false);
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), L"1");
 
+        CheckDlgButton(hDeviceWnd, IDC_SET_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
+        EnableWindow(GetDlgItem(hDeviceWnd, IDC_SET_HDMI_INPUT_NUMBER), false);
+        SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), L"1");
+
         EnableWindow(GetDlgItem(hDeviceWnd, IDOK), false);
 
         EnableWindow(hWnd, false);
@@ -350,6 +361,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         EnableWindow(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), Devices[sel].HDMIinputcontrol?true:false);
         SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), widen(std::to_string(Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs)).c_str());
         SendDlgItemMessage(hDeviceWnd, IDC_HDMI_INPUT_NUMBER_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs);
+
+        CheckDlgButton(hDeviceWnd, IDC_SET_HDMI_INPUT_CHECKBOX, Devices[sel].SetHDMIInputOnResume);
+        EnableWindow(GetDlgItem(hDeviceWnd, IDC_SET_HDMI_INPUT_NUMBER), Devices[sel].SetHDMIInputOnResume ? true : false);
+        SetWindowText(GetDlgItem(hDeviceWnd, IDC_SET_HDMI_INPUT_NUMBER), widen(std::to_string(Devices[sel].SetHDMIInputOnResumeToNumber)).c_str());
+        SendDlgItemMessage(hDeviceWnd, IDC_SET_HDMI_INPUT_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Devices[sel].SetHDMIInputOnResumeToNumber);
+
 
         str = L"";
         for (const auto& item : Devices[sel].MAC)
@@ -721,7 +738,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             //care to support your coder
             if (wParam == IDC_DONATE)
             {
-                if (MessageBox(hWnd, L"This is free software, but in case you would like to show a token of appreciation there is a donation page set up over at PayPal. PayPal allows you to use a credit- or debit card or your PayPal balance to make a donation, even without a PayPal account.\n\nClick 'Yes' to continue to the PayPal donation web page!", L"Donate via PayPal?", MB_YESNO | MB_ICONQUESTION) == IDYES)
+                if (MessageBox(hWnd, L"This is free software, but your support is appreciated and there is a donation page set up over at PayPal. PayPal allows you to use a credit- or debit card or your PayPal balance to make a donation, even without a PayPal account.\n\nClick 'Yes' to continue to the PayPal donation web page!", L"Donate via PayPal?", MB_YESNO | MB_ICONQUESTION) == IDYES)
                     ShellExecute(0, 0, DONATELINK, 0, 0, SW_SHOW);
             }
         }
@@ -799,7 +816,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     if (Devices.size() > 0)
                     {
                         if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-                            if (MessageBox(hWnd, L"Please apply unsaved changes before attmpting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+                            if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
                                 break;
                         int ms = MessageBoxW(hWnd, L"You are about to test the ability to control this device?\n\nPlease click YES to power off the device. Then wait about 5 seconds, or until you hear an iinternal relay of the TV clicking, and press ENTER on your keyboard to power on the device again.", L"Test device", MB_YESNO | MB_ICONQUESTION);
                         switch (ms)
@@ -818,7 +835,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     if (Devices.size() > 0)
                     {
                         if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-                            if (MessageBox(hWnd, L"Please apply unsaved changes before attmpting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+                            if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
                                 break;
                         SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
                     }
@@ -828,7 +845,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     if (Devices.size() > 0)
                     {
                         if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-                            if (MessageBox(hWnd, L"Please apply unsaved changes before attmpting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+                            if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
                                 break;
                         SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
                     }
@@ -917,6 +934,9 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SendDlgItemMessage(hWnd, IDC_HDMI_INPUT_NUMBER_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(4, 1));
         SendDlgItemMessage(hWnd, IDC_DEVICEMACS, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
         SendDlgItemMessage(hWnd, IDC_SUBNET, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+        SendDlgItemMessage(hWnd, IDC_SET_HDMI_INPUT_NUMBER, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+        SendDlgItemMessage(hWnd, IDC_SET_HDMI_INPUT_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(4, 1));
+
     }break;
     case WM_NOTIFY:
     {
@@ -943,6 +963,11 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             case IDC_HDMI_INPUT_NUMBER_CHECKBOX:
             {
                 EnableWindow(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER), IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED);
+                EnableWindow(GetDlgItem(hWnd, IDOK), true);
+            }break;
+            case IDC_SET_HDMI_INPUT_CHECKBOX:
+            {
+                EnableWindow(GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_NUMBER), IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED);
                 EnableWindow(GetDlgItem(hWnd, IDOK), true);
             }break;
             case IDC_RADIO1:
@@ -1016,6 +1041,9 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             Devices[sel].HDMIinputcontrol = IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED;
                             Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER))).c_str());
                             
+                            Devices[sel].SetHDMIInputOnResume = IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
+                            Devices[sel].SetHDMIInputOnResumeToNumber = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_NUMBER))).c_str());
+
                             if (IsDlgButtonChecked(hWnd, IDC_RADIO3))
                                 Devices[sel].WOLtype = WOL_SUBNETBROADCAST;
                             else if (IsDlgButtonChecked(hWnd, IDC_RADIO2))
@@ -1052,6 +1080,8 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                            
                             sess.HDMIinputcontrol = IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED;
                             sess.OnlyTurnOffIfCurrentHDMIInputNumberIs = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER))).c_str());
+                            sess.SetHDMIInputOnResume = IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
+                            sess.SetHDMIInputOnResumeToNumber = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_NUMBER))).c_str());
 
                             Devices.push_back(sess);
 
@@ -1111,6 +1141,7 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             case IDC_DEVICENAME:
             case IDC_DEVICEIP:
             case IDC_HDMI_INPUT_NUMBER:
+            case IDC_SET_HDMI_INPUT_NUMBER:
             case IDC_DEVICEMACS:
             case IDC_SUBNET:
 
@@ -1672,6 +1703,12 @@ void ReadDeviceConfig()
         if (item.value()["WOL"].is_number())
             params.WOLtype = item.value()["WOL"].get<int>();
 
+        if (item.value()["SetHDMIInputOnResume"].is_boolean())
+            params.SetHDMIInputOnResume = item.value()["SetHDMIInputOnResume"].get<bool>();
+
+        if (item.value()["SetHDMIInputOnResumeToNumber"].is_number())
+            params.SetHDMIInputOnResumeToNumber = item.value()["SetHDMIInputOnResumeToNumber"].get<int>();
+
         j = item.value()["MAC"];
         if (!j.empty() && j.size() > 0)
         {
@@ -1829,8 +1866,11 @@ void WriteConfigFile(void)
             prefs[dev.str()]["SessionKey"] = "";
 
         prefs[dev.str()]["HDMIinputcontrol"] = (bool)item.HDMIinputcontrol;
-
         prefs[dev.str()]["OnlyTurnOffIfCurrentHDMIInputNumberIs"] = item.OnlyTurnOffIfCurrentHDMIInputNumberIs;
+
+        prefs[dev.str()]["SetHDMIInputOnResume"] = (bool)item.SetHDMIInputOnResume;
+        prefs[dev.str()]["SetHDMIInputOnResumeToNumber"] = item.SetHDMIInputOnResumeToNumber;
+
 
         if (item.Subnet != "")
             prefs[dev.str()]["Subnet"] = item.Subnet;

@@ -30,7 +30,6 @@
 #define IDC_AUTOUPDATE                  1012
 #define IDC_CHECK_BLANK                 1013
 #define IDC_SYSLINK                     1014
-#define IDC_TIMEOUT2                    1015
 #define IDC_EDIT_BLANK                  1015
 #define IDC_SPIN2                       1016
 #define IDC_LIST                        1018
@@ -44,6 +43,10 @@
 #define IDC_HDMI_INPUT_NUMBER_CHECKBOX  1026
 #define IDC_HDMI_INPUT_NUMBER           1027
 #define IDC_HDMI_INPUT_NUMBER_SPIN      1028
+#define IDC_SET_HDMI_INPUT_CHECKBOX     1029
+#define IDC_SET_HDMI_INPUT_NUMBER       1030
+#define IDC_HDMI_INPUT_NUMBER_SPIN2     1031
+#define IDC_SET_HDMI_INPUT_SPIN         1031
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
