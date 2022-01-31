@@ -64,6 +64,8 @@ HOT tip! Enable the built in logger and check the output, it can be very useful 
 
 ## Commandline arguments
 
+The 'LGTV companion.exe" also accepts command line arguments for integration in scripts or similar.
+
 *LGTV Companion.exe -[poweron|poweroff|screenon|screenoff|autoenable|autodisable|sethdmi1|sethdmi2|sethdmi3|sethdmi4] [Device1|Name] [Device2|Name] ... [DeviceX|Name]*
 - *-poweron* - power on a device.
 - *-poweroff* - power off a device
