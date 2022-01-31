@@ -69,8 +69,8 @@ The 'LGTV companion.exe" also accepts command line arguments for integration in 
 *LGTV Companion.exe -[poweron|poweroff|screenon|screenoff|autoenable|autodisable|sethdmi1|sethdmi2|sethdmi3|sethdmi4] [Device1|Name] [Device2|Name] ... [DeviceX|Name]*
 - *-poweron* - power on a device.
 - *-poweroff* - power off a device
-- *-screenon* - power on a device.
-- *-screenoff* - disable emitters, i.e. enter power saving mode where screen is blanked.
+- *-screenon* - power on and enable the emitters, i e disable internal power saving mode and do not blank screen.
+- *-screenoff* - disable emitters, i.e. enable internal power saving mode whereby the display is blanked.
 - *-sethdmi1 - set HDMI input 1
 - *-sethdmi2 - set HDMI input 2
 - *-sethdmi3 - set HDMI input 3
