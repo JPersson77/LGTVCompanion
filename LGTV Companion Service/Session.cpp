@@ -1,7 +1,9 @@
 // See LGTV Companion UI.cpp for additional details
 #include "Service.h"
 
+#include <boost/optional.hpp>
 #include <boost/utility/string_view.hpp>
+#include <netioapi.h>
 
 using namespace std;
 namespace beast = boost::beast;         // from <boost/beast.hpp>
@@ -12,6 +14,78 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 using json = nlohmann::json;
 
 mutex mMutex;
+
+namespace {
+
+    class NetEntryDeleter final {
+    public:
+        NetEntryDeleter(const NetEntryDeleter&) = delete;
+        NetEntryDeleter& operator=(const NetEntryDeleter&) = delete;
+
+        NetEntryDeleter(NET_LUID luid, SOCKADDR_INET address) : luid(luid), address(address) {}
+
+        ~NetEntryDeleter() {
+            MIB_IPNET_ROW2 row;
+            row.InterfaceLuid = luid;
+            row.Address = address;
+
+            std::stringstream log;
+            log << "DeleteIpNetEntry2() = " << DeleteIpNetEntry2(&row);
+            Log(log.str());
+        }
+
+    private:
+        const NET_LUID luid;
+        const SOCKADDR_INET address;
+    };
+
+    boost::optional<NET_LUID> GetLocalInterface(SOCKADDR_INET destination) {
+        MIB_IPFORWARD_ROW2 row;
+        SOCKADDR_INET bestSourceAddress;
+        const auto result = GetBestRoute2(NULL, 0, NULL, &destination, 0, &row, &bestSourceAddress);
+
+        std::stringstream log;
+        log << "GetBestRoute2()";
+
+        if (result != NO_ERROR) {
+            std::stringstream log;
+            log << " failed with code " << result;
+            Log(log.str());
+            return boost::none;
+        }
+
+        log << " selected interface index " << row.InterfaceIndex << " LUID " << row.InterfaceLuid.Value << " route protocol " << row.Protocol;
+
+        if (row.Protocol != MIB_IPPROTO_LOCAL) {
+            log << "; route is not local, aborting";
+            Log(log.str());
+            return boost::none;
+        }
+
+        Log(log.str());
+        return row.InterfaceLuid;
+    }
+
+    std::unique_ptr<NetEntryDeleter> CreateTransientLocalNetEntry(SOCKADDR_INET destination, unsigned char macAddress[6]) {
+        const auto luid = GetLocalInterface(destination);
+        if (!luid.has_value()) return nullptr;
+
+        MIB_IPNET_ROW2 row;
+        row.Address = destination;
+        row.InterfaceLuid = *luid;
+        memcpy(row.PhysicalAddress, macAddress, sizeof(macAddress));
+        row.PhysicalAddressLength = sizeof(macAddress);
+        const auto result = CreateIpNetEntry2(&row);
+
+        std::stringstream log;
+        log << "CreateIpNetEntry2() = " << result;
+        Log(log.str());
+
+        if (result != NO_ERROR) return nullptr;
+        return std::make_unique<NetEntryDeleter>(*luid, destination);
+    }
+
+}
 
 CSession::CSession(SESSIONPARAMETERS* Params)
 {
@@ -489,6 +563,9 @@ void WOLthread (SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessio
 
                         for (auto i = 1; i <= 16; ++i)
                             memcpy(&Message[i * 6], &MACstr, 6 * sizeof(unsigned char));
+
+                        std::unique_ptr<NetEntryDeleter> netEntryDeleter;
+                        if (WOLtype == WOL_IPSEND) netEntryDeleter = CreateTransientLocalNetEntry(reinterpret_cast<const SOCKADDR_INET&>(LANDestination), MACstr);
 
                         // Send Wake On LAN packet
                         if (sendto(WOLsocket, (char*)&Message, 102, 0, reinterpret_cast<sockaddr*>(&LANDestination), sizeof(LANDestination)) == SOCKET_ERROR)                       

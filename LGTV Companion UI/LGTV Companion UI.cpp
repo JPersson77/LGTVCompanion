@@ -501,7 +501,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                                 temp.IP = narrow(IP);
                                 temp.MAC.push_back(MAC);
                                 temp.Subnet = narrow(WOL_DEFAULTSUBNET);
-                                temp.WOLtype = WOL_NETWORKBROADCAST;
+                                temp.WOLtype = WOL_IPSEND;
                                 Devices.push_back(temp);
                                 ChangesWereMade = true;
                                 DevicesAdded++;
@@ -947,7 +947,14 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             // explain the WOL options
             if (wParam == IDC_SYSLINK4)
             {
-                MessageBox(hWnd, L"Devices are powered on by means of sending wake-on-Lan magic packets. Depending on your network environment and operating system you may need to adjust these settings.\n\nTypically the application should send to either of:\n\na) the network broadcast address 255.255.255.255 or,\nb) the broadcast address according to device IP and subnet.\n\nThe current subnet mask of the subnet(s) of your PC can be found by using the \"IPCONFIG /all\" command in the command prompt.\n\nIf your devices have difficulties powering on try adjustig these settings.", L"Information", MB_OK | MB_ICONINFORMATION);
+                MessageBox(hWnd,
+                    L"Devices are powered on by means of sending wake-on-Lan magic packets. Depending on your network environment, TV firmware and operating system you may need to adjust these settings.\n\n"
+                    "The \"Device IP-address\" approach sends unicast packets directly to the device IP. IP neighbor table overrides are used to make this work even if ARP doesn't. This is believed to be the most reliable option.\n\n"
+                    "If the \"Device IP-address\" option doesn't work for you, you might want to try the other options. You are invited to file an issue on GitHub so that we can get a better understanding of what works and what doesn't work in the wild.\n\n"
+                    "Anecdotal evidence seems to suggest broadcast-based approaches can intermittently fail to wake up the TV (see e.g. GitHub issue #19), which is why they are not recommended.\n\n"
+                    "Between the two broadcast options, the subnet approach is the most likely to work. The global network broadcast approach is prone to issues when multiple network interfaces are present (VPN, etc.), because the packet might be sent using the wrong interface.\n\n"
+                    "The current subnet mask of the subnet(s) of your PC can be found by using the \"IPCONFIG /all\" command in the command prompt.",
+                    L"Information", MB_OK | MB_ICONINFORMATION);
             }
         }break;
         }
@@ -1076,7 +1083,7 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             else if (IsDlgButtonChecked(hWnd, IDC_RADIO2))
                                 sess.WOLtype = WOL_IPSEND;
                             else
-                                sess.WOLtype = WOL_NETWORKBROADCAST;
+                                sess.WOLtype = WOL_IPSEND;
                            
                             sess.HDMIinputcontrol = IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED;
                             sess.OnlyTurnOffIfCurrentHDMIInputNumberIs = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER))).c_str());

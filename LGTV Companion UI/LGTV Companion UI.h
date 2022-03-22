@@ -119,7 +119,7 @@ struct SESSIONPARAMETERS {
  //   bool AwayAuto = true;
     bool Enabled = true;
     int PowerOnTimeout = 40;
-    int WOLtype = WOL_NETWORKBROADCAST;
+    int WOLtype = WOL_IPSEND;
     std::string Subnet;
     bool HDMIinputcontrol = false;
     int OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
