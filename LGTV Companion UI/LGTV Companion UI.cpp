@@ -149,6 +149,7 @@ THANKS TO
     - Boost libs - Boost and Beast https://www.boost.org/
     - Maassoft for initial inspo and understanding re the WebOS comms - https://github.com/Maassoft
     - Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
+    - Etienne Dechanmps - valuable contributions
 
 COPYRIGHT
     Copyright (c) 2021-2022 Jörgen Persson

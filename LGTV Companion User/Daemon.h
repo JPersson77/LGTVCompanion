@@ -35,7 +35,7 @@
 #define			APPNAME_SHORT					L"LGTVdaemon"
 #define			APP_PATH					    L"LGTV Companion"
 #define			APPNAME_FULL					L"LGTV Companion Daemon"
-#define         APP_VERSION                     L"1.6.1"
+#define         APP_VERSION                     L"1.6.2"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_PROCESS			    1
 

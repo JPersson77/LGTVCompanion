@@ -23,7 +23,9 @@
 #include <Aclapi.h>
 #include <WinSock2.h>
 #include <dbt.h>
-
+#include <boost/optional.hpp>
+#include <boost/utility/string_view.hpp>
+#include <Iphlpapi.h>
 
 #include "nlohmann/json.hpp"
 #include "Handshake.h"
@@ -32,10 +34,10 @@
 #pragma comment(lib, "Wevtapi.lib")
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Advapi32.lib")
-
+#pragma comment(lib, "Iphlpapi.lib")
 
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.6.1" 
+#define APPVERSION					    L"1.6.2" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
