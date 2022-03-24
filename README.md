@@ -71,10 +71,10 @@ The 'LGTV companion.exe" also accepts command line arguments for integration in 
 - *-poweroff* - power off a device
 - *-screenon* - power on and enable the emitters, i e disable internal power saving mode and do not blank screen.
 - *-screenoff* - disable emitters, i.e. enable internal power saving mode whereby the display is blanked.
-- *-sethdmi1 - set HDMI input 1
-- *-sethdmi2 - set HDMI input 2
-- *-sethdmi3 - set HDMI input 3
-- *-sethdmi4 - set HDMI input 4
+- *-sethdmi1* - set HDMI input 1
+- *-sethdmi2* - set HDMI input 2
+- *-sethdmi3* - set HDMI input 3
+- *-sethdmi4* - set HDMI input 4
 - *-autoenable* - temporarily enable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. (I personally use this for my home automation system).
 - *-autodisable* - temporarily disable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. 
 - *[DeviceX|Name]* - device identifier. Either use Device1, Device2, ..., DeviceX or the friendly device name as determined in the User Interface, for example OLED48CX.
