@@ -51,6 +51,7 @@ If your display has trouble powering on, these are the things to check first:
 - Try reconfiguring the device and use one of the other wake-on-lan network options, primarily use option three, using a subnet mask.
 - Ensure the network is not dropping WOL-broadcasts.
 - The MAC-address configuration for the device in the application is erroneous.
+- In the case of Wi-Fi, if the connection between the TV and the Wi-Fi access point is lost for any reason (e.g. router reboot, power outage, firmware update, etc.) while the TV is off, the TV will not automatically reconnect and therefore won't react to attempts to turn it on via Wi-Fi. You will need to turn the TV on manually at least once so that it can reconnect to your Wi-Fi network.
 
 If your display has trouble powering off it is most likely because:
 - The IP configuration might be erroneous. Please check the configuration and make sure the TV has a static DHCP lease in your routers admin pages.
