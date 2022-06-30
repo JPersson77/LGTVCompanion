@@ -53,7 +53,7 @@
 
 #define			APPNAME_SHORT					L"LGTVcomp"
 #define			APPNAME_FULL					L"LGTV Companion"
-#define         APP_VERSION                     L"1.6.2"
+#define         APP_VERSION                     L"1.7.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_COMMANDLINE			1
 
@@ -68,6 +68,7 @@
 #define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
 #define         DEFAULT_RESTART                 {"restart"}
 #define         DEFAULT_SHUTDOWN                {"shutdown","power off"}
+#define         JSON_RDP_POWEROFF               "PowerOffDuringRDP"
 
 #define         APP_MESSAGE_ADD                 WM_USER+1
 #define         APP_MESSAGE_MANAGE              WM_USER+2
@@ -108,6 +109,7 @@ struct PREFS {
     bool ResetAPIkeys = false;
     bool BlankScreenWhenIdle = false;
     int BlankScreenWhenIdleDelay = 10;
+    bool PowerOffDuringRDP = false;
 };
 struct SESSIONPARAMETERS {
     std::string DeviceId;

@@ -1,5 +1,6 @@
 #pragma once
 #pragma comment(lib, "urlmon.lib")
+#pragma comment(lib, "Wtsapi32.lib")
 
 #if defined _M_IX86
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
@@ -24,9 +25,10 @@
 #include <fstream>
 #include <sstream>
 #include <thread>
-#include <shellapi.h>
+#include <shellapi.h> 
 #include <strsafe.h>
 #include <urlmon.h>
+#include <wtsapi32.h>
 
 #include "resource.h"
 #include "nlohmann/json.hpp"
@@ -35,15 +37,18 @@
 #define			APPNAME_SHORT					L"LGTVdaemon"
 #define			APP_PATH					    L"LGTV Companion"
 #define			APPNAME_FULL					L"LGTV Companion Daemon"
-#define         APP_VERSION                     L"1.6.2"
+#define         APP_VERSION                     L"1.7.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_PROCESS			    1
 
 #define         TIMER_MAIN                      18
 #define         TIMER_IDLE                      19
+#define         TIMER_RDP                       20
 
 #define         TIMER_MAIN_DELAY_WHEN_BUSY      2000
 #define         TIMER_MAIN_DELAY_WHEN_IDLE      100
+#define         TIMER_RDP_DELAY                 10000
+
 #define         APP_NEW_VERSION                 WM_USER+9
 
 
@@ -65,7 +70,8 @@ struct PREFS {
     int BlankScreenWhenIdleDelay = 10;
     bool Logging = false;
     int version = 2;
-
+    bool ToastInitialised = false;
+    bool DisableSendingViaIPC = false;
 };
 
 class WinToastHandler : public WinToastLib::IWinToastHandler

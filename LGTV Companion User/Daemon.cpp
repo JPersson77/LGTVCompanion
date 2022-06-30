@@ -68,8 +68,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
     if (!WinToast::instance()->initialize(&error)) {
         wchar_t buf[250];
         swprintf_s(buf, L"Failed to initialize Toast Notifications :%d", error);
-        MessageBox(NULL, buf, L"Error", MB_OK);
+        Log(buf);
     }
+    else
+        Prefs.ToastInitialised = true;
 
     // if the app is already running as another process, tell the other process to exit 
     MessageExistingProcess();
@@ -102,13 +104,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
         SetTimer(hMainWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
         SetTimer(hMainWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
     }
-
+        
     wstring startupmess = WindowTitle;
     startupmess += L" is running.";
     Log(startupmess);
 
     HPOWERNOTIFY rsrn =RegisterSuspendResumeNotification(hMainWnd, DEVICE_NOTIFY_WINDOW_HANDLE);
     HPOWERNOTIFY rpsn = RegisterPowerSettingNotification(hMainWnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
+
+    WTSRegisterSessionNotification(hMainWnd, NOTIFY_FOR_ALL_SESSIONS);
 
     CommunicateWithService("-daemon started");
  
@@ -121,20 +125,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
             DispatchMessage(&msg);
         }
     }
-
-    if (idToastNewversion || idToastFirstrun )
+    if (Prefs.ToastInitialised)
     {
-        if(idToastFirstrun)
-            WinToast::instance()->hideToast(idToastFirstrun);
-        if (idToastNewversion)
-            WinToast::instance()->hideToast(idToastNewversion);
-        Sleep(500);
-        WinToast::instance()->clear();
+        if (idToastNewversion || idToastFirstrun)
+        {
+            if (idToastFirstrun)
+                WinToast::instance()->hideToast(idToastFirstrun);
+            if (idToastNewversion)
+                WinToast::instance()->hideToast(idToastNewversion);
+            Sleep(500);
+            WinToast::instance()->clear();
+        }
     }
 
     UnregisterSuspendResumeNotification(rsrn);
     UnregisterPowerSettingNotification(rpsn);
-
+    WTSUnRegisterSessionNotification(hMainWnd);
     return (int)msg.wParam;
 }
 
@@ -146,7 +152,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
     case WM_INITDIALOG:
     {
-        if (bFirstRun)
+
+        if (bFirstRun && Prefs.ToastInitialised)
         {
             TCHAR buffer[MAX_PATH] = { 0 };
             GetModuleFileName(NULL, buffer, MAX_PATH);
@@ -187,30 +194,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             s += NEWRELEASELINK;
             Log(s);
 
-
-            TCHAR buffer[MAX_PATH] = { 0 };
-            GetModuleFileName(NULL, buffer, MAX_PATH);
-            wstring imgpath = buffer;
-            std::wstring::size_type pos = imgpath.find_last_of(L"\\/");
-            imgpath = imgpath.substr(0, pos + 1);
-            imgpath += L"mainicon.ico";
-
-            WinToastTemplate templ;
-            templ = WinToastTemplate(WinToastTemplate::ImageAndText02);
-            templ.setImagePath(imgpath);
-
-            templ.setTextField(L"Yay! A new version is available.", WinToastTemplate::FirstLine);
-            templ.setTextField(L"Please install the new version to keep up to date with bugfixes and features.", WinToastTemplate::SecondLine);
-
-            templ.addAction(L"Download");
-
-            // Read the additional options section in the article
-            templ.setDuration(WinToastTemplate::Duration::Long);
-            templ.setAudioOption(WinToastTemplate::AudioOption::Default);
-            idToastNewversion = WinToast::instance()->showToast(templ, &m_WinToastHandler);
-            if (idToastNewversion == -1L)
+            if (Prefs.ToastInitialised)
             {
-                Log(L"Failed to show toast notification about updated version!");
+                TCHAR buffer[MAX_PATH] = { 0 };
+                GetModuleFileName(NULL, buffer, MAX_PATH);
+                wstring imgpath = buffer;
+                std::wstring::size_type pos = imgpath.find_last_of(L"\\/");
+                imgpath = imgpath.substr(0, pos + 1);
+                imgpath += L"mainicon.ico";
+
+                WinToastTemplate templ;
+                templ = WinToastTemplate(WinToastTemplate::ImageAndText02);
+                templ.setImagePath(imgpath);
+
+                templ.setTextField(L"Yay! A new version is available.", WinToastTemplate::FirstLine);
+                templ.setTextField(L"Please install the new version to keep up to date with bugfixes and features.", WinToastTemplate::SecondLine);
+
+                templ.addAction(L"Download");
+
+                // Read the additional options section in the article
+                templ.setDuration(WinToastTemplate::Duration::Long);
+                templ.setAudioOption(WinToastTemplate::AudioOption::Default);
+                idToastNewversion = WinToast::instance()->showToast(templ, &m_WinToastHandler);
+                if (idToastNewversion == -1L)
+                {
+                    Log(L"Failed to show toast notification about updated version!");
+                }
             }
         }
     }break;
@@ -251,6 +260,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                         {
                             dwLastInputTick = lii.dwTime;
                             bIdlePreventEarlyWakeup = true;
+                            Prefs.DisableSendingViaIPC = false;
                         }
                         else
                         {
@@ -276,6 +286,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     bIdlePreventEarlyWakeup = false;
                 }
             }
+           
             return 0;
         }break;
         case TIMER_IDLE:
@@ -288,6 +299,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             CommunicateWithService("-daemon useridle");
 
             return 0;
+        }break;
+        case TIMER_RDP:
+        {
+            KillTimer(hWnd, TIMER_RDP);
+            if (Prefs.BlankScreenWhenIdle)
+            {
+                if (bIdle)
+                    CommunicateWithService("-daemon remoteconnect_idle");
+                else
+                    CommunicateWithService("-daemon remoteconnect_busy");
+            }
+            else
+                CommunicateWithService("-daemon remoteconnect");
+            Prefs.DisableSendingViaIPC = true;
+            
         }break;
         default:break;
         }
@@ -357,6 +383,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             default:break;
         }
     } 
+    case WM_WTSSESSION_CHANGE:
+    {
+        if (wParam == WTS_REMOTE_CONNECT)
+        {
+            SetTimer(hMainWnd, TIMER_RDP, TIMER_RDP_DELAY, (TIMERPROC)NULL);
+
+        }
+        else if (wParam == WTS_REMOTE_DISCONNECT)
+        {
+            Prefs.DisableSendingViaIPC = false;                
+            CommunicateWithService("-daemon remotedisconnect");
+            Prefs.DisableSendingViaIPC = true; // to prevent user idle screen blanking on login screen, which cannot be unblanked without using the remote.
+        }
+    }break;
     case WM_COPYDATA:
     {
         if (!lParam)
@@ -374,16 +414,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     }break;
     case WM_ENDSESSION: //PC is shutting down so let's do some cleaning up
     {
-        if (idToastNewversion || idToastFirstrun)
+        if (Prefs.ToastInitialised)
         {
-            if (idToastFirstrun)
-                WinToast::instance()->hideToast(idToastFirstrun);
-            if (idToastNewversion)
-                WinToast::instance()->hideToast(idToastNewversion);
-            Sleep(500);
-            WinToast::instance()->clear();
+            if (idToastNewversion || idToastFirstrun)
+            {
+                if (idToastFirstrun)
+                    WinToast::instance()->hideToast(idToastFirstrun);
+                if (idToastNewversion)
+                    WinToast::instance()->hideToast(idToastNewversion);
+                Sleep(500);
+                WinToast::instance()->clear();
+            }
         }
     }break;
+
     case WM_DESTROY:
     {
         PostQuitMessage(0);
@@ -507,23 +551,25 @@ void CommunicateWithService(string input)
 
     if (input == "")
         return;
-
-    hPipe = CreateFile(PIPENAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-
-    if (hPipe != INVALID_HANDLE_VALUE)
+    if (!Prefs.DisableSendingViaIPC)
     {
-        WriteFile(hPipe,
-            input.c_str(),
-            (DWORD)input.length() + 1,   // = length of string + terminating '\0' !!!
-            &dwWritten,
-            NULL);
-        Log(widen(input));
-    }
-    else
-        Log(L"Failed to connect to named pipe. Service may be stopped.");
+        hPipe = CreateFile(PIPENAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 
-    if (hPipe != INVALID_HANDLE_VALUE)
-        CloseHandle(hPipe);
+        if (hPipe != INVALID_HANDLE_VALUE)
+        {
+            WriteFile(hPipe,
+                input.c_str(),
+                (DWORD)input.length() + 1,   // = length of string + terminating '\0' !!!
+                &dwWritten,
+                NULL);
+            Log(widen(input));
+        }
+        else
+            Log(L"Failed to connect to named pipe. Service may be stopped.");
+
+        if (hPipe != INVALID_HANDLE_VALUE)
+            CloseHandle(hPipe);
+    }
 }
 
 void Log(wstring input)

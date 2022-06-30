@@ -410,11 +410,13 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
             EventCallbackStatus = NULL;;
             Log("** System resumed from low power state (Automatic).");
             DispatchSystemPowerEvent(SYSTEM_EVENT_RESUMEAUTO);
+            Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = true;
             break;
         case PBT_APMRESUMESUSPEND: 
             EventCallbackStatus = NULL;;
             Log("** System resumed from low power state.");
             DispatchSystemPowerEvent(SYSTEM_EVENT_RESUME);
+            Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = true;
             break;
         case PBT_APMSUSPEND: 
             
@@ -427,16 +429,19 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
             {
                 Log("** System is shutting down (low power mode).");
                 DispatchSystemPowerEvent(SYSTEM_EVENT_SUSPEND);
+                Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
             }
             else if (EventCallbackStatus == SYSTEM_EVENT_UNSURE)
             {
                 Log("WARNING! Unable to determine if system is shutting down or restarting. Please check 'additional settings' in the UI.");
                 DispatchSystemPowerEvent(SYSTEM_EVENT_UNSURE);
+                Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
             }
             else
             {
                 Log("** System is suspending to a low power state.");
                 DispatchSystemPowerEvent(SYSTEM_EVENT_SUSPEND);
+                Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
             }
             break;
         case PBT_POWERSETTINGCHANGE:           
@@ -451,16 +456,19 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
                     {
                         Log("** System requests displays OFF.");
                         DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
+                        Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
                     }
                     else if (PBS->Data[0] == 2)
                     {
                         Log("** System requests displays OFF(DIMMED).");
                         DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYDIMMED);
+                        Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
                     }
                    else
                     {
                         Log("** System requests displays ON.");
                         DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYON);
+                        Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = true;
                     }
                 }
                 else
@@ -493,17 +501,20 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
         {
             Log("** System is shutting down.");
             DispatchSystemPowerEvent(SYSTEM_EVENT_SHUTDOWN);
+            Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
         }
         else if (EventCallbackStatus == SYSTEM_EVENT_UNSURE)
         {
             Log("WARNING! Unable to determine if system is shutting down or restarting. Please check 'additional settings in the UI.");
             DispatchSystemPowerEvent(SYSTEM_EVENT_UNSURE);
+            Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
         }    
         else
         {
             //This does happen sometimes, probably for timing reasons when shutting down the system.  
             Log("WARNING! The application did not receive an Event Subscription Callback prior to system shutting down. Unable to determine if system is shutting down or restarting.");
             DispatchSystemPowerEvent(SYSTEM_EVENT_UNSURE);
+            Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
         }
 
         ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000);
@@ -692,6 +703,10 @@ bool ReadConfigFile()
             j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY];
             if (!j.empty() && j.is_number())
                 Prefs.BlankScreenWhenIdleDelay = j.get<int>();
+
+            j = jsonPrefs[JSON_PREFS_NODE][JSON_RDP_POWEROFF];
+            if (!j.empty() && j.is_boolean())
+                Prefs.PowerOffDuringRDP = j.get<bool>();
 
             Log(st);
             Log("Configuration file successfully read");
@@ -1064,7 +1079,51 @@ void IPCThread(void)
                                     Log("IPC, User is idle.");
                                     DispatchSystemPowerEvent(SYSTEM_EVENT_USERIDLE);
                                 }
-
+                                else if (param == "remoteconnect_busy")
+                                {
+                                    if (Prefs.PowerOffDuringRDP)
+                                    {
+                                        Log("IPC, Remote session connected. User idle management disabled, Powering off managed displays.");
+                                        DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
+                                    }
+                                    else
+                                        Log("IPC, Remote session connected. User idle management disabled.");
+                                }
+                                else if (param == "remoteconnect_idle")
+                                {
+                                    if (Prefs.PowerOffDuringRDP)
+                                    {
+                                        Log("IPC, Remote session connected. User idle management disabled. Powering off managed displays.");
+                                        DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
+                                    }
+                                    else
+                                    {
+                                        Log("IPC, Remote session connected. User idle management disabled");
+                                        DispatchSystemPowerEvent(SYSTEM_EVENT_UNBLANK);
+                                    }
+                                }
+                                else if (param == "remoteconnect")
+                                {
+                                    if (Prefs.PowerOffDuringRDP)
+                                    {
+                                        Log("IPC, Remote session connected. Powering off managed displays.");
+                                        DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
+                                    }
+                                    else
+                                        Log("IPC, Remote session connected.");
+                                }
+                                else if (param == "remotedisconnect")
+                                {
+                                    if (Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows)
+                                    {
+                                        Log("IPC, Remote session disconnected. Powering on managed displays.");
+                                        DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYON);
+                                    }
+                                    else 
+                                    {
+                                        Log("IPC, Remote session disconnected.");
+                                    }
+                                }
                             }
                             else
                             {

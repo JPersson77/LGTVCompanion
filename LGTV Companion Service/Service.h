@@ -37,7 +37,7 @@
 #pragma comment(lib, "Iphlpapi.lib")
 
 #define APPNAME						    L"LGTV Companion" 
-#define APPVERSION					    L"1.6.2" 
+#define APPVERSION					    L"1.7.0" 
 #define SVCNAME						    L"LGTVsvc" 
 #define SVCDISPLAYNAME				    L"LGTV Companion Service" 
 #define SERVICE_PORT                    "3000"
@@ -52,6 +52,7 @@
 #define DEFAULT_SHUTDOWN                {"shutdown","power off"}
 #define JSON_IDLEBLANK                  "BlankWhenIdle"
 #define JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
+#define JSON_RDP_POWEROFF               "PowerOffDuringRDP"
 
 #define SERVICE_DEPENDENCIES		    L"Dhcp\0Dnscache\0LanmanServer\0\0" 
 #define SERVICE_ACCOUNT				    NULL //L"NT AUTHORITY\\LocalService" 
@@ -75,6 +76,7 @@
 #define SYSTEM_EVENT_USERIDLE           14
 #define SYSTEM_EVENT_FORCESETHDMI       15
 #define SYSTEM_EVENT_BOOT               16
+#define SYSTEM_EVENT_UNBLANK            17
 
 #define APP_CMDLINE_ON                  1
 #define APP_CMDLINE_OFF                 2
@@ -116,6 +118,9 @@ struct PREFS {
     int PowerOnTimeout = 40;
     bool BlankWhenIdle = false;
     int BlankScreenWhenIdleDelay = 10;
+    bool PowerOffDuringRDP = false;
+    bool DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
+
 };
 
 struct SESSIONPARAMETERS {
@@ -134,6 +139,7 @@ struct SESSIONPARAMETERS {
     int BlankScreenWhenIdleDelay = 10;
     bool SetHDMIInputOnResume = false;
     int SetHDMIInputOnResumeToNumber = 1;
+
 };
 
 class CSession {
@@ -152,7 +158,7 @@ private:
     bool ThreadedOpDisplayOff = false;
     bool ThreadedOpDisplaySetHdmiInput = false;
     time_t ThreadedOpDisplayOffTime = 0;
-    void TurnOnDisplay(void);
+    void TurnOnDisplay(bool SendWOL);
     void TurnOffDisplay(bool forced, bool dimmed, bool blankscreen);
     void SetDisplayHdmiInput(int HdmiInput);
 
@@ -177,7 +183,7 @@ void Log(std::string);
 DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, EVT_HANDLE Event);
 std::wstring widen(std::string);
 std::string narrow(std::wstring);
-void DisplayPowerOnThread(SESSIONPARAMETERS *, bool *, int);
+void DisplayPowerOnThread(SESSIONPARAMETERS *, bool *, int, bool);
 void DisplayPowerOffThread(SESSIONPARAMETERS*, bool *, bool, bool);
 void SetDisplayHdmiInputThread(SESSIONPARAMETERS*, bool*, int, int);
 

@@ -126,6 +126,11 @@ CHANGELOG
 
     v 1.6.0             - Implementation of option for setting HDMI input on system start / resume from low power mode
                         - Command line parameter to set HDMI input added
+
+    v 1.7.0             - More robust operations during RDP remote host
+                        - Option to power off devices during RDP
+                        - Some additional help texts in the options dialog
+                        - Bugfixes and optimisations
     
     Todo:                 Option to  manage on active display outputs only
 
@@ -691,6 +696,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 PostMessage(hWnd, APP_MESSAGE_APPLY, (WPARAM) NULL, NULL);
 
             }break;
+            case IDC_TEST:
+            {
+                PostMessage((HWND) -1, WM_SYSCOMMAND, SC_MONITORPOWER, 2);
+
+            }break;
             case IDC_SPLIT:
             {
                 if (Devices.size() > 0)
@@ -1223,9 +1233,16 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         SendDlgItemMessage(hWnd, IDC_SPIN2, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.BlankScreenWhenIdleDelay);
 
         for (auto& item : Prefs.EventLogRestartString)
-            str.push_back(widen(item));
+        {
+            if (std::find(str.begin(), str.end(), widen(item)) == str.end())
+                str.push_back(widen(item));
+        }
         for (auto& item : Prefs.EventLogShutdownString)
-            str.push_back(widen(item));
+        {
+            if (std::find(str.begin(), str.end(), widen(item)) == str.end())
+                str.push_back(widen(item));
+        }
+        
         hResults = EvtQuery(NULL, path.c_str(), query.c_str(), EvtQueryChannelPath | EvtQueryReverseDirection);
         if (hResults)
         {
@@ -1311,6 +1328,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         CheckDlgButton(hWnd, IDC_AUTOUPDATE, Prefs.AutoUpdate ? BST_CHECKED : BST_UNCHECKED);
         CheckDlgButton(hWnd, IDC_CHECK_BLANK, Prefs.BlankScreenWhenIdle ? BST_CHECKED : BST_UNCHECKED);
         EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), Prefs.BlankScreenWhenIdle);
+        CheckDlgButton(hWnd, IDC_CHECK_RDPBLANK, Prefs.PowerOffDuringRDP ? BST_CHECKED : BST_UNCHECKED);
 
         EnableWindow(GetDlgItem(hWnd, IDOK), true);
     }break;
@@ -1355,6 +1373,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             }break;
             case IDC_LOGGING:
             case IDC_AUTOUPDATE:
+            case IDC_CHECK_RDPBLANK:
             {
                 EnableWindow(GetDlgItem(hWnd, IDOK), true);
             }break;
@@ -1377,6 +1396,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                     Prefs.AutoUpdate = IsDlgButtonChecked(hWnd, IDC_AUTOUPDATE);
                     Prefs.BlankScreenWhenIdle = IsDlgButtonChecked(hWnd, IDC_CHECK_BLANK) == BST_CHECKED;
                     Prefs.BlankScreenWhenIdleDelay = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_EDIT_BLANK))).c_str());
+                    Prefs.PowerOffDuringRDP = IsDlgButtonChecked(hWnd, IDC_CHECK_RDPBLANK) == BST_CHECKED;
 
                     int count = ListView_GetItemCount(GetDlgItem(hWnd, IDC_LIST));
                     Prefs.EventLogRestartString.clear();
@@ -1445,6 +1465,13 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             {
                 MessageBox(hWnd, L"This application rely on events in the windows event log to determine whether a reboot or shutdown was initiated by the user.\n\nThese events are localised in the language of your operating system, and the user must therefore assist with manually indicating which strings refers to the system restarting.\n\nPlease put a checkmark for every string which refers to 'restart'", L"Information", MB_OK | MB_ICONINFORMATION);
             }
+            // explain the power saving options
+            if (wParam == IDC_SYSLINK5)
+            {
+                MessageBox(hWnd, L"The option to automatically blank the screen triggers in the absence of user input from keyboard, mouse and/or controllers.The difference, when compared to both the screensaver and windows power plan settings, is that those OS implemented power saving functions utilize more obscured variables for determining user idle / busy states, and which can also be programmatically overridden f.e. by games, media players, production software or your web browser, In short, and simplified, this option is a more aggressively configured screen and power saver. Plese note that this feature is incompatible with-, and will therefore be disabled, while the system is remoted into, using RDP.\n\nThe option to turn off the device while the system is being remoted into, using RDP, is useful to avoid the screen displaying a static login screen during a remote RDP session. There is a delay of 10 seconds after RDP connection. Please note that depending on the configuration of your system (primarily time to turn off screen in power options) there may be occasions where the display cannot be woken by using the local mouse and keyboard and you must rely on the remote to see the login screen. It is recommended to combine this option with a short (<30 minutes) time to turn off displays in Windows Power Plan Options.", L"Information", MB_OK | MB_ICONINFORMATION);
+           
+            }
+
         }break;
         case LVN_ITEMCHANGED:
         {
@@ -1551,17 +1578,25 @@ bool ReadConfigFile()
             j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS];
             if (!j.empty() && j.size() > 0)
             {
-                Prefs.EventLogRestartString.clear();
+ //               Prefs.EventLogRestartString.clear();
                 for (auto& elem : j.items())
-                    Prefs.EventLogRestartString.push_back(elem.value().get<string>());
+                {
+                    string temp = elem.value().get<string>();
+                    if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
+                        Prefs.EventLogRestartString.push_back(temp);
+                }
             }
 
             j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS];
             if (!j.empty() && j.size() > 0)
             {
-                Prefs.EventLogShutdownString.clear();
+ //               Prefs.EventLogShutdownString.clear();
                 for (auto& elem : j.items())
-                    Prefs.EventLogShutdownString.push_back(elem.value().get<string>());
+                {
+                    string temp = elem.value().get<string>();
+                    if (std::find(Prefs.EventLogShutdownString.begin(), Prefs.EventLogShutdownString.end(), temp) == Prefs.EventLogShutdownString.end())
+                        Prefs.EventLogShutdownString.push_back(temp);
+                }
             }
 
             j = jsonPrefs[JSON_PREFS_NODE][JSON_VERSION];
@@ -1588,6 +1623,10 @@ bool ReadConfigFile()
             if (!j.empty() && j.is_number())
                 Prefs.BlankScreenWhenIdleDelay = j.get<int>();
 
+            j = jsonPrefs[JSON_PREFS_NODE][JSON_RDP_POWEROFF];
+            if (!j.empty() && j.is_boolean())
+                Prefs.PowerOffDuringRDP = j.get<bool>();
+            
             return true;
         }
     }
@@ -1846,6 +1885,7 @@ void WriteConfigFile(void)
     prefs[JSON_PREFS_NODE][JSON_AUTOUPDATE] = (bool)Prefs.AutoUpdate;
     prefs[JSON_PREFS_NODE][JSON_IDLEBLANK] = (bool)Prefs.BlankScreenWhenIdle;
     prefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY] = (int)Prefs.BlankScreenWhenIdleDelay;
+    prefs[JSON_PREFS_NODE][JSON_RDP_POWEROFF] = (bool)Prefs.PowerOffDuringRDP;
 
     for (auto& item : Prefs.EventLogRestartString)
         prefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS].push_back(item);

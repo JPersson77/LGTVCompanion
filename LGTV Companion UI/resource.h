@@ -32,8 +32,10 @@
 #define IDC_SYSLINK                     1014
 #define IDC_EDIT_BLANK                  1015
 #define IDC_SPIN2                       1016
+#define IDC_CHECK_RDPBLANK              1017
 #define IDC_LIST                        1018
 #define IDC_SYSLINK3                    1019
+#define IDC_SYSLINK5                    1020
 #define IDC_NEWVERSION                  1021
 #define IDC_RADIO1                      1022
 #define IDC_DONATE                      1022
@@ -44,8 +46,8 @@
 #define IDC_HDMI_INPUT_NUMBER           1027
 #define IDC_HDMI_INPUT_NUMBER_SPIN      1028
 #define IDC_SET_HDMI_INPUT_CHECKBOX     1029
+#define IDC_TEST                        1029
 #define IDC_SET_HDMI_INPUT_NUMBER       1030
-#define IDC_HDMI_INPUT_NUMBER_SPIN2     1031
 #define IDC_SET_HDMI_INPUT_SPIN         1031
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
@@ -73,7 +75,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        144
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1029
+#define _APS_NEXT_CONTROL_VALUE         1030
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

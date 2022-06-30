@@ -156,7 +156,7 @@ void CSession::SetDisplayHdmiInput(int HdmiInput)
     Log(s);
     return;
 }
-void CSession::TurnOnDisplay()
+void CSession::TurnOnDisplay(bool SendWOL)
 {
     string s;
 
@@ -175,7 +175,7 @@ void CSession::TurnOnDisplay()
         ThreadedOpDisplayOn = true;
  //       ThreadedOperationsTimeStamp = time(0);
 
-        thread thread_obj(DisplayPowerOnThread, &Parameters, &ThreadedOpDisplayOn, Parameters.PowerOnTimeout);
+        thread thread_obj(DisplayPowerOnThread, &Parameters, &ThreadedOpDisplayOn, Parameters.PowerOnTimeout, SendWOL);
         thread_obj.detach();
     }
     else
@@ -233,7 +233,7 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 {
     // forced events are always processed, i.e. the user has issued this command.
     if (dwMsg == SYSTEM_EVENT_FORCEON)
-        TurnOnDisplay();
+        TurnOnDisplay(true);
     if (dwMsg == SYSTEM_EVENT_FORCEOFF)
         TurnOffDisplay(true, false, false);
     if (dwMsg == SYSTEM_EVENT_FORCESCREENOFF)
@@ -279,7 +279,7 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 
     case SYSTEM_EVENT_DISPLAYON:
     {
-        TurnOnDisplay();
+        TurnOnDisplay(true);
     }break;
     case SYSTEM_EVENT_DISPLAYOFF:
     {
@@ -297,18 +297,22 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
     case SYSTEM_EVENT_USERBUSY:
     {
         if(Parameters.BlankWhenIdle)
-            TurnOnDisplay();
+            TurnOnDisplay(true);
     }break;
     case SYSTEM_EVENT_BOOT:
     {
         if (Parameters.SetHDMIInputOnResume)
             SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
     }break;
+    case SYSTEM_EVENT_UNBLANK:
+    {
+        TurnOnDisplay(false);
+    }break;
     default:break;
     }
 }
 //   THREAD: Spawned when the device should power ON. This thread manages the pairing key from the display and verifies that the display has been powered on
-void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * CallingSessionThreadRunning, int Timeout)
+void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * CallingSessionThreadRunning, int Timeout, bool SendWOL)
 {
     string screenonmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://com.webos.service.tvpower/power/turnOnScreen\"}";
     
@@ -323,8 +327,11 @@ void DisplayPowerOnThread(SESSIONPARAMETERS * CallingSessionParameters, bool * C
     string handshake; 
     time_t origtim = time(0);
  
-    thread wolthread(WOLthread, CallingSessionParameters, CallingSessionThreadRunning, Timeout);
-    wolthread.detach();
+    if (SendWOL)
+    {
+        thread wolthread(WOLthread, CallingSessionParameters, CallingSessionThreadRunning, Timeout);
+        wolthread.detach();
+    }
 
     // build the appropriate WebOS handshake
     if (key == "")
