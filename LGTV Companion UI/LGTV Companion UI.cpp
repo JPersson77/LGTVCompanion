@@ -798,50 +798,50 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						if (ms == IDCANCEL)
 							break;
 
-						SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)ms == IDYES ? 0 : 1, (LPARAM)lParam);
-					}
-					else
-						SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)0, (LPARAM)lParam);
-				}break;
-				case ID_M_TEST:
-				{
-					if (Devices.size() > 0)
-					{
-						if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-							if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
-								break;
-						int ms = MessageBoxW(hWnd, L"You are about to test the ability to control this device?\n\nPlease click YES to power off the device. Then wait about 5 seconds, or until you hear an iinternal relay of the TV clicking, and press ENTER on your keyboard to power on the device again.", L"Test device", MB_YESNO | MB_ICONQUESTION);
-						switch (ms)
-						{
-						case IDYES:
-							SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
-							MessageBoxW(hWnd, L"Please press ENTER on your keyboard to power on the device again.", L"Test device", MB_OK | MB_ICONEXCLAMATION);
-							SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
-							break;
-						default:break;
-						}
-					}
-				}break;
-				case ID_M_TURNON:
-				{
-					if (Devices.size() > 0)
-					{
-						if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-							if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
-								break;
-						SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
-					}
-				}break;
-				case ID_M_TURNOFF:
-				{
-					if (Devices.size() > 0)
-					{
-						if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-							if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
-								break;
-						SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
-					}
-				}break;
+                        SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)ms == IDYES ? 0 : 1, (LPARAM)lParam);
+                    }
+                    else
+                        SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)0, (LPARAM)lParam);
+                 }break;
+                case ID_M_TEST:
+                {
+                    if (Devices.size() > 0)
+                    {
+                        if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
+                            if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+                                break;
+                        int ms = MessageBoxW(hWnd, L"You are about to test the ability to control this device?\n\nPlease click YES to power off the device. Then wait about 5 seconds, or until you hear an internal relay of the TV clicking, and press ENTER on your keyboard to power on the device again.", L"Test device", MB_YESNO | MB_ICONQUESTION);
+                        switch (ms)
+                        {
+                        case IDYES:
+                            SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
+                            MessageBoxW(hWnd, L"Please press ENTER on your keyboard to power on the device again.", L"Test device", MB_OK | MB_ICONEXCLAMATION);
+                            SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
+                            break;
+                        default:break;
+                        }
+                    }
+                }break;
+                case ID_M_TURNON:
+                {                     
+                    if (Devices.size() > 0)
+                    {
+                        if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
+                            if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+                                break;
+                        SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
+                    }
+                }break;
+                case ID_M_TURNOFF:
+                {
+                    if (Devices.size() > 0)
+                    {
+                        if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
+                            if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+                                break;
+                        SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
+                    }
+                }break;
 
 				default:break;
 				}
