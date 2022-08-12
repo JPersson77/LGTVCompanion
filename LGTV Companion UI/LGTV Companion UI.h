@@ -39,7 +39,7 @@
 #include <winevt.h>
 #include <thread>
 #include <shellapi.h>
-#include <initguid.h>   
+#include <initguid.h>
 #include <functiondiscoverykeys.h>
 #include <SetupAPI.h>
 #include <devpkey.h>
@@ -100,33 +100,33 @@
 #define         DONATELINK                      L"https://www.paypal.com/donate/?hosted_button_id=TGZRPAHV4QC62"
 
 struct PREFS {
-    std::vector<std::string> EventLogRestartString = DEFAULT_RESTART;
-    std::vector<std::string> EventLogShutdownString = DEFAULT_SHUTDOWN;
-    bool Logging = false;
-    int version = 2;
-    int PowerOnTimeout = 40;
-    bool AutoUpdate = false;
-    bool ResetAPIkeys = false;
-    bool BlankScreenWhenIdle = false;
-    int BlankScreenWhenIdleDelay = 10;
-    bool PowerOffDuringRDP = false;
+	std::vector<std::string> EventLogRestartString = DEFAULT_RESTART;
+	std::vector<std::string> EventLogShutdownString = DEFAULT_SHUTDOWN;
+	bool Logging = false;
+	int version = 2;
+	int PowerOnTimeout = 40;
+	bool AutoUpdate = false;
+	bool ResetAPIkeys = false;
+	bool BlankScreenWhenIdle = false;
+	int BlankScreenWhenIdleDelay = 10;
+	bool PowerOffDuringRDP = false;
 };
 struct SESSIONPARAMETERS {
-    std::string DeviceId;
-    std::string IP;
-    std::vector<std::string> MAC;
-    std::string SessionKey;
-    std::string Name;
- //   bool PowerAuto = true;
- //   bool AwayAuto = true;
-    bool Enabled = true;
-    int PowerOnTimeout = 40;
-    int WOLtype = WOL_IPSEND;
-    std::string Subnet;
-    bool HDMIinputcontrol = false;
-    int OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
-    bool SetHDMIInputOnResume = false;
-    int SetHDMIInputOnResumeToNumber = 1;
+	std::string DeviceId;
+	std::string IP;
+	std::vector<std::string> MAC;
+	std::string SessionKey;
+	std::string Name;
+	//   bool PowerAuto = true;
+	//   bool AwayAuto = true;
+	bool Enabled = true;
+	int PowerOnTimeout = 40;
+	int WOLtype = WOL_IPSEND;
+	std::string Subnet;
+	bool HDMIinputcontrol = false;
+	int OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
+	bool SetHDMIInputOnResume = false;
+	int SetHDMIInputOnResumeToNumber = 1;
 };
 
 // Forward declarations of functions included in this code module:

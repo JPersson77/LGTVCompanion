@@ -25,7 +25,7 @@
 #include <fstream>
 #include <sstream>
 #include <thread>
-#include <shellapi.h> 
+#include <shellapi.h>
 #include <strsafe.h>
 #include <urlmon.h>
 #include <wtsapi32.h>
@@ -51,7 +51,6 @@
 
 #define         APP_NEW_VERSION                 WM_USER+9
 
-
 #define         JSON_PREFS_NODE                 "LGTV Companion"
 #define         JSON_VERSION                    "Version"
 #define         JSON_LOGGING                    "ExtendedLog"
@@ -65,30 +64,29 @@
 #define         DONATELINK                      L"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=jorgen.persson@gmail.com&lc=US&item_name=Friendly+gift+for+the+development+of+LGTV+Companion&no_note=0&cn=&currency_code=EUR&bn=PP-DonationsBF:btn_donateCC_LG.gif:NonHosted"
 
 struct PREFS {
-    bool AutoUpdate = false;
-    bool BlankScreenWhenIdle = false;
-    int BlankScreenWhenIdleDelay = 10;
-    bool Logging = false;
-    int version = 2;
-    bool ToastInitialised = false;
-    bool DisableSendingViaIPC = false;
+	bool AutoUpdate = false;
+	bool BlankScreenWhenIdle = false;
+	int BlankScreenWhenIdleDelay = 10;
+	bool Logging = false;
+	int version = 2;
+	bool ToastInitialised = false;
+	bool DisableSendingViaIPC = false;
 };
 
 class WinToastHandler : public WinToastLib::IWinToastHandler
 {
 public:
-//    WinToastHandler() {}
-    // Public interfaces
-    void toastActivated() const override {
- //       ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
-    }
-    void toastActivated(int actionIndex) const override {
-        ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
-    }
-    void toastDismissed(WinToastDismissalReason state) const override {}
-    void toastFailed() const override {}
+	//    WinToastHandler() {}
+		// Public interfaces
+	void toastActivated() const override {
+		//       ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
+	}
+	void toastActivated(int actionIndex) const override {
+		ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
+	}
+	void toastDismissed(WinToastDismissalReason state) const override {}
+	void toastFailed() const override {}
 private:
-
 };
 
 // Forward declarations of functions included in this code module:
