@@ -10,6 +10,12 @@ This application aim to be a set and forget application to:
 ## Background
 With the rise in popularity of using OLED TVs as PC monitors, it is apparent that standard functionality of PC-monitors is missing. Particularly turning the display on or off in response to power events in windows. With OLED monitors this is particularly important to prevent "burn-in", or more accurately pixel-wear.
 
+## What other people say
+
+-*"That is a really janky solution. But... it WORKS!"* Linus Tech Tips at https://youtu.be/4mgePWWCAmA?t=21m14s
+-*"The best kind of programming is fueled by pure hate for an annoying situation."* - reddituser at https://www.reddit.com/r/OLED_Gaming/comments/okhv67/comment/h58alyu/?utm_source=share&utm_medium=web2x&context=3
+-*"Yeah, that's really nice!" by my wife
+
 ## Installation and usage
 1. Important prerequisites:
    - Power ON all TVs and ensure they are connected to your local area network via Wi-Fi or cable.
@@ -102,6 +108,7 @@ Please use the Github issue tracker for potential bug reports or feature request
 - @Maassoft for initial helpi with understanding the WebOS comms - https://github.com/Maassoft
 - @mohabouje - Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
 - Contributors
+
 
 ## Copyright
 Copyright © 2021-2022 Jörgen Persson
