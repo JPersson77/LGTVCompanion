@@ -11,8 +11,10 @@
 #else
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #endif
+this is my change
 
 //#include "targetver.h"
+this
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
