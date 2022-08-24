@@ -12,9 +12,9 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 
 ## What other people say
 
--*"That is a really janky solution. But... it WORKS!"* Linus Tech Tips at https://youtu.be/4mgePWWCAmA?t=21m14s
--*"The best kind of programming is fueled by pure hate for an annoying situation."* - reddituser at https://www.reddit.com/r/OLED_Gaming/comments/okhv67/comment/h58alyu/?utm_source=share&utm_medium=web2x&context=3
- -*"Yeah, that's really nice!" by my wife
+- *"That is a really janky solution. But... it WORKS!"* Linus Tech Tips at https://youtu.be/4mgePWWCAmA?t=21m14s
+- *"The best kind of programming is fueled by pure hate for an annoying situation."* - reddituser at https://www.reddit.com/r/OLED_Gaming/comments/okhv67/comment/h58alyu/?utm_source=share&utm_medium=web2x&context=3
+- *"Yeah, that's really nice!" by my wife
 
 ## Installation and usage
 1. Important prerequisites:
