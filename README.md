@@ -1,7 +1,7 @@
 # LGTV Companion
 
 ## Download instructions
-**The latest installer for the latest version can be downloaded from the [Releases](https://github.com/JPersson77/LGTVCompanion/releases) page.**
+**The installer for the latest version can be downloaded from the [Releases](https://github.com/JPersson77/LGTVCompanion/releases) page.**
 
 ## Overview
 This application (UI and service) controls LG WebOS TVs and displays.
