@@ -3,6 +3,7 @@
 // Used by LGTV Companion UI.rc
 //
 #define IDC_MYICON                      2
+#define IDCONFIGURE                     3
 #define IDD_LGTVCOMPANIONUI_DIALOG      102
 #define IDR_MAINFRAME                   128
 #define IDD_MAIN                        129
@@ -13,6 +14,9 @@
 #define IDD_WAIT                        133
 #define IDI_ICON1                       142
 #define IDI_ICON2                       143
+#define IDD_CONFIGURE_TOPOLOGY          144
+#define IDI_ICON4                       149
+#define IDI_ICON3                       150
 #define IDC_COMBO                       1000
 #define IDC_SPLIT                       1001
 #define IDC_OPTIONS                     1002
@@ -37,6 +41,7 @@
 #define IDC_SYSLINK3                    1019
 #define IDC_SYSLINK5                    1020
 #define IDC_NEWVERSION                  1021
+#define IDC_SYSLINK2                    1021
 #define IDC_RADIO1                      1022
 #define IDC_DONATE                      1022
 #define IDC_RADIO2                      1023
@@ -48,7 +53,31 @@
 #define IDC_SET_HDMI_INPUT_CHECKBOX     1029
 #define IDC_TEST                        1029
 #define IDC_SET_HDMI_INPUT_NUMBER       1030
+#define IDC_CHECK_TOPOLOGY              1030
 #define IDC_SET_HDMI_INPUT_SPIN         1031
+#define IDC_GO                          1031
+#define IDC_STATIC_NO_1                 1032
+#define IDC_STATIC_NO_2                 1033
+#define IDC_STATIC_NO_3                 1034
+#define IDC_STATIC_NO_4                 1035
+#define IDC_STATIC_T_1                  1036
+#define IDC_STATIC_T_11                 1036
+#define IDC_STATIC_T_2                  1037
+#define IDC_STATIC_T_12                 1037
+#define IDC_STATIC_T_3                  1038
+#define IDC_STATIC_T_14                 1038
+#define IDC_STATIC_T_4                  1039
+#define IDC_STATIC_T_16                 1039
+#define IDC_STATIC_STATUS_1             1040
+#define IDC_STATIC_STATUS_2             1041
+#define IDC_STATIC_C                    1042
+#define IDC_STATIC_T_5                  1042
+#define IDC_STATIC_T_15                 1042
+#define IDC_STATIC_NO_6                 1043
+#define IDC_STATIC_T_13                 1044
+#define IDC_SYSLINK_CONF                1044
+#define IDC_GO2                         1045
+#define IDC_STATIC_NO_5                 1046
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -69,13 +98,13 @@
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
-//
+// 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        144
+#define _APS_NEXT_RESOURCE_VALUE        153
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1030
+#define _APS_NEXT_CONTROL_VALUE         1045
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

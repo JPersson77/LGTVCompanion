@@ -42,5 +42,14 @@
     <Image Include="burger.ico">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="icon3.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="go.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="cog.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

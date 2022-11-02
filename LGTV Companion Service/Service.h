@@ -37,7 +37,7 @@
 #pragma comment(lib, "Iphlpapi.lib")
 
 #define APPNAME						    L"LGTV Companion"
-#define APPVERSION					    L"1.7.0"
+#define APPVERSION					    L"1.8.0"
 #define SVCNAME						    L"LGTVsvc"
 #define SVCDISPLAYNAME				    L"LGTV Companion Service"
 #define SERVICE_PORT                    "3000"
@@ -53,6 +53,7 @@
 #define JSON_IDLEBLANK                  "BlankWhenIdle"
 #define JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
 #define JSON_RDP_POWEROFF               "PowerOffDuringRDP"
+#define JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
 
 #define SERVICE_DEPENDENCIES		    L"Dhcp\0Dnscache\0LanmanServer\0\0"
 #define SERVICE_ACCOUNT				    NULL //L"NT AUTHORITY\\LocalService"
@@ -77,6 +78,7 @@
 #define SYSTEM_EVENT_FORCESETHDMI       15
 #define SYSTEM_EVENT_BOOT               16
 #define SYSTEM_EVENT_UNBLANK            17
+#define SYSTEM_EVENT_TOPOLOGY           18
 
 #define APP_CMDLINE_ON                  1
 #define APP_CMDLINE_OFF                 2
@@ -89,6 +91,9 @@
 #define APP_CMDLINE_SETHDMI2            9
 #define APP_CMDLINE_SETHDMI3            10
 #define APP_CMDLINE_SETHDMI4            11
+#define APP_IPC_DAEMON_TOPOLOGY         12
+
+
 
 #define         WOL_NETWORKBROADCAST            1
 #define         WOL_IPSEND                      2
@@ -146,11 +151,15 @@ public:
 	void SystemEvent(DWORD, int param = 0);
 	SESSIONPARAMETERS GetParams();
 	bool IsBusy();
+	void SetTopology(bool);
+	std::string DeviceID;
 private:
 	time_t ScreenDimmedRequestTime = 0;
 	bool ThreadedOpDisplayOn = false;
 	bool ThreadedOpDisplayOff = false;
 	bool ThreadedOpDisplaySetHdmiInput = false;
+	bool AdhereTopology = false;
+	bool TopologyEnabled = false;
 	time_t ThreadedOpDisplayOffTime = 0;
 	void TurnOnDisplay(bool SendWOL);
 	void TurnOffDisplay(bool forced, bool dimmed, bool blankscreen);

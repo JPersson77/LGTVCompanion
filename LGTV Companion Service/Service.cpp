@@ -800,6 +800,7 @@ void InitDeviceSessions()
 		params.PowerOnTimeout = Prefs.PowerOnTimeout;
 
 		CSession S(&params);
+		S.DeviceID = params.DeviceId;
 		DeviceCtrlSessions.push_back(S);
 		Log(s.str());
 	}
@@ -981,7 +982,6 @@ void IPCThread(void)
 	SetSecurityDescriptorDacl(psd, TRUE, (PACL)NULL, FALSE);
 	SECURITY_ATTRIBUTES sa = { sizeof(sa), psd, FALSE };
 
-	//   Log("Creating named pipe");
 	hPipe = CreateNamedPipe(PIPENAME,
 		PIPE_ACCESS_DUPLEX,
 		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,   // FILE_FLAG_FIRST_PIPE_INSTANCE is not needed but forces CreateNamedPipe(..) to fail if the pipe already exists...
@@ -1002,7 +1002,7 @@ void IPCThread(void)
 				transform(t.begin(), t.end(), t.begin(), ::tolower);
 
 				vector <string> cmd = stringsplit(t, " ");
-				if (cmd.size() > 1)
+				if (cmd.size() > 0)
 				{
 					int param1 = 0;
 
@@ -1030,6 +1030,16 @@ void IPCThread(void)
 							param1 = APP_CMDLINE_SETHDMI3;
 						else if (param == "-sethdmi4")
 							param1 = APP_CMDLINE_SETHDMI4;
+						else if (param == "-clearlog")
+						{
+							string w = "IPC, clear log  ";
+							wstring log = DataPath;
+							log += L"Log.txt";
+							w += narrow(log);
+							Log(w);
+							DeleteFile(log.c_str());
+						}
+
 						else if (param1 > 0)
 						{
 							if (param1 == APP_IPC_DAEMON)
@@ -1099,7 +1109,47 @@ void IPCThread(void)
 										Log("IPC, Remote session disconnected.");
 									}
 								}
+								else if (param == "topology")
+								{
+									param1 = APP_IPC_DAEMON_TOPOLOGY;
+									for (auto &d : DeviceCtrlSessions)
+									{
+										d.SetTopology(false);
+									}
+								}
+
 							}
+							else if (param1 == APP_IPC_DAEMON_TOPOLOGY)
+							{
+								if (param == "*")
+								{
+									//debuggy
+									stringstream s;
+									s << "IPC, windows monitor topology was changed.";
+									Log(s.str());
+									DispatchSystemPowerEvent(SYSTEM_EVENT_TOPOLOGY);
+								}
+								else
+								{
+									for (auto &d : DeviceCtrlSessions)
+									{
+										string id = d.DeviceID;
+										transform(id.begin(), id.end(), id.begin(), ::tolower);
+
+										if (param == id)
+										{
+											//debuggy
+											stringstream s;
+											s << "IPC, ";
+											s << d.DeviceID;
+											s << " - enabled in windows monitor topology.";
+											Log(s.str());
+											d.SetTopology(true);
+										}
+									}
+								}
+							}
+
 							else
 							{
 								for (auto& device : DeviceCtrlSessions)

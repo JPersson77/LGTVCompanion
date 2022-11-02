@@ -37,19 +37,21 @@
 #define			APPNAME_SHORT					L"LGTVdaemon"
 #define			APP_PATH					    L"LGTV Companion"
 #define			APPNAME_FULL					L"LGTV Companion Daemon"
-#define         APP_VERSION                     L"1.7.0"
+#define         APP_VERSION                     L"1.8.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_PROCESS			    1
 
 #define         TIMER_MAIN                      18
 #define         TIMER_IDLE                      19
 #define         TIMER_RDP                       20
+#define         TIMER_TOPOLOGY                  21
 
 #define         TIMER_MAIN_DELAY_WHEN_BUSY      2000
 #define         TIMER_MAIN_DELAY_WHEN_IDLE      100
 #define         TIMER_RDP_DELAY                 10000
 
 #define         APP_NEW_VERSION                 WM_USER+9
+#define         USER_DISPLAYCHANGE              WM_USER+10
 
 #define         JSON_PREFS_NODE                 "LGTV Companion"
 #define         JSON_VERSION                    "Version"
@@ -57,6 +59,7 @@
 #define         JSON_AUTOUPDATE                 "AutoUpdate"
 #define         JSON_IDLEBLANK                  "BlankWhenIdle"
 #define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
+#define         JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
 
 #define         PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
 #define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
@@ -71,6 +74,7 @@ struct PREFS {
 	int version = 2;
 	bool ToastInitialised = false;
 	bool DisableSendingViaIPC = false;
+	bool AdhereTopology = false;
 };
 
 class WinToastHandler : public WinToastLib::IWinToastHandler
@@ -88,6 +92,18 @@ public:
 	void toastFailed() const override {}
 private:
 };
+struct SESSIONPARAMETERS {
+	std::string DeviceId;
+	std::string Name;
+	std::string UniqueDeviceKey;
+};
+struct DISPLAY_INFO {
+	DISPLAYCONFIG_TARGET_DEVICE_NAME target;
+	HMONITOR hMonitor;
+	HDC hdcMonitor;
+	RECT rcMonitor2;
+	MONITORINFOEX monitorinfo;
+};
 
 // Forward declarations of functions included in this code module:
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -96,6 +112,10 @@ bool				ReadConfigFile();
 std::wstring        widen(std::string);
 std::string         narrow(std::wstring);
 std::vector<std::string> stringsplit(std::string, std::string);
-void                CommunicateWithService(std::string);
+void                CommunicateWithService(std::string, bool OverrideDisable = false);
 void                VersionCheckThread(HWND);
 void                Log(std::wstring input);
+void				ReadDeviceConfig();
+std::vector<DISPLAY_INFO> QueryDisplays();
+static BOOL			CALLBACK meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);
+bool				CheckDisplayTopology(void);

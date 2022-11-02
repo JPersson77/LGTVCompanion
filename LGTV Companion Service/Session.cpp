@@ -23,10 +23,7 @@ namespace {
 			MIB_IPNET_ROW2 row;
 			row.InterfaceLuid = luid;
 			row.Address = address;
-
-			std::stringstream log;
-			log << "DeleteIpNetEntry2() = " << DeleteIpNetEntry2(&row);
-			Log(log.str());
+			DeleteIpNetEntry2(&row);
 		}
 
 	private:
@@ -43,7 +40,6 @@ namespace {
 		log << "GetBestRoute2()";
 
 		if (result != NO_ERROR) {
-			std::stringstream log;
 			log << " failed with code " << result;
 			Log(log.str());
 			return boost::none;
@@ -72,9 +68,9 @@ namespace {
 		row.PhysicalAddressLength = sizeof(macAddress);
 		const auto result = CreateIpNetEntry2(&row);
 
-		std::stringstream log;
-		log << "CreateIpNetEntry2() = " << result;
-		Log(log.str());
+//		std::stringstream log;
+//		log << "CreateIpNetEntry2() = " << result;
+//		Log(log.str());
 
 		if (result != NO_ERROR) return nullptr;
 		return std::make_unique<NetEntryDeleter>(*luid, destination);
@@ -123,6 +119,16 @@ bool CSession::IsBusy(void)
 	ret = ThreadedOpDisplayOn || ThreadedOpDisplayOff || ThreadedOpDisplaySetHdmiInput;
 	mMutex.unlock();
 	return ret;
+}
+void CSession::SetTopology(bool bEnabled)
+{
+	//thread safe section
+	while (!mMutex.try_lock())
+		Sleep(MUTEX_WAIT);
+	TopologyEnabled = bEnabled;
+	AdhereTopology = true;
+	mMutex.unlock();
+	return;
 }
 void CSession::SetDisplayHdmiInput(int HdmiInput)
 {
@@ -262,12 +268,26 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 	case SYSTEM_EVENT_RESUMEAUTO:
 	{
 		if (Parameters.SetHDMIInputOnResume)
-			SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
+		{
+			if (AdhereTopology)
+			{
+				if (TopologyEnabled)
+					SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
+			}
+			else
+				SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
+		}
 	}break;
 
 	case SYSTEM_EVENT_DISPLAYON:
 	{
-		TurnOnDisplay(true);
+		if (AdhereTopology)
+		{
+			if (TopologyEnabled)
+				TurnOnDisplay(true);
+		}
+		else
+			TurnOnDisplay(true);
 	}break;
 	case SYSTEM_EVENT_DISPLAYOFF:
 	{
@@ -280,21 +300,55 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 	case SYSTEM_EVENT_USERIDLE:
 	{
 		if (Parameters.BlankWhenIdle)
-			TurnOffDisplay(false, false, true);
+		{
+			if (AdhereTopology)
+			{
+				if (TopologyEnabled)
+					TurnOffDisplay(false, false, true);
+			}
+			else 
+				TurnOffDisplay(false, false, true);
+		}
 	}break;
 	case SYSTEM_EVENT_USERBUSY:
 	{
 		if (Parameters.BlankWhenIdle)
-			TurnOnDisplay(true);
+		{
+			if (AdhereTopology)
+			{
+				if (TopologyEnabled)
+					TurnOnDisplay(true);
+			}
+			else
+				TurnOnDisplay(true);
+		}
 	}break;
 	case SYSTEM_EVENT_BOOT:
 	{
 		if (Parameters.SetHDMIInputOnResume)
-			SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
+		{
+			if (AdhereTopology)
+			{
+				if(TopologyEnabled)
+					SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
+			}
+			else
+				SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
+		}
 	}break;
 	case SYSTEM_EVENT_UNBLANK:
 	{
 		TurnOnDisplay(false);
+	}break;
+	case SYSTEM_EVENT_TOPOLOGY:
+	{
+		if (AdhereTopology)
+		{
+			if (TopologyEnabled)
+				TurnOnDisplay(true);
+			else
+				TurnOffDisplay(false, false, false);
+		}
 	}break;
 	default:break;
 	}

@@ -20,6 +20,7 @@ PREFS                           Prefs;
 HANDLE                          hPipe = INVALID_HANDLE_VALUE;
 INT64                           idToastFirstrun = NULL;
 INT64                           idToastNewversion = NULL;
+vector <SESSIONPARAMETERS>      Devices;                 
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -79,6 +80,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	// read the configuration file and init prefs
 	try {
 		ReadConfigFile();
+		ReadDeviceConfig();
 	}
 	catch (...) {
 		CommunicateWithService("-daemon errorconfig");
@@ -103,6 +105,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		SetTimer(hMainWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 		SetTimer(hMainWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
 	}
+	if (Prefs.AdhereTopology)
+		SetTimer(hMainWnd, TIMER_TOPOLOGY, 8000, (TIMERPROC)NULL);
+
 
 	wstring startupmess = WindowTitle;
 	startupmess += L" is running.";
@@ -309,6 +314,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			else
 				CommunicateWithService("-daemon remoteconnect");
 			Prefs.DisableSendingViaIPC = true;
+			return 0;
+		}break;
+		case TIMER_TOPOLOGY:
+		{
+			KillTimer(hWnd, TIMER_TOPOLOGY);
+			PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+			return 0;
 		}break;
 		default:break;
 		}
@@ -376,7 +388,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		default:break;
 		}
-	}
+	}break;
+	case USER_DISPLAYCHANGE:
+	{
+		CheckDisplayTopology();
+	}break;
+	
+	case WM_DISPLAYCHANGE:
+	{
+
+		if (Prefs.AdhereTopology)
+		{
+			PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+		}
+	
+	}break;
+
 	case WM_WTSSESSION_CHANGE:
 	{
 		if (wParam == WTS_REMOTE_CONNECT)
@@ -425,11 +452,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		PostQuitMessage(0);
 		break;
+	}break;
+	default:break;
 	}
-	default:
-		return 0;
-	}
-	return 0;
+	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
 //   If the application is already running, tell other process to exit
@@ -496,6 +522,10 @@ bool ReadConfigFile()
 			if (!j.empty() && j.is_number())
 				Prefs.BlankScreenWhenIdleDelay = j.get<int>();
 
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY];
+			if (!j.empty() && j.is_boolean())
+				Prefs.AdhereTopology = j.get<bool>();
+
 			return true;
 		}
 	}
@@ -535,13 +565,13 @@ string narrow(wstring sInput) {
 }
 
 //   Send the commandline to the service
-void CommunicateWithService(string input)
+void CommunicateWithService(string input, bool OverrideDisable)
 {
 	DWORD dwWritten;
 
 	if (input == "")
 		return;
-	if (!Prefs.DisableSendingViaIPC)
+	if (!Prefs.DisableSendingViaIPC || OverrideDisable)
 	{
 		hPipe = CreateFile(PIPENAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 
@@ -657,4 +687,137 @@ vector<string> stringsplit(string str, string token) {
 		}
 	}
 	return res;
+}
+void ReadDeviceConfig()
+{
+	if (jsonPrefs.empty())
+		return;
+
+	//Clear current sessions.
+	Devices.clear();
+
+	//Iterate nodes
+	for (const auto& item : jsonPrefs.items())
+	{
+		json j;
+		if (item.key() == JSON_PREFS_NODE)
+			break;
+
+		SESSIONPARAMETERS params;
+
+		params.DeviceId = item.key();
+
+		if (item.value()["Name"].is_string())
+			params.Name = item.value()["Name"].get<string>();
+
+		if (item.value()["UniqueDeviceKey"].is_string())
+			params.UniqueDeviceKey = item.value()["UniqueDeviceKey"].get<string>();
+		Devices.push_back(params);
+	}
+	return;
+}
+
+vector<DISPLAY_INFO> QueryDisplays()
+{
+	vector<DISPLAY_INFO> targets;
+
+	//populate targets struct with information about attached displays
+	EnumDisplayMonitors(NULL, NULL, meproc, (LPARAM)&targets);
+
+	return targets;
+
+
+}
+static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPARAM pData)
+{
+	if (!pData)
+		return false;
+	vector<DISPLAY_INFO>* targets = (vector<DISPLAY_INFO> *) pData;
+	UINT32 requiredPaths, requiredModes;
+	vector<DISPLAYCONFIG_PATH_INFO> paths;
+	vector<DISPLAYCONFIG_MODE_INFO> modes;
+//	DISPLAYCONFIG_TOPOLOGY_ID currentTopologyId;
+	MONITORINFOEX mi;
+	LONG isError = ERROR_INSUFFICIENT_BUFFER;
+
+	ZeroMemory(&mi, sizeof(mi));
+	mi.cbSize = sizeof(mi);
+	GetMonitorInfo(hMonitor, &mi);
+	//	wprintf(L"DisplayDevice: %s\n", mi.szDevice);
+
+	isError = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &requiredPaths, &requiredModes);
+	if (isError)
+	{
+		targets->clear();
+		return false;
+	}
+	paths.resize(requiredPaths);
+	modes.resize(requiredModes);
+
+	isError = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &requiredPaths, paths.data(), &requiredModes, modes.data(), NULL);
+	if (isError)
+	{
+		targets->clear();
+		return false;
+	}
+	paths.resize(requiredPaths);
+	modes.resize(requiredModes);
+
+	for (auto& p : paths)
+	{
+		DISPLAYCONFIG_SOURCE_DEVICE_NAME sourceName;
+		sourceName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+		sourceName.header.size = sizeof(sourceName);
+		sourceName.header.adapterId = p.sourceInfo.adapterId;
+		sourceName.header.id = p.sourceInfo.id;
+
+		DisplayConfigGetDeviceInfo(&sourceName.header);
+		if (wcscmp(mi.szDevice, sourceName.viewGdiDeviceName) == 0)
+		{
+			DISPLAYCONFIG_TARGET_DEVICE_NAME name;
+			name.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+			name.header.size = sizeof(name);
+			name.header.adapterId = p.sourceInfo.adapterId;
+			name.header.id = p.targetInfo.id;
+			DisplayConfigGetDeviceInfo(&name.header);
+			wstring FriendlyName = name.monitorFriendlyDeviceName;
+			if (FriendlyName.find(L"LG TV") != wstring::npos)
+			{
+				DISPLAY_INFO di;
+				di.monitorinfo = mi;
+				di.hMonitor = hMonitor;
+				di.hdcMonitor = hdc;
+				di.rcMonitor2 = *(LPRECT)lprcMonitor;
+				di.target = name;
+				targets->push_back(di);
+
+			}
+		}
+	}
+	return true;
+
+}
+bool CheckDisplayTopology(void)
+{
+	stringstream s;
+	s << "-daemon topology ";
+	vector<DISPLAY_INFO> displays = QueryDisplays();
+	if (Devices.size() == 0)
+		return false;
+	if (displays.size() > 0)
+	{
+		for (auto &disp : displays)
+		{
+			for (auto &dev : Devices)
+			{
+				if (narrow(disp.target.monitorDevicePath) == dev.UniqueDeviceKey)
+				{
+					s << dev.DeviceId << " ";
+				}
+			}
+		}
+	}
+	s << "*";
+	CommunicateWithService(s.str(),true);
+	return true;
 }

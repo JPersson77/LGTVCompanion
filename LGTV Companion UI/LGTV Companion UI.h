@@ -53,7 +53,7 @@
 
 #define			APPNAME_SHORT					L"LGTVcomp"
 #define			APPNAME_FULL					L"LGTV Companion"
-#define         APP_VERSION                     L"1.7.0"
+#define         APP_VERSION                     L"1.8.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_COMMANDLINE			1
 
@@ -66,9 +66,15 @@
 #define         JSON_PWRONTIMEOUT               "PowerOnTimeOut"
 #define         JSON_IDLEBLANK                  "BlankWhenIdle"
 #define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
+#define         JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
 #define         DEFAULT_RESTART                 {"restart"}
 #define         DEFAULT_SHUTDOWN                {"shutdown","power off"}
 #define         JSON_RDP_POWEROFF               "PowerOffDuringRDP"
+
+#define			COLOR_STATIC					0x00555555
+#define			COLOR_RED						0x00000099
+#define			COLOR_GREEN						0x00009900
+#define			COLOR_BLUE						0x00772222
 
 #define         APP_MESSAGE_ADD                 WM_USER+1
 #define         APP_MESSAGE_MANAGE              WM_USER+2
@@ -79,6 +85,10 @@
 #define         APP_MESSAGE_REMOVE              WM_USER+7
 #define         APP_MESSAGE_APPLY               WM_USER+8
 #define         APP_NEW_VERSION                 WM_USER+9
+#define         APP_TOP_PHASE_1		            WM_USER+10
+#define         APP_TOP_PHASE_2	                WM_USER+11
+#define         APP_TOP_PHASE_3                 WM_USER+12
+#define         APP_TOP_NEXT_DISPLAY            WM_USER+13
 
 #define         APP_CMDLINE_ON                  1
 #define         APP_CMDLINE_OFF                 2
@@ -110,6 +120,7 @@ struct PREFS {
 	bool BlankScreenWhenIdle = false;
 	int BlankScreenWhenIdleDelay = 10;
 	bool PowerOffDuringRDP = false;
+	bool AdhereTopology = false;
 };
 struct SESSIONPARAMETERS {
 	std::string DeviceId;
@@ -117,6 +128,9 @@ struct SESSIONPARAMETERS {
 	std::vector<std::string> MAC;
 	std::string SessionKey;
 	std::string Name;
+	std::string UniqueDeviceKey;
+	std::string UniqueDeviceKey_Temp;
+
 	//   bool PowerAuto = true;
 	//   bool AwayAuto = true;
 	bool Enabled = true;
@@ -128,11 +142,20 @@ struct SESSIONPARAMETERS {
 	bool SetHDMIInputOnResume = false;
 	int SetHDMIInputOnResumeToNumber = 1;
 };
+struct DISPLAY_INFO {
+	DISPLAYCONFIG_TARGET_DEVICE_NAME target;
+	HMONITOR hMonitor;
+	HDC hdcMonitor;
+	RECT rcMonitor2;
+	MONITORINFOEX monitorinfo;
+};
 
 // Forward declarations of functions included in this code module:
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK    DeviceWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK    OptionsWndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK    ConfigureTopologyWndProc(HWND, UINT, WPARAM, LPARAM);
+
 bool                MessageExistingProcess(std::wstring);
 bool				ReadConfigFile();
 void                ReadDeviceConfig();
@@ -147,3 +170,5 @@ void                CommunicateWithService(std::string);
 void                WriteConfigFile(void);
 std::vector<std::string> GetOwnIP(void);
 void                VersionCheckThread(HWND);
+static BOOL CALLBACK meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);
+std::vector<DISPLAY_INFO> QueryDisplays();
