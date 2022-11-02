@@ -112,6 +112,7 @@ Please use the Github issue tracker for potential bug reports or feature request
 - @Maassoft for initial helpi with understanding the WebOS comms - https://github.com/Maassoft
 - @mohabouje - Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
 - Contributors
+- Donors and supporters
 
 
 ## Copyright
