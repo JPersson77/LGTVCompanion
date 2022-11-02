@@ -7,7 +7,7 @@
 This application (UI and service) controls LG WebOS TVs and displays.
 
 This application aim to be a set and forget application to:
-- provide automatic management for your WebOS display, to shut off and turn on in reponse to to the PC shutting down, rebooting, entering low power modes as well as and when user is afk (idle). 
+- provide automatic management for your WebOS display, to shut off and turn on in reponse to to the PC shutting down, rebooting, entering low power modes and when user is afk (idle) as well as in response to changes in the windows monitor topology.
 - provide the user with a command line tool to turn displays on or off.
 
 ## Background
@@ -56,11 +56,12 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 
 ## Troubleshooting
 If your display has trouble powering on, these are the things to check first:
-- When connecting the TV via Wi-Fi it seems some users must enable "Quickstart+" and disable "HDD Eco mode" to avoid the NIC becoming inactive. (physical network cable does not seem to need this)
-- Try reconfiguring the device and use one of the other wake-on-lan network options, primarily use option three, using a subnet mask.
+- When connecting the TV via Wi-Fi it seems some users must enable "Quickstart+" (up to 2021 models) or "Always ready" (2022 and forward models) and disable "HDD Eco mode" to avoid the NIC becoming inactive. (physical network cable does not seem to need this)
+- Try reconfiguring the device and use one of the other wake-on-lan network options, primarily use option two, send to IP-address.
 - Ensure the network is not dropping WOL-broadcasts.
 - The MAC-address configuration for the device in the application is erroneous.
 - In the case of Wi-Fi, if the connection between the TV and the Wi-Fi access point is lost for any reason (e.g. router reboot, power outage, firmware update, etc.) while the TV is off, the TV will not automatically reconnect and therefore won't react to attempts to turn it on via Wi-Fi. You will need to turn the TV on manually at least once so that it can reconnect to your Wi-Fi network.
+- In case of issues with devices not turning on in response to changes in the windows monitor topology configuration ensure that "Quickstart+" (up to 2021 models) or "Always ready" (2022 and forward models) is enabled.
 
 If your display has trouble powering off it is most likely because:
 - The IP configuration might be erroneous. Please check the configuration and make sure the TV has a static DHCP lease in your routers admin pages.
