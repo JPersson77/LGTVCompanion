@@ -31,13 +31,13 @@ namespace {
 		const SOCKADDR_INET address;
 	};
 
-	boost::optional<NET_LUID> GetLocalInterface(SOCKADDR_INET destination) {
+	boost::optional<NET_LUID> GetLocalInterface(SOCKADDR_INET destination, string sDev) {
 		MIB_IPFORWARD_ROW2 row;
 		SOCKADDR_INET bestSourceAddress;
 		const auto result = GetBestRoute2(NULL, 0, NULL, &destination, 0, &row, &bestSourceAddress);
 
 		std::stringstream log;
-		log << "GetBestRoute2()";
+		log << sDev <<", GetBestRoute2()";
 
 		if (result != NO_ERROR) {
 			log << " failed with code " << result;
@@ -57,8 +57,8 @@ namespace {
 		return row.InterfaceLuid;
 	}
 
-	std::unique_ptr<NetEntryDeleter> CreateTransientLocalNetEntry(SOCKADDR_INET destination, unsigned char macAddress[6]) {
-		const auto luid = GetLocalInterface(destination);
+	std::unique_ptr<NetEntryDeleter> CreateTransientLocalNetEntry(SOCKADDR_INET destination, unsigned char macAddress[6], string sDev) {
+		const auto luid = GetLocalInterface(destination, sDev);
 		if (!luid.has_value()) return nullptr;
 
 		MIB_IPNET_ROW2 row;
@@ -414,10 +414,25 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 			ws.write(net::buffer(std::string(handshake)));
 			ws.read(buffer); // read the first response
 
+			const json j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
+			boost::string_view sv = j["type"];
+			string check = std::string(sv);
+
 			// parse for pairing key if needed
-			if (key == "")
+			if (check != "registered")
 			{
-				ws.read(buffer); //read the second response which hopefully now contains the session key
+				if (key != "")
+				{
+					logmsg = device;
+					logmsg += ", WARNING! Pairing key is invalid. Re-pairing forced!";
+					Log(logmsg);
+
+					handshake = narrow(HANDSHAKE_NOTPAIRED);
+					ws.write(net::buffer(std::string(handshake)));
+					ws.read(buffer); // read the first response
+				}
+
+				ws.read(buffer); //read the second response which should now contain the session key
 				string t = beast::buffers_to_string(buffer.data());
 				size_t u = t.find("client-key\":\"");
 				if (u != string::npos) // so did we get a session key?
@@ -436,11 +451,17 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 						mMutex.unlock();
 					}
 				}
+				else
+				{
+					logmsg = device;
+					logmsg += ", WARNING! Pairing key expected but not received.";
+					Log(logmsg);
+				}
 			}
 
 			ws.write(net::buffer(std::string(screenonmess)));
-			//          ws.read(buffer);
-
+			ws.read(buffer);
+						
 			ws.close(websocket::close_code::normal);
 			logmsg = device;
 			logmsg += ", established contact: Display is ON.  ";
@@ -608,7 +629,7 @@ void WOLthread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSession
 							memcpy(&Message[i * 6], &MACstr, 6 * sizeof(unsigned char));
 
 						std::unique_ptr<NetEntryDeleter> netEntryDeleter;
-						if (WOLtype == WOL_IPSEND) netEntryDeleter = CreateTransientLocalNetEntry(reinterpret_cast<const SOCKADDR_INET&>(LANDestination), MACstr);
+						if (WOLtype == WOL_IPSEND) netEntryDeleter = CreateTransientLocalNetEntry(reinterpret_cast<const SOCKADDR_INET&>(LANDestination), MACstr, device);
 
 						// Send Wake On LAN packet
 						if (sendto(WOLsocket, (char*)&Message, 102, 0, reinterpret_cast<sockaddr*>(&LANDestination), sizeof(LANDestination)) == SOCKET_ERROR)
@@ -677,13 +698,11 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 {
 	time_t origtim = time(0);
 
-	//   Log("DEBUG INFO: DisplayPowerOffThread() running...");
 	if (!CallingSessionParameters)
 	{
-		//        Log("DEBUG INFO: DisplayPowerOffThread() :: CallingSessionParameters is zero");
 		return;
 	}
-	if (CallingSessionParameters->SessionKey != "") //assume we have paired here. Doe not make sense to try pairing when display shall turn off.
+	if (CallingSessionParameters->SessionKey != "") 
 	{
 		string host = CallingSessionParameters->IP;
 		string key = CallingSessionParameters->SessionKey;
@@ -691,25 +710,20 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 		string logmsg;
 		string poweroffmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://system/turnOff\"}";
 		string screenoffmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://com.webos.service.tvpower/power/turnOffScreen\"}";
-
 		string handshake = narrow(HANDSHAKE_PAIRED);
 		string ck = "CLIENTKEYx0x0x0";
+		beast::flat_buffer buffer;
 
 		try
 		{
-			//            Log("DEBUG INFO: DisplayPowerOffThread() creating websocket...");
-
 			net::io_context ioc;
 
 			size_t ckf = handshake.find(ck);
 			handshake.replace(ckf, ck.length(), key);
 			tcp::resolver resolver{ ioc };
 			websocket::stream<tcp::socket> ws{ ioc };
-			//            Log("DEBUG INFO: DisplayPowerOffThread() resolving...");
 
 			auto const results = resolver.resolve(host, SERVICE_PORT);
-			//           Log("DEBUG INFO: DisplayPowerOffThread() connecting...");
-
 			auto ep = net::connect(ws.next_layer(), results);
 
 			host += ':' + std::to_string(ep.port());
@@ -718,9 +732,7 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 				Log("DisplayPowerOffThread() - forced exit");
 				goto threadoffend;
 			}
-			//            Log("DEBUG INFO: DisplayPowerOffThread() setting options...");
-
-						// Set a decorator to change the User-Agent of the handshake
+			// Set a decorator to change the User-Agent of the handshake
 			ws.set_option(websocket::stream_base::decorator(
 				[](websocket::request_type& req)
 				{
@@ -734,22 +746,29 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 				goto threadoffend;
 			}
 
-			//           Log("DEBUG INFO: DisplayPowerOffThread() handshake...");
-
 			ws.handshake(host, "/");
-
 			if (time(0) - origtim > 10) // this thread should not run too long
 			{
 				Log("WARNING! DisplayPowerOffThread() - forced exit");
 				goto threadoffend;
 			}
 
-			//            Log("DEBUG INFO: DisplayPowerOffThread() sending...");
-
-			beast::flat_buffer buffer;
-
+			//send handshake
 			ws.write(net::buffer(std::string(handshake)));
 			ws.read(buffer); // read the response
+
+			const json j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
+			boost::string_view sv = j["type"];
+			string check = std::string(sv);
+
+			if (check != "registered")
+			{
+				logmsg = device;
+				logmsg += ", Warning! Pairing key is invalid.";
+				Log(logmsg);
+				ws.close(websocket::close_code::normal);
+				goto threadoffend;
+			}
 
 			bool shouldPowerOff = true;
 			if (!UserForced && CallingSessionParameters->HDMIinputcontrol)
@@ -759,6 +778,7 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 				ws.write(net::buffer(std::string(R"({"id": "1", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})")));
 				beast::flat_buffer response;
 				ws.read(response);
+
 				const json j = json::parse(static_cast<const char*>(response.data().data()), static_cast<const char*>(response.data().data()) + response.size());
 				boost::string_view appId = j["payload"]["appId"];
 				app = std::string("Current AppId: ") + std::string(appId);
@@ -789,6 +809,7 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 			{
 				ws.write(net::buffer(std::string(BlankScreen ? screenoffmess : poweroffmess)));
 				ws.read(buffer); // read the response
+
 				logmsg = device;
 				if (BlankScreen)
 					logmsg += ", established contact: Screen is OFF. ";

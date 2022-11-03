@@ -37,7 +37,7 @@
 #pragma comment(lib, "Iphlpapi.lib")
 
 #define APPNAME						    L"LGTV Companion"
-#define APPVERSION					    L"1.8.0"
+#define APPVERSION					    L"1.8.1"
 #define SVCNAME						    L"LGTVsvc"
 #define SVCDISPLAYNAME				    L"LGTV Companion Service"
 #define SERVICE_PORT                    "3000"

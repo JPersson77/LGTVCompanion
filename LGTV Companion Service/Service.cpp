@@ -17,7 +17,7 @@ PREFS                   Prefs;                              //App preferences
 vector <CSession>       DeviceCtrlSessions;                 //CSession objects manage network connections with Display
 DWORD                   EventCallbackStatus = NULL;
 WSADATA                 WSAData;
-//mutex                   g_mutex;
+mutex                   log_mutex;
 wstring                 DataPath;
 vector<string>          HostIPs;
 
@@ -845,6 +845,9 @@ void Log(string ss)
 {
 	if (!Prefs.Logging)
 		return;
+	//thread safe
+	while (!log_mutex.try_lock())
+		Sleep(MUTEX_WAIT);
 
 	ofstream m;
 	time_t rawtime;
@@ -869,6 +872,7 @@ void Log(string ss)
 		m << s.c_str();
 		m.close();
 	}
+	log_mutex.unlock();
 }
 //   Callback function for the event log to determine restart or power off, by asking for Events with EventID 1074 to be pushed to the application. Localisation is an issue though....
 DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, EVT_HANDLE hEvent)
@@ -1123,7 +1127,6 @@ void IPCThread(void)
 							{
 								if (param == "*")
 								{
-									//debuggy
 									stringstream s;
 									s << "IPC, windows monitor topology was changed.";
 									Log(s.str());
@@ -1138,7 +1141,6 @@ void IPCThread(void)
 
 										if (param == id)
 										{
-											//debuggy
 											stringstream s;
 											s << "IPC, ";
 											s << d.DeviceID;
