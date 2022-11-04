@@ -7,7 +7,7 @@
 This application (UI and service) controls LG WebOS TVs and displays.
 
 This application aim to be a set and forget application to:
-- provide automatic management for your WebOS display, to shut off and turn on in reponse to to the PC shutting down, rebooting, entering low power modes and when user is afk (idle) as well as in response to changes in the windows monitor topology.
+- provide automatic management for your WebOS display, to shut off and turn on in reponse to to the PC shutting down, rebooting, entering low power modes and when user is afk (idle) as well as in response to changes in the windows monitor topology, in a multi-monitor environment.
 - provide the user with a command line tool to turn displays on or off.
 
 ## Background
