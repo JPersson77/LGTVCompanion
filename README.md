@@ -118,4 +118,4 @@ Please use the Github issue tracker for potential bug reports and/or feature req
 
 
 ## Copyright
-Copyright © 2021-2022 Jörgen Persson
+Copyright © 2021-2023 Jörgen Persson
