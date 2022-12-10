@@ -62,6 +62,7 @@ If your display has trouble powering on, these are the things to check first:
 - The MAC-address configuration for the device in the application is erroneous.
 - In the case of Wi-Fi, if the connection between the TV and the Wi-Fi access point is lost for any reason (e.g. router reboot, power outage, firmware update, etc.) while the TV is off, the TV will not automatically reconnect and therefore won't react to attempts to turn it on via Wi-Fi. You will need to turn the TV on manually at least once so that it can reconnect to your Wi-Fi network.
 - In case of issues with devices not turning on in response to changes in the windows monitor topology configuration ensure that "Quickstart+" (up to 2021 models) or "Always ready" (2022 and forward models) is enabled.
+- Also note that a manual power off via remote and/or automatic display power off (Settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off) can sometimes cause a situation where you also need to power on the display with the remote. Consider not using the remote, and setting a long enough timeout for the display built-in automatic power-off to never interfere with the length of your typical session with the PC.
 
 If your display has trouble powering off it is most likely because:
 - The IP configuration might be erroneous. Please check the configuration and make sure the TV has a static DHCP lease in your routers admin pages.
