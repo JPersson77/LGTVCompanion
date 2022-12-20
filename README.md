@@ -7,7 +7,7 @@
 This application (UI and service) controls LG WebOS TVs and displays.
 
 This application aim to be a set and forget application to:
-- provide automatic management for your WebOS display, to shut off and turn on in reponse to to the PC shutting down, rebooting, entering low power modes and when user is afk (idle) as well as in response to changes in the windows monitor topology.
+- provide automatic management for your WebOS display, to shut off and turn on in reponse to to the PC shutting down, rebooting, entering low power modes and when user is afk (idle) as well as in response to changes in the windows monitor topology, in a multi-monitor environment.
 - provide the user with a command line tool to turn displays on or off.
 
 ## Background
@@ -23,6 +23,7 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 1. Important prerequisites:
    - Power ON all TVs and ensure they are connected to your local area network via Wi-Fi or cable.
    - Ensure that the TV can be woken via the network. For the CX line of displays this is accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->Mobile Connection Management->TV On with Mobile, and then enable 'Turn On via Wi-Fi'. For C1 and C2 it's All Settings->General->Devices->External Devices->TV On With Mobile->Turn on via Wi-Fi.
+   - HOT TIP! While in the settings of the TV, ensure that the display automatic power off is set long enough to not interfere with youur sessions with the PC, f e 8 hours. Note that for the C2 displays this setting can be found here: All settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off. The app will manage the power state of the display and the less interference the better.
    - Open the administrative interface of your router, and set a static DHCP lease for your WebOS devices, i.e. to ensure that the displays always have the same IP-address on your LAN.
 2. Download the latest version of the setup package from the releases page ( [Click here](https://github.com/JPersson77/LGTVCompanion/releases) ) and install it. This will install and start the service (LGTVsvc.exe), install the user interface (LGTV Companion.exe) as well as the desktop user mode daemon (LGTVdaemon.exe).
 3. Open the user interface from the Windows start menu, LGTV Companion.
@@ -62,6 +63,7 @@ If your display has trouble powering on, these are the things to check first:
 - The MAC-address configuration for the device in the application is erroneous.
 - In the case of Wi-Fi, if the connection between the TV and the Wi-Fi access point is lost for any reason (e.g. router reboot, power outage, firmware update, etc.) while the TV is off, the TV will not automatically reconnect and therefore won't react to attempts to turn it on via Wi-Fi. You will need to turn the TV on manually at least once so that it can reconnect to your Wi-Fi network.
 - In case of issues with devices not turning on in response to changes in the windows monitor topology configuration ensure that "Quickstart+" (up to 2021 models) or "Always ready" (2022 and forward models) is enabled.
+- Also note that a manual power off via remote and/or automatic display power off (Settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off) can sometimes cause a situation where you also need to power on the display with the remote. Consider not using the remote, and setting a long enough timeout for the display built-in automatic power-off to never interfere with the length of your typical session with the PC.
 
 If your display has trouble powering off it is most likely because:
 - The IP configuration might be erroneous. Please check the configuration and make sure the TV has a static DHCP lease in your routers admin pages.
@@ -95,7 +97,7 @@ Example usage: LGTV Companion.exe -poweron Device1 Device2 "LG OLED48CX" -autodi
 This command will power on device 1, device 2 and the device named LG OLED48CX, and additionally device2 is thereafter set to temporarily not respond to automatic power events (on/off). Note the usage of "quotes" for the device name.
 
 ## License
-Copyright © 2021-2022 Jörgen Persson
+Copyright © 2021-2023 Jörgen Persson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -104,7 +106,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## Discussions
 
-Please use the Github issue tracker for potential bug reports or feature requests
+Discord: https://discord.gg/7KkTPrP3fq
+
+Please use the Github issue tracker for potential bug reports and/or feature requests
 
 ## Thanks to
 - @nlohmann - Niels Lohmann, author of JSON for Modern CPP https://github.com/nlohmann/json
@@ -116,4 +120,4 @@ Please use the Github issue tracker for potential bug reports or feature request
 
 
 ## Copyright
-Copyright © 2021-2022 Jörgen Persson
+Copyright © 2021-2023 Jörgen Persson
