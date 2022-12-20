@@ -37,7 +37,7 @@
 #define			APPNAME_SHORT					L"LGTVdaemon"
 #define			APP_PATH					    L"LGTV Companion"
 #define			APPNAME_FULL					L"LGTV Companion Daemon"
-#define         APP_VERSION                     L"1.8.0"
+#define         APP_VERSION                     L"1.8.7"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_PROCESS			    1
 
@@ -60,12 +60,20 @@
 #define         JSON_IDLEBLANK                  "BlankWhenIdle"
 #define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
 #define         JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
+#define         JSON_ADVANCEDIDLE				"AdvancedUserInputIdle"
+#define         JSON_IDLEWHITELIST				"IdleWhiteListEnabled"
+#define         JSON_IDLEFULLSCREEN				"IdleFullscreen"
+#define         JSON_WHITELIST					"IdleWhiteList"
 
 #define         PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
 #define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
 #define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases"
 #define         DONATELINK                      L"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=jorgen.persson@gmail.com&lc=US&item_name=Friendly+gift+for+the+development+of+LGTV+Companion&no_note=0&cn=&currency_code=EUR&bn=PP-DonationsBF:btn_donateCC_LG.gif:NonHosted"
 
+struct WHITELIST {
+	std::string Name;
+	std::string Application;
+};
 struct PREFS {
 	bool AutoUpdate = false;
 	bool BlankScreenWhenIdle = false;
@@ -75,6 +83,9 @@ struct PREFS {
 	bool ToastInitialised = false;
 	bool DisableSendingViaIPC = false;
 	bool AdhereTopology = false;
+	bool bIdleWhitelistEnabled = false;
+	bool bFullscreenCheckEnabled = false;
+	bool bAdvancedUserIdle = false;
 };
 
 class WinToastHandler : public WinToastLib::IWinToastHandler
@@ -96,6 +107,7 @@ struct SESSIONPARAMETERS {
 	std::string DeviceId;
 	std::string Name;
 	std::string UniqueDeviceKey;
+	bool Enabled = true;
 };
 struct DISPLAY_INFO {
 	DISPLAYCONFIG_TARGET_DEVICE_NAME target;
@@ -119,3 +131,8 @@ void				ReadDeviceConfig();
 std::vector<DISPLAY_INFO> QueryDisplays();
 static BOOL			CALLBACK meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);
 bool				CheckDisplayTopology(void);
+bool				VerifyTopology();
+bool				GetLastUserInputTime(PLASTINPUTINFO);
+bool				WhitelistProcessRunning(void);
+bool				FullscreenApplicationRunning(void);
+bool				MyGetLastinputInfo (PLASTINPUTINFO);

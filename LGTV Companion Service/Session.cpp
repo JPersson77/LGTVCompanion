@@ -130,6 +130,16 @@ void CSession::SetTopology(bool bEnabled)
 	mMutex.unlock();
 	return;
 }
+bool CSession::GetTopology(void)
+{
+	//thread safe section
+	bool b;
+	while (!mMutex.try_lock())
+		Sleep(MUTEX_WAIT);
+	b = TopologyEnabled;
+	mMutex.unlock();
+	return b;
+}
 void CSession::SetDisplayHdmiInput(int HdmiInput)
 {
 	string s;
@@ -177,6 +187,7 @@ void CSession::TurnOnDisplay(bool SendWOL)
 
 		thread thread_obj(DisplayPowerOnThread, &Parameters, &ThreadedOpDisplayOn, Parameters.PowerOnTimeout, SendWOL);
 		thread_obj.detach();
+
 	}
 	else
 	{
@@ -216,7 +227,7 @@ void CSession::TurnOffDisplay(bool forced, bool dimmed, bool blankscreen)
 		s = Parameters.DeviceId;
 		s += ", omitted DisplayPowerOffThread()";
 		if (Parameters.SessionKey == "")
-			s += " (no session key).";
+			s += " (no pairing key).";
 		else
 			s += ".";
 	}
@@ -253,11 +264,13 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 	{
 	case SYSTEM_EVENT_REBOOT:
 	{
+		ActivePowerState = false;
 	}break;
 	case SYSTEM_EVENT_UNSURE:
 	case SYSTEM_EVENT_SHUTDOWN:
 	{
 		TurnOffDisplay(false, false, false);
+		ActivePowerState = false;
 	}break;
 	case SYSTEM_EVENT_SUSPEND:
 	{
@@ -288,14 +301,17 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 		}
 		else
 			TurnOnDisplay(true);
+		ActivePowerState = true;
 	}break;
 	case SYSTEM_EVENT_DISPLAYOFF:
 	{
 		TurnOffDisplay(false, false, false);
+		ActivePowerState = false;
 	}break;
 	case SYSTEM_EVENT_DISPLAYDIMMED:
 	{
 		TurnOffDisplay(false, true, false);
+		ActivePowerState = false;
 	}break;
 	case SYSTEM_EVENT_USERIDLE:
 	{
@@ -308,6 +324,7 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 			}
 			else 
 				TurnOffDisplay(false, false, true);
+			ActivePowerState = false;
 		}
 	}break;
 	case SYSTEM_EVENT_USERBUSY:
@@ -321,6 +338,7 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 			}
 			else
 				TurnOnDisplay(true);
+			ActivePowerState = true;
 		}
 	}break;
 	case SYSTEM_EVENT_BOOT:
@@ -339,9 +357,12 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 	case SYSTEM_EVENT_UNBLANK:
 	{
 		TurnOnDisplay(false);
+		ActivePowerState = false;
 	}break;
 	case SYSTEM_EVENT_TOPOLOGY:
 	{
+		if (!ActivePowerState)
+			break;
 		if (AdhereTopology)
 		{
 			if (TopologyEnabled)
@@ -356,7 +377,8 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 //   THREAD: Spawned when the device should power ON. This thread manages the pairing key from the display and verifies that the display has been powered on
 void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, int Timeout, bool SendWOL)
 {
-	string screenonmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://com.webos.service.tvpower/power/turnOnScreen\"}";
+	string screenonmess = R"({"id":"2","type" : "request","uri" : "ssap://com.webos.service.tvpower/power/turnOnScreen"})";
+	string getpowerstatemess = R"({"id": "1", "type": "request", "uri": "ssap://com.webos.service.tvpower/power/getPowerState"})";
 
 	if (!CallingSessionParameters)
 		return;
@@ -414,13 +436,13 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 			ws.write(net::buffer(std::string(handshake)));
 			ws.read(buffer); // read the first response
 
-			const json j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
-			boost::string_view sv = j["type"];
-			string check = std::string(sv);
+			json j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
+			boost::string_view check = j["type"];
 
 			// parse for pairing key if needed
-			if (check != "registered")
+			if (std::string(check) != "registered")
 			{
+				buffer.consume(buffer.size());
 				if (key != "")
 				{
 					logmsg = device;
@@ -461,12 +483,27 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 
 			ws.write(net::buffer(std::string(screenonmess)));
 			ws.read(buffer);
+			buffer.consume(buffer.size());
 						
-			ws.close(websocket::close_code::normal);
-			logmsg = device;
-			logmsg += ", established contact: Display is ON.  ";
-			Log(logmsg);
-			break;
+			//retreive power state from device to determine if the device is powered on
+			ws.write(net::buffer(getpowerstatemess));
+			ws.read(buffer);
+			j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
+
+			boost::string_view type = j["type"];
+			boost::string_view state = j["payload"]["state"];
+			if (std::string(type) == "response")
+			{
+				if (std::string(state) == "Active")
+				{
+					logmsg = device;
+					logmsg += ", power state is: ON";
+					Log(logmsg);
+					ws.close(websocket::close_code::normal);
+					break;
+				}
+			}
+			buffer.consume(buffer.size());
 		}
 		catch (std::exception const& e)
 		{
@@ -708,11 +745,17 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 		string key = CallingSessionParameters->SessionKey;
 		string device = CallingSessionParameters->DeviceId;
 		string logmsg;
-		string poweroffmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://system/turnOff\"}";
-		string screenoffmess = "{ \"id\":\"2\",\"type\" : \"request\",\"uri\" : \"ssap://com.webos.service.tvpower/power/turnOffScreen\"}";
+		string getpowerstatemess = R"({"id": "1", "type": "request", "uri": "ssap://com.webos.service.tvpower/power/getPowerState"})";
+		string getactiveinputmess = R"({"id": "2", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})";
+		string poweroffmess = R"({"id": "3", "type" : "request", "uri" : "ssap://system/turnOff" })";
+		string screenoffmess = R"({"id": "4", "type" : "request", "uri" : "ssap://com.webos.service.tvpower/power/turnOffScreen"})";
 		string handshake = narrow(HANDSHAKE_PAIRED);
 		string ck = "CLIENTKEYx0x0x0";
-		beast::flat_buffer buffer;
+		beast::flat_buffer buffer; 
+		json j;
+		boost::string_view type;
+		boost::string_view state;
+		boost::string_view appId;
 
 		try
 		{
@@ -729,7 +772,9 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 			host += ':' + std::to_string(ep.port());
 			if (time(0) - origtim > 10) // this thread should not run too long
 			{
-				Log("DisplayPowerOffThread() - forced exit");
+				logmsg = device;
+				logmsg += ", WARNING! DisplayPowerOffThread() - forced exit";
+				Log(logmsg);
 				goto threadoffend;
 			}
 			// Set a decorator to change the User-Agent of the handshake
@@ -742,45 +787,80 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 				}));
 			if (time(0) - origtim > 10) // this thread should not run too long
 			{
-				Log("DisplayPowerOffThread() - forced exit");
+				logmsg = device;
+				logmsg += ", WARNING! DisplayPowerOffThread() - forced exit";
+				Log(logmsg);
 				goto threadoffend;
 			}
 
 			ws.handshake(host, "/");
 			if (time(0) - origtim > 10) // this thread should not run too long
 			{
-				Log("WARNING! DisplayPowerOffThread() - forced exit");
+				logmsg = device;
+				logmsg += ", WARNING! DisplayPowerOffThread() - forced exit";
+				Log(logmsg);
 				goto threadoffend;
 			}
 
-			//send handshake
+			//send a handshake and check validity of the handshake pairing key.
 			ws.write(net::buffer(std::string(handshake)));
 			ws.read(buffer); // read the response
+			j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
+			type = j["type"];
 
-			const json j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
-			boost::string_view sv = j["type"];
-			string check = std::string(sv);
-
-			if (check != "registered")
+			if (std::string(type) != "registered")
 			{
 				logmsg = device;
-				logmsg += ", Warning! Pairing key is invalid.";
+				logmsg += ", WARNING! DisplayPowerOffThread() - Pairing key is invalid.";
 				Log(logmsg);
 				ws.close(websocket::close_code::normal);
 				goto threadoffend;
 			}
+			buffer.consume(buffer.size());
+			
+			//retreive power state from device to determine if the device is powered on
+			ws.write(net::buffer(getpowerstatemess));
+			ws.read(buffer);
+			j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
+			
+			type = j["type"]; 
+			state = j["payload"]["state"];
+			if (std::string(type) == "response")
+			{
+				if (std::string(state) != "Active")
+				{
+					logmsg = device;
+					logmsg += ", power state is: ";
+					logmsg += std::string(state);
+					Log(logmsg);
+					ws.close(websocket::close_code::normal);
+					goto threadoffend;
+				}
+			}
+			else 
+			{
+				logmsg = device;
+				logmsg += ", WARNING! DisplayPowerOffThread() - Invalid response from device - PowerState.";
+				Log(logmsg);
+				ws.close(websocket::close_code::normal);
+				goto threadoffend;
+			}
+			buffer.consume(buffer.size());
 
 			bool shouldPowerOff = true;
-			if (!UserForced && CallingSessionParameters->HDMIinputcontrol)
+
+			// Only process power off events when device is set to a certain HDMI input
+			if (!UserForced && CallingSessionParameters->HDMIinputcontrol) 
 			{
 				string app;
 				shouldPowerOff = false;
-				ws.write(net::buffer(std::string(R"({"id": "1", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})")));
-				beast::flat_buffer response;
-				ws.read(response);
 
-				const json j = json::parse(static_cast<const char*>(response.data().data()), static_cast<const char*>(response.data().data()) + response.size());
-				boost::string_view appId = j["payload"]["appId"];
+				// get information about active input
+				ws.write(net::buffer(std::string(getactiveinputmess)));
+				ws.read(buffer);
+				j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
+				
+				appId = j["payload"]["appId"];
 				app = std::string("Current AppId: ") + std::string(appId);
 				const boost::string_view prefix = "com.webos.app.hdmi";
 				if (appId.starts_with(prefix))
@@ -803,22 +883,40 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 						Log(logmsg);
 					}
 				}
+				else
+				{
+					logmsg = device;
+					logmsg += ", ";
+					logmsg += app;
+					logmsg += " active.";
+					logmsg += app;
+					Log(logmsg);
+				}
+
+				buffer.consume(buffer.size());
 			}
 
 			if (shouldPowerOff)
 			{
+				// send device or screen off command to device
 				ws.write(net::buffer(std::string(BlankScreen ? screenoffmess : poweroffmess)));
 				ws.read(buffer); // read the response
 
 				logmsg = device;
 				if (BlankScreen)
-					logmsg += ", established contact: Screen is OFF. ";
+					logmsg += ", power state is: ON (blanked screen). ";
 				else
-					logmsg += ", established contact: Device is OFF.";
+					logmsg += ", power state is: OFF.";
+				Log(logmsg);
+				buffer.consume(buffer.size());
+			}
+			else
+			{
+				logmsg = device;
+				logmsg += ", power state is: Unchanged.";
 				Log(logmsg);
 			}
 
-			//            Log("DEBUG INFO: DisplayPowerOffThread() closing...");
 			ws.close(websocket::close_code::normal);
 		}
 		catch (std::exception const& e)
@@ -830,7 +928,11 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 		}
 	}
 	else
-		Log("WARNING! DisplayPowerOffThread() - no pairing key");
+	{
+		string logmsg = CallingSessionParameters->DeviceId;
+		logmsg += ", WARNING! DisplayPowerOffThread() - no pairing key";
+		Log(logmsg);
+	}
 
 threadoffend:
 
@@ -845,7 +947,7 @@ threadoffend:
 //   THREAD: Spawned when the device should select an HDMI input.
 void SetDisplayHdmiInputThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, int Timeout, int HdmiInput)
 {
-	string setinputmess = "{ \"id\":\"3\",\"type\" : \"request\",\"uri\" : \"ssap://system.launcher/launch\", \"payload\" :{\"id\":\"com.webos.app.hdmiHDMIINPUT\"}}";
+	string setinputmess = R"({"id": "3", "type" : "request", "uri" : "ssap://system.launcher/launch", "payload" :{"id":"com.webos.app.hdmiHDMIINPUT"}})";
 
 	if (!CallingSessionParameters)
 		return;
@@ -908,7 +1010,7 @@ void SetDisplayHdmiInputThread(SESSIONPARAMETERS* CallingSessionParameters, bool
 
 			ws.close(websocket::close_code::normal);
 			logmsg = device;
-			logmsg += ", established contact. Set HDMI input: ";
+			logmsg += ", Setting HDMI input: ";
 			logmsg += std::to_string(HdmiInput);
 			Log(logmsg);
 			break;

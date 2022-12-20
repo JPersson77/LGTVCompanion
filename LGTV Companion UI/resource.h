@@ -17,6 +17,7 @@
 #define IDD_CONFIGURE_TOPOLOGY          144
 #define IDI_ICON4                       149
 #define IDI_ICON3                       150
+#define IDD_ADVANCEDIDLE                153
 #define IDC_COMBO                       1000
 #define IDC_SPLIT                       1001
 #define IDC_OPTIONS                     1002
@@ -44,7 +45,9 @@
 #define IDC_SYSLINK2                    1021
 #define IDC_RADIO1                      1022
 #define IDC_DONATE                      1022
+#define IDC_SYSLINK6                    1022
 #define IDC_RADIO2                      1023
+#define IDC_SYSLINK7                    1023
 #define IDC_RADIO3                      1024
 #define IDC_SYSLINK4                    1025
 #define IDC_HDMI_INPUT_NUMBER_CHECKBOX  1026
@@ -57,7 +60,9 @@
 #define IDC_SET_HDMI_INPUT_SPIN         1031
 #define IDC_GO                          1031
 #define IDC_STATIC_NO_1                 1032
+#define IDC_SYSLINK8                    1032
 #define IDC_STATIC_NO_2                 1033
+#define IDC_SYSLINK9                    1033
 #define IDC_STATIC_NO_3                 1034
 #define IDC_STATIC_NO_4                 1035
 #define IDC_STATIC_T_1                  1036
@@ -77,7 +82,16 @@
 #define IDC_STATIC_T_13                 1044
 #define IDC_SYSLINK_CONF                1044
 #define IDC_GO2                         1045
+#define IDC_SYSLINK_CONF2               1045
+#define IDC_CHECK1                      1045
 #define IDC_STATIC_NO_5                 1046
+#define IDC_EDIT1                       1046
+#define IDC_SPIN1                       1047
+#define IDC_CHECK2                      1049
+#define IDC_BUTTON1                     1050
+#define IDC_BUTTON2                     1051
+#define IDC_DEVICES                     1053
+#define IDC_DEVICES2                    1054
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -102,9 +116,9 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        153
+#define _APS_NEXT_RESOURCE_VALUE        154
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1045
+#define _APS_NEXT_CONTROL_VALUE         1054
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

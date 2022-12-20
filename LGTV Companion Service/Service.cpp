@@ -20,6 +20,7 @@ WSADATA                 WSAData;
 mutex                   log_mutex;
 wstring                 DataPath;
 vector<string>          HostIPs;
+bool					bIdleLog = true;
 
 wchar_t sddl[] = L"D:"
 L"(A;;CCLCSWRPWPDTLOCRRC;;;SY)"           // default permissions for local system
@@ -309,8 +310,8 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 	thread_obj.detach();
 
 	//make sure the process is shutdown as early as possible
-	if (SetProcessShutdownParameters(0x3FF, 0))
-		Log("Setting shutdown parameter level 0x3FF");
+	if (SetProcessShutdownParameters(0x100, SHUTDOWN_NORETRY))
+		Log("Setting shutdown parameter level 0x100");
 	else
 		Log("Could not set shutdown parameter level");
 
@@ -325,6 +326,8 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 
 	// Wait until service stops
 	WaitForSingleObject(ghSvcStopEvent, INFINITE);
+
+	Sleep(1000);
 
 	//terminate the device control sessions
 	DeviceCtrlSessions.clear();
@@ -369,6 +372,7 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 	switch (dwCtrl)
 	{
 	case SERVICE_CONTROL_STOP:
+	{
 		ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000);
 
 		do
@@ -387,27 +391,28 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 		// Signal the service to stop.
 		SetEvent(ghSvcStopEvent);
 		ReportSvcStatus(gSvcStatus.dwCurrentState, NO_ERROR, 0);
+	}	break;
 
-		break;
-		//    case SERVICE_CONTROL_USERMODEREBOOT: // does not seem to work. Unfortunate! Need to investigate alternative means of detecting a system restart then.
-		//        break;
 	case SERVICE_CONTROL_POWEREVENT:
+	{
 		switch (dwEventType)
 		{
 		case PBT_APMRESUMEAUTOMATIC:
+		{
 			EventCallbackStatus = NULL;;
 			Log("** System resumed from low power state (Automatic).");
 			DispatchSystemPowerEvent(SYSTEM_EVENT_RESUMEAUTO);
 			Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = true;
-			break;
+		}	break;
 		case PBT_APMRESUMESUSPEND:
+		{
 			EventCallbackStatus = NULL;;
 			Log("** System resumed from low power state.");
 			DispatchSystemPowerEvent(SYSTEM_EVENT_RESUME);
 			Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = true;
-			break;
+		}	break;
 		case PBT_APMSUSPEND:
-
+		{
 			if (EventCallbackStatus == SYSTEM_EVENT_REBOOT)
 			{
 				Log("** System is restarting.");
@@ -431,8 +436,9 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 				DispatchSystemPowerEvent(SYSTEM_EVENT_SUSPEND);
 				Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
 			}
-			break;
+		}	break;
 		case PBT_POWERSETTINGCHANGE:
+		{
 			if (lpEventData)
 			{
 				POWERBROADCAST_SETTING* PBS = NULL;
@@ -473,12 +479,13 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 					Log(text);
 				}
 			}
-			break;
+		}	break;
 
 		default:break;
 		}
-		break;
+	}	break;
 	case SERVICE_CONTROL_PRESHUTDOWN:
+	{
 		if (EventCallbackStatus == SYSTEM_EVENT_REBOOT)
 		{
 			Log("** System is restarting.");
@@ -522,12 +529,14 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 		// Signal the service to stop.
 		SetEvent(ghSvcStopEvent);
 		ReportSvcStatus(gSvcStatus.dwCurrentState, NO_ERROR, 0);
-		break;
+	}	break;
 
 	case SERVICE_CONTROL_INTERROGATE:
+	{
 		Log("SERVICE_CONTROL_INTERROGATE");
-		break;
-	default:break;
+	}	break;
+	default:
+		return ERROR_CALL_NOT_IMPLEMENTED;
 	}
 	return NO_ERROR;
 }
@@ -985,6 +994,7 @@ void IPCThread(void)
 	InitializeSecurityDescriptor(psd, SECURITY_DESCRIPTOR_REVISION);
 	SetSecurityDescriptorDacl(psd, TRUE, (PACL)NULL, FALSE);
 	SECURITY_ATTRIBUTES sa = { sizeof(sa), psd, FALSE };
+	
 
 	hPipe = CreateNamedPipe(PIPENAME,
 		PIPE_ACCESS_DUPLEX,
@@ -1060,12 +1070,20 @@ void IPCThread(void)
 								}
 								else if (param == "userbusy")
 								{
-									Log("IPC, User is not idle.");
+									if (!bIdleLog)
+									{
+										Log("IPC, User is not idle.");
+										bIdleLog = true;
+									}
 									DispatchSystemPowerEvent(SYSTEM_EVENT_USERBUSY);
 								}
 								else if (param == "useridle")
 								{
-									Log("IPC, User is idle.");
+									if (bIdleLog)
+									{
+										Log("IPC, User is idle.");
+										bIdleLog = false;
+									}
 									DispatchSystemPowerEvent(SYSTEM_EVENT_USERIDLE);
 								}
 								else if (param == "remoteconnect_busy")
@@ -1115,6 +1133,7 @@ void IPCThread(void)
 								}
 								else if (param == "topology")
 								{
+									
 									param1 = APP_IPC_DAEMON_TOPOLOGY;
 									for (auto &d : DeviceCtrlSessions)
 									{
@@ -1125,11 +1144,28 @@ void IPCThread(void)
 							}
 							else if (param1 == APP_IPC_DAEMON_TOPOLOGY)
 							{
+								if (param == "invalid")
+								{
+									Log("IPC, A recent change to the system seem to have invalidated the monitor topology configuration. "
+										"Please run the configuration guide in the global options again to ensure correct operation.");
+								}
 								if (param == "*")
 								{
-									stringstream s;
-									s << "IPC, windows monitor topology was changed.";
-									Log(s.str());
+									string s;
+									string TopologyDevices ;
+									for (auto& d : DeviceCtrlSessions)
+									{
+										TopologyDevices += d.DeviceID;
+										TopologyDevices += ":";
+										TopologyDevices += d.GetTopology() ? "ON ":"OFF ";
+									}
+
+									s  = "IPC, windows monitor topology was changed. ";
+									if (TopologyDevices == "")
+										s += "No devices configured.";
+									else
+										s += TopologyDevices;
+									Log(s);
 									DispatchSystemPowerEvent(SYSTEM_EVENT_TOPOLOGY);
 								}
 								else
@@ -1138,17 +1174,13 @@ void IPCThread(void)
 									{
 										string id = d.DeviceID;
 										transform(id.begin(), id.end(), id.begin(), ::tolower);
-
 										if (param == id)
 										{
-											stringstream s;
-											s << "IPC, ";
-											s << d.DeviceID;
-											s << " - enabled in windows monitor topology.";
-											Log(s.str());
-											d.SetTopology(true);
+											d.SetTopology(true);								                                                   
 										}
+
 									}
+
 								}
 							}
 

@@ -37,7 +37,7 @@
 #pragma comment(lib, "Iphlpapi.lib")
 
 #define APPNAME						    L"LGTV Companion"
-#define APPVERSION					    L"1.8.1"
+#define APPVERSION					    L"1.8.7"
 #define SVCNAME						    L"LGTVsvc"
 #define SVCDISPLAYNAME				    L"LGTV Companion Service"
 #define SERVICE_PORT                    "3000"
@@ -152,9 +152,11 @@ public:
 	SESSIONPARAMETERS GetParams();
 	bool IsBusy();
 	void SetTopology(bool);
+	bool GetTopology();
 	std::string DeviceID;
 private:
 	time_t ScreenDimmedRequestTime = 0;
+	bool ActivePowerState = false;
 	bool ThreadedOpDisplayOn = false;
 	bool ThreadedOpDisplayOff = false;
 	bool ThreadedOpDisplaySetHdmiInput = false;

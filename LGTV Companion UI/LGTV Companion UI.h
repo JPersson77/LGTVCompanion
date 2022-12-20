@@ -53,7 +53,7 @@
 
 #define			APPNAME_SHORT					L"LGTVcomp"
 #define			APPNAME_FULL					L"LGTV Companion"
-#define         APP_VERSION                     L"1.8.0"
+#define         APP_VERSION                     L"1.8.7"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_COMMANDLINE			1
 
@@ -155,6 +155,7 @@ LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK    DeviceWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK    OptionsWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK    ConfigureTopologyWndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK    UserIdleConfWndProc(HWND, UINT, WPARAM, LPARAM);
 
 bool                MessageExistingProcess(std::wstring);
 bool				ReadConfigFile();

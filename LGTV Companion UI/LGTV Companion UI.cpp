@@ -134,8 +134,14 @@ CHANGELOG
 
 	TODO:
 
-	v 1.9.0				- Enhanced support for GameStream/Moonlight/SteamLink
-
+	v 1.9.0				- [ ] Enhanced support for GameStream/Moonlight/SteamLink - check added virtual devices
+						- [ ] Advanced configuration for user idle detection. Separate mouse/keyboard/controller, and implement app whitelist
+						https://learn.microsoft.com/en-us/windows/win32/inputdev/using-raw-input?source=recommendations
+						https://stackoverflow.com/questions/7009080/detecting-full-screen-mode-in-windows
+						- [x] bugfix random power onoff potentially related to wm_displaychange triggering not only on topology change
+						- [x] clearly explain that change of GPU will cause problems with the topology feature. Possible to identify GPU changes?
+						- [x] identify invalid pairing keys
+						- [x] more help texts
 LICENSE
 	Copyright (c) 2021-2022 Jörgen Persson
 
@@ -159,7 +165,7 @@ THANKS TO
 	- Etienne Dechanmps - valuable contributions
 
 COPYRIGHT
-	Copyright (c) 2021-2022 Jörgen Persson
+	Copyright (c) 2021-2023 Jörgen Persson
 */
 
 #include "LGTV Companion UI.h"
@@ -169,7 +175,11 @@ using json = nlohmann::json;
 
 // Global Variables:
 HINSTANCE                       hInstance;  // current instance
-HWND                            hMainWnd;
+HWND                            hMainWnd = NULL;
+HWND                            hDeviceWindow = NULL;
+HWND                            hOptionsWindow = NULL;
+HWND                            hTopologyWindow = NULL;
+HWND                            hUserIdleConfWindow = NULL;
 
 wstring                         CommandLineParameters;
 wstring                         DataPath;
@@ -282,9 +292,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	}
 
 	// message loop:
+	// don't call DefWindowProc for modeless dialogs. Return true for handled messages or false otherwise
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
-		if (!IsDialogMessage(hMainWnd, &msg))
+
+		if (!IsDialogMessage(hMainWnd, &msg) &&
+			!IsDialogMessage(hDeviceWindow,&msg) &&
+			!IsDialogMessage(hOptionsWindow,&msg) &&
+			!IsDialogMessage(hTopologyWindow, &msg) &&
+			!IsDialogMessage(hUserIdleConfWindow, &msg))
+		
+//		if (!IsDialogMessage(hMainWnd, &msg))
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
@@ -355,25 +373,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}break;
 	case APP_MESSAGE_ADD:
 	{
-		HWND hDeviceWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEVICE), hWnd, (DLGPROC)DeviceWndProc);
-		SetWindowText(hDeviceWnd, DEVICEWINDOW_TITLE_ADD);
-		SetWindowText(GetDlgItem(hDeviceWnd, IDOK), L"&Add");
-		CheckDlgButton(hDeviceWnd, IDC_RADIO2, BST_CHECKED);
-		EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), false);
-		SetWindowText(GetDlgItem(hDeviceWnd, IDC_SUBNET), WOL_DEFAULTSUBNET);
+		hDeviceWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEVICE), hWnd, (DLGPROC)DeviceWndProc);
+		SetWindowText(hDeviceWindow, DEVICEWINDOW_TITLE_ADD);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDOK), L"&Add");
+		CheckDlgButton(hDeviceWindow, IDC_RADIO2, BST_CHECKED);
+		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), false);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SUBNET), WOL_DEFAULTSUBNET);
 
-		CheckDlgButton(hDeviceWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX, BST_UNCHECKED);
-		EnableWindow(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), false);
-		SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), L"1");
+		CheckDlgButton(hDeviceWindow, IDC_HDMI_INPUT_NUMBER_CHECKBOX, BST_UNCHECKED);
+		EnableWindow(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), false);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), L"1");
 
-		CheckDlgButton(hDeviceWnd, IDC_SET_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
-		EnableWindow(GetDlgItem(hDeviceWnd, IDC_SET_HDMI_INPUT_NUMBER), false);
-		SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), L"1");
+		CheckDlgButton(hDeviceWindow, IDC_SET_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
+		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_INPUT_NUMBER), false);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), L"1");
 
-		EnableWindow(GetDlgItem(hDeviceWnd, IDOK), false);
+		EnableWindow(GetDlgItem(hDeviceWindow, IDOK), false);
 
 		EnableWindow(hWnd, false);
-		ShowWindow(hDeviceWnd, SW_SHOW);
+		ShowWindow(hDeviceWindow, SW_SHOW);
 	}break;
 	case APP_MESSAGE_MANAGE:
 	{
@@ -381,21 +399,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		if (sel == CB_ERR)
 			break;
 
-		HWND hDeviceWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEVICE), hWnd, (DLGPROC)DeviceWndProc);
-		SetWindowText(hDeviceWnd, DEVICEWINDOW_TITLE_MANAGE);
-		SetWindowText(GetDlgItem(hDeviceWnd, IDOK), L"&Save");
-		SetWindowText(GetDlgItem(hDeviceWnd, IDC_DEVICENAME), widen(Devices[sel].Name).c_str());
-		SetWindowText(GetDlgItem(hDeviceWnd, IDC_DEVICEIP), widen(Devices[sel].IP).c_str());
+		hDeviceWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEVICE), hWnd, (DLGPROC)DeviceWndProc);
+		SetWindowText(hDeviceWindow, DEVICEWINDOW_TITLE_MANAGE);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDOK), L"&Save");
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_DEVICENAME), widen(Devices[sel].Name).c_str());
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_DEVICEIP), widen(Devices[sel].IP).c_str());
 
-		CheckDlgButton(hDeviceWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX, Devices[sel].HDMIinputcontrol);
-		EnableWindow(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), Devices[sel].HDMIinputcontrol ? true : false);
-		SetWindowText(GetDlgItem(hDeviceWnd, IDC_HDMI_INPUT_NUMBER), widen(std::to_string(Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs)).c_str());
-		SendDlgItemMessage(hDeviceWnd, IDC_HDMI_INPUT_NUMBER_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs);
+		CheckDlgButton(hDeviceWindow, IDC_HDMI_INPUT_NUMBER_CHECKBOX, Devices[sel].HDMIinputcontrol);
+		EnableWindow(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), Devices[sel].HDMIinputcontrol ? true : false);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), widen(std::to_string(Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs)).c_str());
+		SendDlgItemMessage(hDeviceWindow, IDC_HDMI_INPUT_NUMBER_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Devices[sel].OnlyTurnOffIfCurrentHDMIInputNumberIs);
 
-		CheckDlgButton(hDeviceWnd, IDC_SET_HDMI_INPUT_CHECKBOX, Devices[sel].SetHDMIInputOnResume);
-		EnableWindow(GetDlgItem(hDeviceWnd, IDC_SET_HDMI_INPUT_NUMBER), Devices[sel].SetHDMIInputOnResume ? true : false);
-		SetWindowText(GetDlgItem(hDeviceWnd, IDC_SET_HDMI_INPUT_NUMBER), widen(std::to_string(Devices[sel].SetHDMIInputOnResumeToNumber)).c_str());
-		SendDlgItemMessage(hDeviceWnd, IDC_SET_HDMI_INPUT_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Devices[sel].SetHDMIInputOnResumeToNumber);
+		CheckDlgButton(hDeviceWindow, IDC_SET_HDMI_INPUT_CHECKBOX, Devices[sel].SetHDMIInputOnResume);
+		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_INPUT_NUMBER), Devices[sel].SetHDMIInputOnResume ? true : false);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_INPUT_NUMBER), widen(std::to_string(Devices[sel].SetHDMIInputOnResumeToNumber)).c_str());
+		SendDlgItemMessage(hDeviceWindow, IDC_SET_HDMI_INPUT_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Devices[sel].SetHDMIInputOnResumeToNumber);
 
 		str = L"";
 		for (const auto& item : Devices[sel].MAC)
@@ -404,37 +422,37 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (item != Devices[sel].MAC.back())
 				str += L"\r\n";
 		}
-		SetWindowText(GetDlgItem(hDeviceWnd, IDC_DEVICEMACS), str.c_str());
-		EnableWindow(GetDlgItem(hDeviceWnd, IDOK), false);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_DEVICEMACS), str.c_str());
+		EnableWindow(GetDlgItem(hDeviceWindow, IDOK), false);
 
 		switch (Devices[sel].WOLtype)
 		{
 		case 1:
 		{
-			CheckDlgButton(hDeviceWnd, IDC_RADIO1, BST_CHECKED);
-			EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), false);
+			CheckDlgButton(hDeviceWindow, IDC_RADIO1, BST_CHECKED);
+			EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), false);
 		}break;
 		case 2:
 		{
-			CheckDlgButton(hDeviceWnd, IDC_RADIO2, BST_CHECKED);
-			EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), false);
+			CheckDlgButton(hDeviceWindow, IDC_RADIO2, BST_CHECKED);
+			EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), false);
 		}break;
 		case 3:
 		{
-			CheckDlgButton(hDeviceWnd, IDC_RADIO3, BST_CHECKED);
-			EnableWindow(GetDlgItem(hDeviceWnd, IDC_SUBNET), true);
+			CheckDlgButton(hDeviceWindow, IDC_RADIO3, BST_CHECKED);
+			EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), true);
 		}break;
 		default:break;
 		}
 		if (Devices[sel].Subnet != "")
-			SetWindowText(GetDlgItem(hDeviceWnd, IDC_SUBNET), widen(Devices[sel].Subnet).c_str());
+			SetWindowText(GetDlgItem(hDeviceWindow, IDC_SUBNET), widen(Devices[sel].Subnet).c_str());
 		else
-			SetWindowText(GetDlgItem(hDeviceWnd, IDC_SUBNET), WOL_DEFAULTSUBNET);
+			SetWindowText(GetDlgItem(hDeviceWindow, IDC_SUBNET), WOL_DEFAULTSUBNET);
 
-		EnableWindow(GetDlgItem(hDeviceWnd, IDOK), false);
+		EnableWindow(GetDlgItem(hDeviceWindow, IDOK), false);
 
 		EnableWindow(hWnd, false);
-		ShowWindow(hDeviceWnd, SW_SHOW);
+		ShowWindow(hDeviceWindow, SW_SHOW);
 	}break;
 	case APP_MESSAGE_SCAN:
 	{
@@ -727,10 +745,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}break;
 			case IDC_OPTIONS:
 			{
-				HWND hOptionsWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_OPTIONS), hWnd, (DLGPROC)OptionsWndProc);
-				SetWindowText(hOptionsWnd, L"Additional options");
+				hOptionsWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_OPTIONS), hWnd, (DLGPROC)OptionsWndProc);
+				SetWindowText(hOptionsWindow, L"Additional options");
 				EnableWindow(hWnd, false);
-				ShowWindow(hOptionsWnd, SW_SHOW);
+				ShowWindow(hOptionsWindow, SW_SHOW);
 			}break;
 			default:break;
 			}
@@ -769,7 +787,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (MessageBox(hWnd, L"This is free software, but your support is appreciated and there is a donation page set up over at PayPal. PayPal allows you to use a credit- or debit card or your PayPal balance to make a donation, even without a PayPal account.\n\nClick 'Yes' to continue to the PayPal donation web page!", L"Donate via PayPal?", MB_YESNO | MB_ICONQUESTION) == IDYES)
 					ShellExecute(0, 0, DONATELINK, 0, 0, SW_SHOW);
 			}
-		}
+		}break;
 		case BCN_DROPDOWN:
 		{
 			NMBCDROPDOWN* pDropDown = (NMBCDROPDOWN*)lParam;
@@ -942,9 +960,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 	}
 	default:
-		return 0;
+		return false;
 	}
-	return 0;
+	return true;
 }
 
 //   Process messages for the add/manage devices window
@@ -970,15 +988,37 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		case NM_CLICK:
 		{
 			// explain the WOL options
-			if (wParam == IDC_SYSLINK4)
+			if (wParam == IDC_SYSLINK8)
 			{
 				MessageBox(hWnd,
-					L"Devices are powered on by means of sending wake-on-Lan magic packets. Depending on your network environment, TV firmware and operating system you may need to adjust these settings.\n\n"
-					"The \"Device IP-address\" approach sends unicast packets directly to the device IP. IP neighbor table overrides are used to make this work even if ARP doesn't. This is believed to be the most reliable option.\n\n"
-					"If the \"Device IP-address\" option doesn't work for you, you might want to try the other options. You are invited to file an issue on GitHub so that we can get a better understanding of what works and what doesn't work in the wild.\n\n"
+					L"Name your devices so you can easily distinguish them.\n\n"
+					"The IP-address and MAC-address are the device's unique network identifiers. If the automatic scan could not determine the "
+					"correct values please enter the network settings "
+					"of your  WebOS-device to determine the correct values.\n\n"
+					"Please note that both MAC address and IP are mandatory to set.",
+					L"Device information", MB_OK | MB_ICONINFORMATION);
+
+			}
+			// explain the WOL options
+			else if (wParam == IDC_SYSLINK4)
+			{
+				MessageBox(hWnd,
+					L"Devices are powered on by means of sending wake-on lan (WOL) magic packets. Depending on your network environment, device firmware and operating system you may need to adjust these settings.\n\n"
+					"The \"Send to device IP-address\" method (no 2) sends unicast packets directly to the device IP. IP neighbor table overrides are used to make this work even if ARP doesn't. This is believed to be the most reliable option for most users.\n\n"
+					"If the \"Send to device IP-address\" option doesn't work reliably please try the other options. You are invited to file an issue on GitHub so that we can get a better understanding of what works and what doesn't work in the wild.\n\n"
 					"Anecdotal evidence seems to suggest broadcast-based approaches can intermittently fail to wake up the TV (see e.g. GitHub issue #19), which is why they are not recommended.\n\n"
 					"Between the two broadcast options, the subnet approach is the most likely to work. The global network broadcast approach is prone to issues when multiple network interfaces are present (VPN, etc.), because the packet might be sent using the wrong interface.\n\n"
 					"The current subnet mask of the subnet(s) of your PC can be found by using the \"IPCONFIG /all\" command in the command prompt.",
+					L"Network options", MB_OK | MB_ICONINFORMATION);
+			} 
+			// explain the WOL options
+			else if (wParam == IDC_SYSLINK9)
+			{
+				MessageBox(hWnd,
+					L"The option to process power and screen off events only when the HDMI display input is set to a specific input should be used to prevent the "
+					"WebOS-device from powering off while you are not using it for your PC, i e when you are busy watching Netflix or gaming on your console.\n\n"
+					"The option to set an HDMI input on startup or resume can be used to force the device to automatically switch to the input "
+					" the PC is connected to when powering on.", 
 					L"Information", MB_OK | MB_ICONINFORMATION);
 			}
 		}break;
@@ -1050,6 +1090,12 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							else
 								for (int ind = 4; ind >= 0; ind--)
 									mac.insert(ind * 2 + 2, ":");
+						}
+						//verify IP
+						if (narrow(GetWndText(GetDlgItem(hWnd, IDC_DEVICEIP))) == "0.0.0.0")
+						{
+							MessageBox(hWnd, L"The IP-address is invalid.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
+							return 0;
 						}
 					}
 
@@ -1211,10 +1257,14 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 	{
 		EndDialog(hWnd, 0);
 	}break;
-
-	default:break;
+	case WM_DESTROY:
+	{
+		hDeviceWindow = NULL;
+	}break;
+	default:
+		return false;
 	}
-	return 0;
+	return true;
 }
 
 //   Process messages for the options window
@@ -1401,9 +1451,9 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					}
 					else
 					{
-						HWND hConfigureWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)ConfigureTopologyWndProc);
+						hTopologyWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)ConfigureTopologyWndProc);
 						EnableWindow(hWnd, false);
-						ShowWindow(hConfigureWnd, SW_SHOW);
+						ShowWindow(hTopologyWindow, SW_SHOW);
 					}
 				}
 
@@ -1500,7 +1550,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				ShellExecute(NULL, L"open", str.c_str(), NULL, DataPath.c_str(), SW_SHOW);
 			}
 			//clear log
-			if (wParam == IDC_SYSLINK2)
+			else if (wParam == IDC_SYSLINK2)
 			{
 				wstring str = DataPath;
 				str += L"log.txt";
@@ -1512,15 +1562,24 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				}
 			}
 			// explain the restart words
-			if (wParam == IDC_SYSLINK3)
+			else if (wParam == IDC_SYSLINK3)
 			{
 				MessageBox(hWnd, L"This application rely on events in the windows event log to determine whether a reboot or shutdown was initiated by the user."
 					"\n\nThese events are localised in the language of your operating system, and the user must therefore assist with manually indicating which "
 					"strings refers to the system restarting.\n\nPlease put a checkmark for every string which refers to 'restart'", 
-					L"Information", MB_OK | MB_ICONINFORMATION);
+					L"Restart words", MB_OK | MB_ICONINFORMATION);
+			}
+			// explain the power on timeout, logging etc
+			else if (wParam == IDC_SYSLINK7)
+			{
+				MessageBox(hWnd, L"The power on timeout determines the maximum number of seconds the app will attempt to connect to devices when powering on. "
+					"Please consider increasing this value if your PC needs more time to establish contact with the WebOS-devices during system boot.\n\n"
+					"The option to enable logging is very useful for troubleshooting and if you are experiencing issues with the operations of this app.\n\n"
+					"The option to automatically check for updates ensure that you are always notified when a new version of LGTV Companion is available for download.",
+					L"Global options", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the power saving options
-			if (wParam == IDC_SYSLINK5)
+			else if (wParam == IDC_SYSLINK5)
 			{
 				MessageBox(hWnd, L"The option to automatically blank the screen triggers in the absence of user input from keyboard, mouse and/or controllers."
 					"The difference, when compared to both the screensaver and windows power plan settings, is that those OS implemented power saving functions "
@@ -1531,12 +1590,21 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"login screen during a remote RDP session. There is a delay of 10 seconds after RDP connection. Please note that depending on the configuration "
 					"of your system (primarily time to turn off screen in power options) there may be occasions where the display cannot be woken by using the local "
 					"mouse and keyboard and you must rely on the remote to see the login screen. It is recommended to combine this option with a short (<30 minutes) "
-					"time to turn off displays in Windows Power Plan Options.\n\nThe option to automatically conform to the windows monitor topology ensures that "
-					"power state of individual devices will mztch the enabled/disabled state in the Windows monitor configuration, f e "
-					"when an HDMI-output and associated device is disabled in the graphics card configuration the associated device will also power off.", 
-					L"Information", MB_OK | MB_ICONINFORMATION);
+					"time to turn off displays in Windows Power Plan Options.", 
+					L"Andvanced power options", MB_OK | MB_ICONINFORMATION);
 			}
-			if (wParam == IDC_SYSLINK_CONF)
+			// explain the pmulti-monitor conf
+			else if (wParam == IDC_SYSLINK6)
+			{
+				MessageBox(hWnd, L"The option to automatically conform to the windows monitor topology ensures that the "
+					"power state of individual devices will match the enabled or disabled state in the Windows monitor configuration, i e "
+					"when an HDMI-output is disabled in the graphics card configuration the associated device will also power off. \n\n"
+					"If you have a multi-monitor system it is recommended to configure and enable this option.\n\n"
+					"NOTE! A change of GPU or adding more displays may invalidate the configuration. If so, please run the configuration guide "
+					"again to ensure correct operation.",
+					L"Multi-monitor support", MB_OK | MB_ICONINFORMATION);
+			}
+			else if (wParam == IDC_SYSLINK_CONF)
 			{
 				if (Devices.size() == 0)
 				{
@@ -1545,10 +1613,16 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				}
 				else
 				{
-					HWND hConfigureWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)ConfigureTopologyWndProc);
+					hTopologyWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)ConfigureTopologyWndProc);
 					EnableWindow(hWnd, false);
-					ShowWindow(hConfigureWnd, SW_SHOW);
+					ShowWindow(hTopologyWindow, SW_SHOW);
 				}
+			}
+			else if (wParam == IDC_SYSLINK_CONF2)
+			{
+					hUserIdleConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_ADVANCEDIDLE), hWnd, (DLGPROC)UserIdleConfWndProc);
+					EnableWindow(hWnd, false);
+					ShowWindow(hUserIdleConfWindow, SW_SHOW);
 			}
 
 		}break;
@@ -1604,11 +1678,16 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	{
 		EndDialog(hWnd, 0);
 	}break;
-
-	default:break;
+	case WM_DESTROY:
+	{
+		hOptionsWindow = NULL;
+	}	break;
+	default:
+		return false;
 	}
-	return 0;
+	return true;
 }
+
 
 //   Process messages for the options window
 LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -1638,7 +1717,7 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 		{
 			if (k.UniqueDeviceKey != "")
 			{
-				SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"Configuration OK!");
+				SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"Waiting for input...");
 			}
 		}
 
@@ -1685,7 +1764,7 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_NO_4), false);
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_T_11), false);
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_T_12), false);
-		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_T_13), false);		
+		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_T_13), false);
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_T_14), false);
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_NO_5), true);
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_T_15), true);
@@ -1852,10 +1931,13 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 		if ((HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_STATUS_2))
 		{
 			wstring s = GetWndText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2));
-			if(s.find(L"OK!") != wstring::npos)
+			if (s.find(L"OK!") != wstring::npos)
 				SetTextColor(hdcStatic, COLORREF(COLOR_GREEN));
 			else if (s.find(L"Updating") != wstring::npos)
 				SetTextColor(hdcStatic, COLORREF(COLOR_BLUE));
+			else if (s.find(L"Waiting") != wstring::npos)
+				SetTextColor(hdcStatic, COLORREF(COLOR_BLUE));
+
 			else
 				SetTextColor(hdcStatic, COLORREF(COLOR_RED));
 		}
@@ -1888,10 +1970,229 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 	{
 		EndDialog(hWnd, 0);
 	}break;
-
-	default:break;
+	case  WM_DESTROY:
+	{
+		hTopologyWindow = NULL;
+	}break;
+	default:
+		return false;
 	}
-	return 0;
+	return true;
+}
+
+
+//   Process messages for the options window
+LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	{
+		/*
+		SendDlgItemMessage(hWnd, IDC_COMBO, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_1, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_2, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_3, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_4, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_5, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_6, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_11, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_12, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_13, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_14, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_15, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_16, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_STATUS_1, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_STATUS_2, WM_SETFONT, (WPARAM)hEditMediumBoldfont, MAKELPARAM(TRUE, 0));
+		SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"Not configured!");
+		for (auto& k : Devices)
+		{
+			if (k.UniqueDeviceKey != "")
+			{
+				SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"Configuration OK!");
+			}
+		}
+
+
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)-1, (LPARAM)0);
+
+		if (Devices.size() > 0)
+		{
+			for (const auto& item : Devices)
+			{
+				stringstream s;
+				s << item.DeviceId << ": " << item.Name << "(" << item.IP << ")";
+				SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)widen(s.str()).c_str());
+			}
+			SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+		}
+		SendMessage(hWnd, APP_TOP_PHASE_1, NULL, NULL);
+		iTopConfDisplay = 0;
+		*/
+	}break;
+
+	case WM_COMMAND:
+	{
+		switch (HIWORD(wParam))
+		{
+		case BN_CLICKED:
+		{
+			switch (LOWORD(wParam))
+			{
+
+			case IDOK:
+			{
+				/*
+				switch (iTopConfPhase) // three phases - intro, match displays, finalise
+				{
+				case 1:
+				{
+					vector<DISPLAY_INFO> displays = QueryDisplays();
+					// No WebOs devices attached
+					if (displays.size() == 0)
+					{
+						MessageBox(hWnd, L"To configure your devices, ensure that all your WebOS-devices are powered ON, connected to to your PC and enabled (with an extended desktop in case of multiple displays).", L"No WebOS devices detected", MB_OK | MB_ICONWARNING);
+						break;
+					}
+					// If exactly one physical device connected/enabled and exactly one device cofigured it is considered an automatic match
+					else if (Devices.size() == 1 && displays.size() == 1)
+					{
+						if (MessageBox(hWnd, L"Your device can be automatically configured.\n\nDo you want to accept the automatic configuration?", L"Automatic match", MB_YESNO) == IDYES)
+						{
+							Devices[0].UniqueDeviceKey_Temp = narrow(displays[0].target.monitorDevicePath);
+							SendMessage(hWnd, APP_TOP_PHASE_3, NULL, NULL);
+							SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"All OK!");
+							break;
+						}
+					}
+					SendMessage(hWnd, APP_TOP_PHASE_2, NULL, NULL);
+					SendMessage(hWnd, APP_TOP_NEXT_DISPLAY, NULL, NULL);
+				}break;
+				case 2:
+				{
+					vector<DISPLAY_INFO> displays = QueryDisplays();
+					int sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+					if (sel == CB_ERR || Devices.size() <= sel)
+						break;
+					Devices[sel].UniqueDeviceKey_Temp = narrow(displays[iTopConfDisplay].target.monitorDevicePath);
+
+					iTopConfDisplay++;
+					if (iTopConfDisplay >= displays.size()) // all displays iterated
+					{
+						SendMessage(hWnd, APP_TOP_PHASE_3, NULL, NULL);
+					}
+					else // more displays are connected
+					{
+						SendMessage(hWnd, APP_TOP_NEXT_DISPLAY, NULL, NULL);
+					}
+
+				}break;
+				case 3:
+				{
+					for (auto& k : Devices)
+					{
+						k.UniqueDeviceKey = k.UniqueDeviceKey_Temp;
+					}
+					EndDialog(hWnd, 0);
+					EnableWindow(GetParent(hWnd), true);
+					EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
+				}break;
+				default:break;
+				}
+				*/
+			}break;
+			case IDCANCEL:
+			{
+				/*
+				bool conf = false;
+				for (auto& k : Devices)
+				{
+					if (k.UniqueDeviceKey != "")
+					{
+						conf = true;
+						break;
+					}
+				}
+				if (!conf)
+				{
+					CheckDlgButton(GetParent(hWnd), IDC_CHECK_TOPOLOGY, BST_UNCHECKED);
+				}
+				*/
+				EndDialog(hWnd, 0);
+				EnableWindow(GetParent(hWnd), true);
+			}break;
+			default:break;
+			}
+		}break;
+		default:break;
+		}
+	}break;
+	case WM_CTLCOLORSTATIC:
+	{
+		/*
+		HDC hdcStatic = (HDC)wParam;
+		if ((HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_1)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_2)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_3)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_4)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_T_1)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_T_2)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_T_3)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_T_4)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_STATUS_1)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_STATUS_2))
+		{
+			SetBkMode(hdcStatic, TRANSPARENT);
+		}
+		if ((HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_STATUS_2))
+		{
+			wstring s = GetWndText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2));
+			if(s.find(L"OK!") != wstring::npos)
+				SetTextColor(hdcStatic, COLORREF(COLOR_GREEN));
+			else if (s.find(L"Updating") != wstring::npos)
+				SetTextColor(hdcStatic, COLORREF(COLOR_BLUE));
+			else
+				SetTextColor(hdcStatic, COLORREF(COLOR_RED));
+		}
+
+		else if ((HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_1)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_2)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_3)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_4))
+			SetTextColor(hdcStatic, COLORREF(COLOR_BLUE));
+		else
+			SetTextColor(hdcStatic, COLORREF(COLOR_STATIC));
+*/
+		return(INT_PTR)hBackbrush;
+	}break;
+
+	case WM_PAINT:
+	{
+		RECT rc = { 0 };
+
+		GetClientRect(hWnd, &rc);
+
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		FillRect(hdc, &rc, (HBRUSH)hBackbrush);
+
+		EndPaint(hWnd, &ps);
+	}break;
+
+	case WM_CLOSE:
+	{
+		EndDialog(hWnd, 0);
+	}break;
+	case  WM_DESTROY:
+	{
+		hUserIdleConfWindow = NULL;
+	}break;
+	default:
+		return false;
+	}
+	return true;
 }
 
 

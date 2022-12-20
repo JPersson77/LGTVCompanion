@@ -20,7 +20,8 @@ PREFS                           Prefs;
 HANDLE                          hPipe = INVALID_HANDLE_VALUE;
 INT64                           idToastFirstrun = NULL;
 INT64                           idToastNewversion = NULL;
-vector <SESSIONPARAMETERS>      Devices;                 
+vector <SESSIONPARAMETERS>      Devices;     
+LASTINPUTINFO					SavedLII;
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -37,6 +38,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	WindowTitle = APPNAME_FULL;
 	WindowTitle += L" v";
 	WindowTitle += APP_VERSION;
+	SavedLII.cbSize = sizeof(LASTINPUTINFO);
+	SavedLII.dwTime = 0;
 
 	//commandline processing
 	if (lpCmdLine)
@@ -242,7 +245,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			LASTINPUTINFO lii;
 			lii.cbSize = sizeof(LASTINPUTINFO);
-			if (GetLastInputInfo(&lii))
+			if (GetLastUserInputTime(&lii))
 			{
 				if (bDaemonVisible)
 				{
@@ -287,7 +290,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					bIdlePreventEarlyWakeup = false;
 				}
 			}
-
 			return 0;
 		}break;
 		case TIMER_IDLE:
@@ -298,7 +300,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
 			//           Log(L"Idle");
 			CommunicateWithService("-daemon useridle");
-
 			return 0;
 		}break;
 		case TIMER_RDP:
@@ -319,7 +320,45 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case TIMER_TOPOLOGY:
 		{
 			KillTimer(hWnd, TIMER_TOPOLOGY);
-			PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+
+			if(VerifyTopology())
+				PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+			else
+			{
+				CommunicateWithService("-daemon topology invalid");
+
+				wstring s = L"A recent change to the system seem to have invalidated the monitor topology configuration. "
+					"Please run the configuration guide in the global options to ensure correct operation.";
+				Log(s);
+
+				if (Prefs.ToastInitialised)
+				{
+					TCHAR buffer[MAX_PATH] = { 0 };
+					GetModuleFileName(NULL, buffer, MAX_PATH);
+					wstring imgpath = buffer;
+					std::wstring::size_type pos = imgpath.find_last_of(L"\\/");
+					imgpath = imgpath.substr(0, pos + 1);
+					imgpath += L"mainicon.ico";
+
+					WinToastTemplate templ;
+					templ = WinToastTemplate(WinToastTemplate::ImageAndText02);
+					templ.setImagePath(imgpath);
+
+					templ.setTextField(L"Invalidated monitor topology configuration!", WinToastTemplate::FirstLine);
+					templ.setTextField(L"A recent change to the system seem to have invalidated the multi-monitor configuration. Please run the configuration guide in the global options again.", WinToastTemplate::SecondLine);
+
+//					templ.addAction(L"Download");
+
+					// Read the additional options section in the article
+					templ.setDuration(WinToastTemplate::Duration::Long);
+					templ.setAudioOption(WinToastTemplate::AudioOption::Default);
+					idToastNewversion = WinToast::instance()->showToast(templ, &m_WinToastHandler);
+					if (idToastNewversion == -1L)
+					{
+						Log(L"Failed to show toast notification about invalidated topology configuration!");
+					}
+				}
+			}
 			return 0;
 		}break;
 		default:break;
@@ -451,11 +490,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 	{
 		PostQuitMessage(0);
-		break;
 	}break;
-	default:break;
+	default:
+		return false;
 	}
-	return DefWindowProc(hWnd, message, wParam, lParam);
+	return true;
 }
 
 //   If the application is already running, tell other process to exit
@@ -526,6 +565,30 @@ bool ReadConfigFile()
 			if (!j.empty() && j.is_boolean())
 				Prefs.AdhereTopology = j.get<bool>();
 
+/*
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_ADVANCEDIDLE];
+			if (!j.empty() && j.is_boolean())
+				Prefs.bAdvancedUserIdle = j.get<bool>();
+
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST];
+			if (!j.empty() && j.is_boolean())
+				Prefs.bIdleWhitelistEnabled = j.get<bool>();
+
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN];
+			if (!j.empty() && j.is_boolean())
+				Prefs.bFullscreenCheckEnabled = j.get<bool>();
+
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
+			if (!j.empty() && j.size() > 0)
+			{
+				for (auto& elem : j.items())
+				{
+					string temp = elem.value().get<string>();
+					if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
+						Prefs.EventLogRestartString.push_back(temp);
+				}
+			}
+*/
 			return true;
 		}
 	}
@@ -712,6 +775,10 @@ void ReadDeviceConfig()
 
 		if (item.value()["UniqueDeviceKey"].is_string())
 			params.UniqueDeviceKey = item.value()["UniqueDeviceKey"].get<string>();
+
+		if (item.value()["Enabled"].is_boolean())
+			params.Enabled = item.value()["Enabled"].get<bool>();
+
 		Devices.push_back(params);
 	}
 	return;
@@ -820,4 +887,85 @@ bool CheckDisplayTopology(void)
 	s << "*";
 	CommunicateWithService(s.str(),true);
 	return true;
+}
+
+bool VerifyTopology(void)
+{
+	bool match = false;
+	vector<DISPLAY_INFO> displays = QueryDisplays();
+
+	if (!Prefs.AdhereTopology)
+		return true;
+	if (Devices.size() == 0)
+		return true;
+	if (displays.size() > 0)
+	{
+		for (auto& dev : Devices)
+		{
+			match = false;
+			if (dev.Enabled && dev.UniqueDeviceKey != "")
+			{		
+				for (auto& disp : displays)
+				{
+					if (narrow(disp.target.monitorDevicePath) == dev.UniqueDeviceKey)
+					{
+						match = true;;
+					}
+				}
+				if (!match)
+					return false;
+			}
+		}
+	}
+	return true;
+}
+bool GetLastUserInputTime(PLASTINPUTINFO pLII)
+{
+	if (SavedLII.dwTime == 0)
+		SavedLII.dwTime = GetTickCount();
+
+	//white list management
+	if (Prefs.bIdleWhitelistEnabled)
+	{
+		if (WhitelistProcessRunning())
+		{
+			pLII->dwTime = GetTickCount();
+			Log(L"Whitelist process prohibiting idle.");
+			return true;
+		}
+	}
+	//fullscreen management
+	if (Prefs.bFullscreenCheckEnabled)
+	{
+		if (FullscreenApplicationRunning())
+		{
+			pLII->dwTime = GetTickCount();
+			Log(L"Fullscreen process prohibiting idle.");
+			return true;
+		}
+	}
+
+	if (Prefs.bAdvancedUserIdle)
+	{
+		MyGetLastinputInfo(pLII);
+	}
+	else
+		GetLastInputInfo(pLII);
+
+	SavedLII.dwTime = pLII->dwTime;
+
+	return true;
+}
+
+bool WhitelistProcessRunning(void)
+{
+	return false;
+}
+bool FullscreenApplicationRunning(void)
+{
+	return false;
+}
+bool MyGetLastinputInfo(PLASTINPUTINFO plii)
+{
+	return false;
 }
