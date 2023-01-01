@@ -180,6 +180,7 @@ HWND                            hDeviceWindow = NULL;
 HWND                            hOptionsWindow = NULL;
 HWND                            hTopologyWindow = NULL;
 HWND                            hUserIdleConfWindow = NULL;
+HWND							hWhitelistConfWindow = NULL;
 
 wstring                         CommandLineParameters;
 wstring                         DataPath;
@@ -199,6 +200,7 @@ HANDLE                          hPipe = INVALID_HANDLE_VALUE;
 WSADATA                         WSAData;
 int								iTopConfPhase;
 int								iTopConfDisplay;
+vector<WHITELIST>				WhitelistTemp;
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -300,6 +302,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			!IsDialogMessage(hDeviceWindow,&msg) &&
 			!IsDialogMessage(hOptionsWindow,&msg) &&
 			!IsDialogMessage(hTopologyWindow, &msg) &&
+			!IsDialogMessage(hUserIdleConfWindow, &msg) &&
+			!IsDialogMessage(hWhitelistConfWindow, &msg) &&
 			!IsDialogMessage(hUserIdleConfWindow, &msg))
 		
 //		if (!IsDialogMessage(hMainWnd, &msg))
@@ -1288,10 +1292,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(100, 1));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.PowerOnTimeout);
-		SendDlgItemMessage(hWnd, IDC_EDIT_BLANK, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_SPIN2, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(240, 1));
-		SendDlgItemMessage(hWnd, IDC_SPIN2, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.BlankScreenWhenIdleDelay);
-
+		
 		for (auto& item : Prefs.EventLogRestartString)
 		{
 			if (std::find(str.begin(), str.end(), widen(item)) == str.end())
@@ -1387,10 +1388,9 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		CheckDlgButton(hWnd, IDC_LOGGING, Prefs.Logging ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_AUTOUPDATE, Prefs.AutoUpdate ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_BLANK, Prefs.BlankScreenWhenIdle ? BST_CHECKED : BST_UNCHECKED);
-		EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), Prefs.BlankScreenWhenIdle);
 		CheckDlgButton(hWnd, IDC_CHECK_RDPBLANK, Prefs.PowerOffDuringRDP ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, Prefs.AdhereTopology ? BST_CHECKED : BST_UNCHECKED);
-		EnableWindow(GetDlgItem(hWnd, IDOK), true);
+		EnableWindow(GetDlgItem(hWnd, IDOK), false);
 	}break;
 	case WM_COMMAND:
 	{
@@ -1408,24 +1408,16 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					if (mess == IDNO)
 					{
 						CheckDlgButton(hWnd, IDC_CHECK_BLANK, BST_UNCHECKED);
-						EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), false);
 					}
 					if (mess == IDYES)
 					{
 						CheckDlgButton(hWnd, IDC_CHECK_BLANK, BST_CHECKED);
-						EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), true);
-
 						Prefs.ResetAPIkeys = true;
 						EnableWindow(GetDlgItem(hWnd, IDOK), true);
 					}
 				}
 				else
 				{
-					if (IsDlgButtonChecked(hWnd, IDC_CHECK_BLANK))
-						EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), true);
-					else
-						EnableWindow(GetDlgItem(hWnd, IDC_EDIT_BLANK), false);
-
 					EnableWindow(GetDlgItem(hWnd, IDOK), true);
 				}
 			}break;
@@ -1484,7 +1476,6 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					}
 					Prefs.AutoUpdate = IsDlgButtonChecked(hWnd, IDC_AUTOUPDATE);
 					Prefs.BlankScreenWhenIdle = IsDlgButtonChecked(hWnd, IDC_CHECK_BLANK) == BST_CHECKED;
-					Prefs.BlankScreenWhenIdleDelay = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_EDIT_BLANK))).c_str());
 					Prefs.PowerOffDuringRDP = IsDlgButtonChecked(hWnd, IDC_CHECK_RDPBLANK) == BST_CHECKED;
 					Prefs.AdhereTopology = IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY) == BST_CHECKED;
 
@@ -1581,7 +1572,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			// explain the power saving options
 			else if (wParam == IDC_SYSLINK5)
 			{
-				MessageBox(hWnd, L"The option to automatically blank the screen triggers in the absence of user input from keyboard, mouse and/or controllers."
+				MessageBox(hWnd, L"The option to automatically blank the screen, i e turn the transmitters off, is triggered in the absence of user input from keyboard, mouse and/or controllers. "
 					"The difference, when compared to both the screensaver and windows power plan settings, is that those OS implemented power saving functions "
 					"utilize more obscured variables for determining user idle / busy states, and which can also be programmatically overridden f.e. by games, "
 					"media players, production software or your web browser, In short, and simplified, this option is a more aggressively configured screen and "
@@ -1969,6 +1960,7 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 	case WM_CLOSE:
 	{
 		EndDialog(hWnd, 0);
+		EnableWindow(GetParent(hWnd), true);
 	}break;
 	case  WM_DESTROY:
 	{
@@ -1981,147 +1973,167 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 }
 
 
-//   Process messages for the options window
+//   Process messages for the user idle conf window
 LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
 	case WM_INITDIALOG:
 	{
-		/*
-		SendDlgItemMessage(hWnd, IDC_COMBO, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_1, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_2, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_3, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_4, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_5, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_6, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_EDIT_TIME, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(240, 1));
+		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.BlankScreenWhenIdleDelay);
 
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_11, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_12, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_13, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_14, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_15, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_16, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_STATUS_1, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_STATUS_2, WM_SETFONT, (WPARAM)hEditMediumBoldfont, MAKELPARAM(TRUE, 0));
-		SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"Not configured!");
-		for (auto& k : Devices)
+		WhitelistTemp = Prefs.WhiteList;
+		SendMessage(hWnd, APP_LISTBOX_REDRAW, 0, 0);
+
+		CheckDlgButton(hWnd, IDC_CHECK_WHITELIST, Prefs.bIdleWhitelistEnabled ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_FULLSCREEN, Prefs.bFullscreenCheckEnabled ? BST_CHECKED : BST_UNCHECKED);
+		EnableWindow(GetDlgItem(hWnd, IDC_LIST), Prefs.bIdleWhitelistEnabled);
+		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD), Prefs.bIdleWhitelistEnabled);
+		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), Prefs.bIdleWhitelistEnabled);
+		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), Prefs.bIdleWhitelistEnabled);
+		EnableWindow(GetDlgItem(hWnd, IDOK), false);
+
+	}break;
+	case APP_LISTBOX_EDIT:
+	{
+		int index = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETCURSEL, 0, 0);
+		if (index != LB_ERR)
 		{
-			if (k.UniqueDeviceKey != "")
+			int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETITEMDATA, index, 0);
+			if (data != LB_ERR && data < WhitelistTemp.size())
 			{
-				SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"Configuration OK!");
+				hWhitelistConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WhitelistConfWndProc);
+				SetWindowText(hWhitelistConfWindow, L"Edit whitelisted process");
+				SetWindowText(GetDlgItem(hWhitelistConfWindow, IDOK), L"Change");
+				SetWindowText(GetDlgItem(hWhitelistConfWindow, IDC_EDIT_NAME), WhitelistTemp[data].Name.c_str());
+				SetWindowText(GetDlgItem(hWhitelistConfWindow, IDC_EDIT_PROCESS), WhitelistTemp[data].Application.c_str());
+				EnableWindow(hWnd, false);
+				ShowWindow(hWhitelistConfWindow, SW_SHOW);
 			}
 		}
-
-
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)-1, (LPARAM)0);
-
-		if (Devices.size() > 0)
-		{
-			for (const auto& item : Devices)
-			{
-				stringstream s;
-				s << item.DeviceId << ": " << item.Name << "(" << item.IP << ")";
-				SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)widen(s.str()).c_str());
-			}
-			SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
-		}
-		SendMessage(hWnd, APP_TOP_PHASE_1, NULL, NULL);
-		iTopConfDisplay = 0;
-		*/
 	}break;
 
+	case APP_LISTBOX_ADD:
+	{
+		hWhitelistConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WhitelistConfWndProc);
+		SetWindowText(hWhitelistConfWindow, L"Add whitelisted process");
+		SetWindowText(GetDlgItem(hWhitelistConfWindow, IDOK), L"Add");
+		EnableWindow(hWnd, false);
+		ShowWindow(hWhitelistConfWindow, SW_SHOW);
+	}break;
+	case APP_LISTBOX_DELETE:
+	{
+
+		int index = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETCURSEL, 0, 0);
+		if (index != LB_ERR)
+		{
+			TCHAR * text;
+			int len = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETTEXTLEN, index, 0); 
+			text = new TCHAR[len + 1];
+			if (SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETTEXT, (WPARAM)index, (LPARAM)text) != LB_ERR)
+			{
+				wstring s = L"Do you want to delete '";
+				s += text;
+				s += L"' from the whitelist?";
+				if (MessageBox(hWnd, s.c_str(), L"Delete item", MB_YESNO | MB_ICONQUESTION) == IDYES)
+				{
+					int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETITEMDATA, index, 0);
+					if (data != LB_ERR && data < WhitelistTemp.size())
+					{
+							WhitelistTemp.erase(WhitelistTemp.begin() + data);
+							SendMessage(hWnd, APP_LISTBOX_REDRAW, 0, 0);
+					}
+					else
+					{
+						MessageBox(hWnd, L"Could not delete item!", L"Error", MB_OK | MB_ICONINFORMATION);
+					}
+				}
+			}
+			else
+			{
+				MessageBox(hWnd, L"There was an error when managing the listbox", L"Error", MB_OK | MB_ICONINFORMATION);
+			}
+		}
+	}break;
+	case APP_LISTBOX_REDRAW:
+	{
+		int i = 0;
+		SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_RESETCONTENT, 0, 0);
+		for (auto& w : WhitelistTemp)
+		{
+			if (w.Application != L"" && w.Name != L"")
+			{
+				int index = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_ADDSTRING, 0, (LPARAM)(w.Name.c_str()));
+				SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_SETITEMDATA, index, (LPARAM)i);
+				i++;
+			}
+		}
+		if (SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETCOUNT, 0, 0) > 0)
+		{
+			SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_SETCURSEL, 0, 0);
+			ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), SW_SHOW);
+			ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), SW_SHOW);
+
+		}
+		else
+		{
+			ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), SW_HIDE);
+			ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), SW_HIDE);
+		}
+	}break;
 	case WM_COMMAND:
 	{
 		switch (HIWORD(wParam))
 		{
+		case LBN_DBLCLK:
+		{
+			PostMessage(hWnd, APP_LISTBOX_EDIT, 0, 0);
+		}break;
+
 		case BN_CLICKED:
 		{
 			switch (LOWORD(wParam))
 			{
-
+			case IDC_CHECK_WHITELIST:
+			{
+				EnableWindow(GetDlgItem(hWnd, IDC_LIST), IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST));
+				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD), IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST));
+				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST));
+				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST));
+				EnableWindow(GetDlgItem(hWnd, IDOK), true);
+			}break;
+			case IDC_CHECK_FULLSCREEN:
+			{
+				EnableWindow(GetDlgItem(hWnd, IDOK), true);
+			}break;
 			case IDOK:
 			{
-				/*
-				switch (iTopConfPhase) // three phases - intro, match displays, finalise
-				{
-				case 1:
-				{
-					vector<DISPLAY_INFO> displays = QueryDisplays();
-					// No WebOs devices attached
-					if (displays.size() == 0)
-					{
-						MessageBox(hWnd, L"To configure your devices, ensure that all your WebOS-devices are powered ON, connected to to your PC and enabled (with an extended desktop in case of multiple displays).", L"No WebOS devices detected", MB_OK | MB_ICONWARNING);
-						break;
-					}
-					// If exactly one physical device connected/enabled and exactly one device cofigured it is considered an automatic match
-					else if (Devices.size() == 1 && displays.size() == 1)
-					{
-						if (MessageBox(hWnd, L"Your device can be automatically configured.\n\nDo you want to accept the automatic configuration?", L"Automatic match", MB_YESNO) == IDYES)
-						{
-							Devices[0].UniqueDeviceKey_Temp = narrow(displays[0].target.monitorDevicePath);
-							SendMessage(hWnd, APP_TOP_PHASE_3, NULL, NULL);
-							SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"All OK!");
-							break;
-						}
-					}
-					SendMessage(hWnd, APP_TOP_PHASE_2, NULL, NULL);
-					SendMessage(hWnd, APP_TOP_NEXT_DISPLAY, NULL, NULL);
-				}break;
-				case 2:
-				{
-					vector<DISPLAY_INFO> displays = QueryDisplays();
-					int sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
-					if (sel == CB_ERR || Devices.size() <= sel)
-						break;
-					Devices[sel].UniqueDeviceKey_Temp = narrow(displays[iTopConfDisplay].target.monitorDevicePath);
-
-					iTopConfDisplay++;
-					if (iTopConfDisplay >= displays.size()) // all displays iterated
-					{
-						SendMessage(hWnd, APP_TOP_PHASE_3, NULL, NULL);
-					}
-					else // more displays are connected
-					{
-						SendMessage(hWnd, APP_TOP_NEXT_DISPLAY, NULL, NULL);
-					}
-
-				}break;
-				case 3:
-				{
-					for (auto& k : Devices)
-					{
-						k.UniqueDeviceKey = k.UniqueDeviceKey_Temp;
-					}
-					EndDialog(hWnd, 0);
-					EnableWindow(GetParent(hWnd), true);
-					EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
-				}break;
-				default:break;
-				}
-				*/
+				Prefs.BlankScreenWhenIdleDelay = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_EDIT_TIME))).c_str());
+				Prefs.bFullscreenCheckEnabled = IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN);
+				Prefs.bIdleWhitelistEnabled = IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST);
+				Prefs.WhiteList = WhitelistTemp;
+				EndDialog(hWnd, 0);
+				EnableWindow(GetParent(hWnd), true);
+				EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
 			}break;
 			case IDCANCEL:
 			{
-				/*
-				bool conf = false;
-				for (auto& k : Devices)
-				{
-					if (k.UniqueDeviceKey != "")
-					{
-						conf = true;
-						break;
-					}
-				}
-				if (!conf)
-				{
-					CheckDlgButton(GetParent(hWnd), IDC_CHECK_TOPOLOGY, BST_UNCHECKED);
-				}
-				*/
 				EndDialog(hWnd, 0);
 				EnableWindow(GetParent(hWnd), true);
+			}break;
+			default:break;
+			}
+		}break;
+		case EN_CHANGE:
+		{
+			switch (LOWORD(wParam))
+			{
+			case IDC_EDIT_TIME:
+			{
+				EnableWindow(GetDlgItem(hWnd, IDOK), true);
 			}break;
 			default:break;
 			}
@@ -2129,42 +2141,52 @@ LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		default:break;
 		}
 	}break;
+	case WM_NOTIFY:
+	{
+		switch (((NMHDR*)lParam)->code)
+		{
+		case NM_CLICK:
+		{
+			if (wParam == IDC_SYSLINK_INFO_1)
+			{
+				MessageBox(hWnd, L"Please configure the time, in minutes, without user input from keyboard, mouse or game controllers before "
+					"triggering the user idle mode.",L"User idle time configuration", MB_OK | MB_ICONINFORMATION);
+			}
+			else if (wParam == IDC_SYSLINK_INFO_2)
+			{
+				MessageBox(hWnd, L"The option prevents user idle mode when a whitelisted process is running on the system. Enable the option to prevent user idle mode "
+					"while running a movie player, for example.", L"User idle mode whitelist configuration", MB_OK | MB_ICONINFORMATION);
+			}
+			else if (wParam == IDC_SYSLINK_INFO_3)
+			{
+				MessageBox(hWnd, L"The option prevents user idle mode when an application or game is running in fullscreen "
+					"mode.", L"User idle mode fullscreen configuration", MB_OK | MB_ICONINFORMATION);
+			}
+			else if (wParam == IDC_SYSLINK_ADD)
+			{
+				PostMessage(hWnd, APP_LISTBOX_ADD, 0, 0);
+			}
+			else if (wParam == IDC_SYSLINK_EDIR)
+			{
+				PostMessage(hWnd, APP_LISTBOX_EDIT, 0, 0);
+			}
+			else if (wParam == IDC_SYSLINK_DELETE)
+			{
+				PostMessage(hWnd, APP_LISTBOX_DELETE, 0, 0);
+			}
+		}break;
+		default:break;
+		}
+	}break;
 	case WM_CTLCOLORSTATIC:
 	{
-		/*
 		HDC hdcStatic = (HDC)wParam;
-		if ((HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_1)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_2)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_3)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_4)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_T_1)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_T_2)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_T_3)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_T_4)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_STATUS_1)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_STATUS_2))
+		SetTextColor(hdcStatic, COLORREF(COLOR_STATIC));
+		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_WHITELIST)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_FULLSCREEN))
 		{
 			SetBkMode(hdcStatic, TRANSPARENT);
 		}
-		if ((HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_STATUS_2))
-		{
-			wstring s = GetWndText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2));
-			if(s.find(L"OK!") != wstring::npos)
-				SetTextColor(hdcStatic, COLORREF(COLOR_GREEN));
-			else if (s.find(L"Updating") != wstring::npos)
-				SetTextColor(hdcStatic, COLORREF(COLOR_BLUE));
-			else
-				SetTextColor(hdcStatic, COLORREF(COLOR_RED));
-		}
-
-		else if ((HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_1)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_2)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_3)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_NO_4))
-			SetTextColor(hdcStatic, COLORREF(COLOR_BLUE));
-		else
-			SetTextColor(hdcStatic, COLORREF(COLOR_STATIC));
-*/
 		return(INT_PTR)hBackbrush;
 	}break;
 
@@ -2184,10 +2206,213 @@ LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	case WM_CLOSE:
 	{
 		EndDialog(hWnd, 0);
+		EnableWindow(GetParent(hWnd), true);
 	}break;
-	case  WM_DESTROY:
+	case WM_DESTROY:
 	{
 		hUserIdleConfWindow = NULL;
+	}break;
+	default:
+		return false;
+	}
+	return true;
+}
+
+//   Process messages for the user idle conf window
+LRESULT CALLBACK WhitelistConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	{
+		SendDlgItemMessage(hWnd, IDC_EDIT_NAME, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_EDIT_PROCESS, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+	}break;
+
+
+	case WM_COMMAND:
+	{
+		switch (HIWORD(wParam))
+		{
+		case BN_CLICKED:
+		{
+			switch (LOWORD(wParam))
+			{
+
+			case IDOK:
+			{
+				wstring name = GetWndText(GetDlgItem(hWnd, IDC_EDIT_NAME));
+				wstring proc = GetWndText(GetDlgItem(hWnd, IDC_EDIT_PROCESS));
+
+				if (name.find_last_of(L"\\/") != string::npos)
+				{
+					name = name.substr(name.find_last_of(L"\\/"));
+					name.erase(0, 1);
+				}
+				if (proc.find_last_of(L"\\/") != string::npos)
+				{
+					proc = proc.substr(proc.find_last_of(L"\\/"));
+					proc.erase(0, 1);
+				}
+
+				if (name != L"" && proc != L"")
+				{
+					if (GetWndText(GetDlgItem(hWnd, IDOK)) == L"Add") // add item
+					{
+						WHITELIST w;
+						w.Name = name;
+						w.Application = proc;
+						WhitelistTemp.push_back(w);
+					}
+					else //change item
+					{
+						if (hUserIdleConfWindow)
+						{
+							int index = (int)SendMessage(GetDlgItem(hUserIdleConfWindow, IDC_LIST), LB_GETCURSEL, 0, 0);
+							if (index != LB_ERR)
+							{
+								int data = (int)SendMessage(GetDlgItem(hUserIdleConfWindow, IDC_LIST), LB_GETITEMDATA, index, 0);
+								if (data != LB_ERR && data < WhitelistTemp.size())
+								{
+									WhitelistTemp[data].Application = proc;
+									WhitelistTemp[data].Name = name;
+								}
+							}
+						}
+					}
+
+					EndDialog(hWnd, 0);
+					SendMessage(GetParent(hWnd), APP_LISTBOX_REDRAW, 0, 0);
+					EnableWindow(GetParent(hWnd), true);
+					EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
+				}
+				else
+				{
+					MessageBox(hWnd, L"Please ensure that both display name and process executable name are properly "
+						"configured before continuing. Please note that process executable name should not include the path.", 
+						L"Invalid configuration", MB_OK | MB_ICONERROR);
+				}
+
+			}break;
+			case IDCANCEL:
+			{
+				EndDialog(hWnd, 0);
+				EnableWindow(GetParent(hWnd), true);
+			}break;
+			default:break;
+			}
+		}break;
+		case EN_CHANGE:
+		{
+			switch (LOWORD(wParam))
+			{
+			case IDC_EDIT_NAME:
+			case IDC_EDIT_PROCESS:
+			{
+				EnableWindow(GetDlgItem(hWnd, IDOK), true);
+			}break;
+			default:break;
+			}
+		}break;
+		default:break;
+		}
+	}break;
+	case WM_NOTIFY:
+	{
+		switch (((NMHDR*)lParam)->code)
+		{
+		case NM_CLICK:
+		{
+			if (wParam == IDC_SYSLINK_BROWSE)
+			{
+				IFileOpenDialog* pfd;
+				DWORD dwOptions;
+				LPWSTR Path;
+				IShellItem* psi;
+				COMDLG_FILTERSPEC aFileTypes[] = {
+					{ L"Executable files", L"*.exe" },
+					{ L"All files", L"*.*" },
+				};
+
+				if (SUCCEEDED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE))) {
+					if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&pfd)))) {
+						if (SUCCEEDED(pfd->GetOptions(&dwOptions)))
+						{
+							pfd->SetOptions(dwOptions | FOS_FILEMUSTEXIST);
+							pfd->SetFileTypes(_countof(aFileTypes), aFileTypes);
+							if (SUCCEEDED(pfd->Show(hWnd)))
+								if (SUCCEEDED(pfd->GetResult(&psi))) {
+									if (SUCCEEDED(psi->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, &Path)))
+									{
+
+										TCHAR buffer[MAX_PATH] = { 0 };
+										GetModuleFileName(NULL, buffer, MAX_PATH);
+
+										wstring path = Path;
+										wstring exe, name;
+										std::wstring::size_type pos = path.find_last_of(L"\\/");
+										if (pos != wstring::npos)
+										{
+											exe = path.substr(pos);
+											exe.erase(0, 1);
+											pos = exe.find_last_of(L".");
+											if (pos != wstring::npos)
+											{
+												name = exe.substr(0, pos);
+											}
+											if (GetWndText(GetDlgItem(hWnd, IDC_EDIT_NAME)) == L"")
+												SetWindowText(GetDlgItem(hWnd, IDC_EDIT_NAME), name.c_str());
+											SetWindowText(GetDlgItem(hWnd, IDC_EDIT_PROCESS), exe.c_str());
+										}
+										
+										CoTaskMemFree(Path);
+
+									}
+									psi->Release();
+								}
+						}
+						pfd->Release();
+					}
+					CoUninitialize();
+				}
+			}		
+		}break;
+		default:break;
+		}
+	}break;
+	case WM_CTLCOLORSTATIC:
+	{
+		HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, COLORREF(COLOR_STATIC));
+//		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_WHITELIST)
+//			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_FULLSCREEN))
+//		{
+//			SetBkMode(hdcStatic, TRANSPARENT);
+//		}
+		return(INT_PTR)hBackbrush;
+	}break;
+
+	case WM_PAINT:
+	{
+		RECT rc = { 0 };
+
+		GetClientRect(hWnd, &rc);
+
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		FillRect(hdc, &rc, (HBRUSH)hBackbrush);
+
+		EndPaint(hWnd, &ps);
+	}break;
+
+	case WM_CLOSE:
+	{
+		EndDialog(hWnd, 0);
+		EnableWindow(GetParent(hWnd), true);
+	}break;
+	case WM_DESTROY:
+	{
+		hWhitelistConfWindow = NULL;
 	}break;
 	default:
 		return false;
@@ -2297,6 +2522,25 @@ bool ReadConfigFile()
 			if (!j.empty() && j.is_boolean())
 				Prefs.AdhereTopology = j.get<bool>();
 
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST];
+			if (!j.empty() && j.is_boolean())
+				Prefs.bIdleWhitelistEnabled = j.get<bool>();
+
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN];
+			if (!j.empty() && j.is_boolean())
+				Prefs.bFullscreenCheckEnabled = j.get<bool>();
+
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
+			if (!j.empty() && j.size() > 0)
+			{
+				for (auto& elem : j.items())
+				{
+					WHITELIST w;
+					w.Application = widen(elem.value().get<string>());
+					w.Name = widen(elem.key());
+					Prefs.WhiteList.push_back(w);
+				}
+			}
 			return true;
 		}
 	}
@@ -2556,12 +2800,20 @@ void WriteConfigFile(void)
 	prefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY] = (int)Prefs.BlankScreenWhenIdleDelay;
 	prefs[JSON_PREFS_NODE][JSON_RDP_POWEROFF] = (bool)Prefs.PowerOffDuringRDP;
 	prefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY] = (bool)Prefs.AdhereTopology;
+	prefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST] = (bool)Prefs.bIdleWhitelistEnabled;
+	prefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN] = (bool)Prefs.bFullscreenCheckEnabled;
 
 	for (auto& item : Prefs.EventLogRestartString)
 		prefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS].push_back(item);
 
 	for (auto& item : Prefs.EventLogShutdownString)
 		prefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS].push_back(item);
+
+	if (Prefs.WhiteList.size() > 0)
+	{
+		for (auto& w : Prefs.WhiteList)
+			prefs[JSON_PREFS_NODE][JSON_WHITELIST][narrow(w.Name)] = narrow(w.Application);
+	}
 
 	//Iterate nodes
 	int deviceid = 1;

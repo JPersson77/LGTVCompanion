@@ -18,6 +18,7 @@
 #define IDI_ICON4                       149
 #define IDI_ICON3                       150
 #define IDD_ADVANCEDIDLE                153
+#define IDD_WHITELIST_EDIT              154
 #define IDC_COMBO                       1000
 #define IDC_SPLIT                       1001
 #define IDC_OPTIONS                     1002
@@ -83,15 +84,20 @@
 #define IDC_SYSLINK_CONF                1044
 #define IDC_GO2                         1045
 #define IDC_SYSLINK_CONF2               1045
-#define IDC_CHECK1                      1045
+#define IDC_CHECK_FULLSCREEN            1045
 #define IDC_STATIC_NO_5                 1046
-#define IDC_EDIT1                       1046
-#define IDC_SPIN1                       1047
-#define IDC_CHECK2                      1049
-#define IDC_BUTTON1                     1050
-#define IDC_BUTTON2                     1051
-#define IDC_DEVICES                     1053
-#define IDC_DEVICES2                    1054
+#define IDC_EDIT_TIME                   1046
+#define IDC_CHECK_WHITELIST             1049
+#define IDC_SYSLINK_ADD                 1055
+#define IDC_SYSLINK_DELETE              1056
+#define IDC_SYSLINK_EDIR                1057
+#define IDC_EDIT_NAME                   1057
+#define IDC_SYSLINK_INFO_2              1058
+#define IDC_EDIT_PROCESS                1058
+#define IDC_SYSLINK_INFO_3              1059
+#define IDC_SYSLINK1                    1059
+#define IDC_SYSLINK_BROWSE              1059
+#define IDC_SYSLINK_INFO_1              1060
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -116,9 +122,9 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        154
+#define _APS_NEXT_RESOURCE_VALUE        155
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1054
+#define _APS_NEXT_CONTROL_VALUE         1060
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

@@ -1,6 +1,7 @@
 #pragma once
 #pragma comment(lib, "urlmon.lib")
 #pragma comment(lib, "Wtsapi32.lib")
+#pragma comment(lib, "User32.lib")
 
 #if defined _M_IX86
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
@@ -29,7 +30,12 @@
 #include <strsafe.h>
 #include <urlmon.h>
 #include <wtsapi32.h>
-
+#include <tlhelp32.h>
+#include <tchar.h>
+#include <hidusage.h>
+#include <initguid.h>
+#include <usbiodef.h>
+#include <Dbt.h>
 #include "resource.h"
 #include "nlohmann/json.hpp"
 #include "WinToast-1.2.0/wintoastlib.h"
@@ -37,7 +43,7 @@
 #define			APPNAME_SHORT					L"LGTVdaemon"
 #define			APP_PATH					    L"LGTV Companion"
 #define			APPNAME_FULL					L"LGTV Companion Daemon"
-#define         APP_VERSION                     L"1.8.7"
+#define         APP_VERSION                     L"1.9.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_PROCESS			    1
 
@@ -46,7 +52,7 @@
 #define         TIMER_RDP                       20
 #define         TIMER_TOPOLOGY                  21
 
-#define         TIMER_MAIN_DELAY_WHEN_BUSY      2000
+#define         TIMER_MAIN_DELAY_WHEN_BUSY      10000
 #define         TIMER_MAIN_DELAY_WHEN_IDLE      100
 #define         TIMER_RDP_DELAY                 10000
 
@@ -60,7 +66,6 @@
 #define         JSON_IDLEBLANK                  "BlankWhenIdle"
 #define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
 #define         JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
-#define         JSON_ADVANCEDIDLE				"AdvancedUserInputIdle"
 #define         JSON_IDLEWHITELIST				"IdleWhiteListEnabled"
 #define         JSON_IDLEFULLSCREEN				"IdleFullscreen"
 #define         JSON_WHITELIST					"IdleWhiteList"
@@ -70,10 +75,17 @@
 #define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases"
 #define         DONATELINK                      L"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=jorgen.persson@gmail.com&lc=US&item_name=Friendly+gift+for+the+development+of+LGTV+Companion&no_note=0&cn=&currency_code=EUR&bn=PP-DonationsBF:btn_donateCC_LG.gif:NonHosted"
 
-struct WHITELIST {
-	std::string Name;
-	std::string Application;
+const std::vector<std::wstring> usb_list { 
+	L"USB#HID_0955", //nvidia
+	L"HID#VID_0955", //nvidia
+	L"USB#VID_413D" //dummy
 };
+
+struct WHITELIST {
+	std::wstring Name;
+	std::wstring Application;
+};
+
 struct PREFS {
 	bool AutoUpdate = false;
 	bool BlankScreenWhenIdle = false;
@@ -85,7 +97,7 @@ struct PREFS {
 	bool AdhereTopology = false;
 	bool bIdleWhitelistEnabled = false;
 	bool bFullscreenCheckEnabled = false;
-	bool bAdvancedUserIdle = false;
+	std::vector<WHITELIST> WhiteList;
 };
 
 class WinToastHandler : public WinToastLib::IWinToastHandler
@@ -132,7 +144,5 @@ std::vector<DISPLAY_INFO> QueryDisplays();
 static BOOL			CALLBACK meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);
 bool				CheckDisplayTopology(void);
 bool				VerifyTopology();
-bool				GetLastUserInputTime(PLASTINPUTINFO);
-bool				WhitelistProcessRunning(void);
+std::string			WhitelistProcessRunning(void);
 bool				FullscreenApplicationRunning(void);
-bool				MyGetLastinputInfo (PLASTINPUTINFO);

@@ -21,7 +21,6 @@ HANDLE                          hPipe = INVALID_HANDLE_VALUE;
 INT64                           idToastFirstrun = NULL;
 INT64                           idToastNewversion = NULL;
 vector <SESSIONPARAMETERS>      Devices;     
-LASTINPUTINFO					SavedLII;
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -38,8 +37,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	WindowTitle = APPNAME_FULL;
 	WindowTitle += L" v";
 	WindowTitle += APP_VERSION;
-	SavedLII.cbSize = sizeof(LASTINPUTINFO);
-	SavedLII.dwTime = 0;
 
 	//commandline processing
 	if (lpCmdLine)
@@ -111,13 +108,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	if (Prefs.AdhereTopology)
 		SetTimer(hMainWnd, TIMER_TOPOLOGY, 8000, (TIMERPROC)NULL);
 
-
 	wstring startupmess = WindowTitle;
 	startupmess += L" is running.";
 	Log(startupmess);
 
 	HPOWERNOTIFY rsrn = RegisterSuspendResumeNotification(hMainWnd, DEVICE_NOTIFY_WINDOW_HANDLE);
 	HPOWERNOTIFY rpsn = RegisterPowerSettingNotification(hMainWnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
+	/*
+	DEV_BROADCAST_DEVICEINTERFACE NotificationFilter;
+	ZeroMemory(&NotificationFilter, sizeof(NotificationFilter));
+	NotificationFilter.dbcc_size = sizeof(DEV_BROADCAST_DEVICEINTERFACE);
+	NotificationFilter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
+	memcpy(&(NotificationFilter.dbcc_classguid), &(GUID_DEVINTERFACE_USB_DEVICE), sizeof(struct _GUID));
+	HDEVNOTIFY dev_notify = RegisterDeviceNotification(hMainWnd, &NotificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
+	*/
 
 	WTSRegisterSessionNotification(hMainWnd, NOTIFY_FOR_ALL_SESSIONS);
 
@@ -147,6 +151,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 
 	UnregisterSuspendResumeNotification(rsrn);
 	UnregisterPowerSettingNotification(rpsn);
+//	UnregisterDeviceNotification(dev_notify);
 	WTSUnRegisterSessionNotification(hMainWnd);
 	return (int)msg.wParam;
 }
@@ -245,7 +250,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			LASTINPUTINFO lii;
 			lii.cbSize = sizeof(LASTINPUTINFO);
-			if (GetLastUserInputTime(&lii))
+			if (GetLastInputInfo(&lii))
 			{
 				if (bDaemonVisible)
 				{
@@ -253,7 +258,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					DWORD time = (GetTickCount() - lii.dwTime) / 1000;
 					wstring ago = widen(to_string(time));
 
-					SendMessage(GetDlgItem(hMainWnd, IDC_EDIT2), WM_SETTEXT, 0, (WPARAM)tick.c_str());
+//					SendMessage(GetDlgItem(hMainWnd, IDC_EDIT2), WM_SETTEXT, 0, (WPARAM)tick.c_str());
 					SendMessage(GetDlgItem(hMainWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());
 				}
 				if (bIdle)
@@ -268,12 +273,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						}
 						else
 						{
-							SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
+							SetTimer(hWnd, TIMER_MAIN, bDaemonVisible?(TIMER_MAIN_DELAY_WHEN_BUSY)/10: TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 							SetTimer(hWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
 							dwLastInputTick = lii.dwTime;
 							bIdlePreventEarlyWakeup = false;
 							bIdle = false;
-							//                        Log(L"Busy");
 							CommunicateWithService("-daemon userbusy");
 						}
 					}
@@ -294,14 +298,35 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}break;
 		case TIMER_IDLE:
 		{
+			if (Prefs.bFullscreenCheckEnabled)
+				if (FullscreenApplicationRunning())
+				{
+					Log(L"Fullscreen application prohibiting idle");
+					return 0;
+				}
+			if (Prefs.bIdleWhitelistEnabled)
+			{
+				string proc = WhitelistProcessRunning();
+				if (proc != "")
+				{
+					wstring mess = L"Whitelisted application prohibiting idle (";
+					mess += widen(proc);
+					mess += L")";
+					Log(mess);
+					return 0;
+				}
+			}
+
 			bIdle = true;
 			bIdlePreventEarlyWakeup = false;
-			//           KillTimer(hWnd, TIMER_IDLE);
+
 			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
-			//           Log(L"Idle");
+
 			CommunicateWithService("-daemon useridle");
+			
 			return 0;
 		}break;
+
 		case TIMER_RDP:
 		{
 			KillTimer(hWnd, TIMER_RDP);
@@ -386,7 +411,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			bIdlePreventEarlyWakeup = false;
 			if (Prefs.BlankScreenWhenIdle)
 			{
-				SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
+				SetTimer(hWnd, TIMER_MAIN, bDaemonVisible?(TIMER_MAIN_DELAY_WHEN_BUSY)/10: TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 				SetTimer(hWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
 			}
 			Log(L"Resuming system.");
@@ -415,7 +440,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						bIdlePreventEarlyWakeup = false;
 						if (Prefs.BlankScreenWhenIdle)
 						{
-							SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
+							SetTimer(hWnd, TIMER_MAIN, bDaemonVisible?(TIMER_MAIN_DELAY_WHEN_BUSY)/10: TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 							SetTimer(hWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
 						}
 						Log(L"System requests displays ON.");
@@ -428,6 +453,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		default:break;
 		}
 	}break;
+
 	case USER_DISPLAYCHANGE:
 	{
 		CheckDisplayTopology();
@@ -442,7 +468,50 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 	
 	}break;
+	/*
+	case WM_DEVICECHANGE:
+	{
+		if (lParam)
+		{
+			PDEV_BROADCAST_HDR lpdb = (PDEV_BROADCAST_HDR)lParam;
+			PDEV_BROADCAST_DEVICEINTERFACE lpdbv = (PDEV_BROADCAST_DEVICEINTERFACE)lpdb;
+			wstring path;
+			if (lpdb->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
+			{
+				path = wstring(lpdbv->dbcc_name);
+				switch (wParam)
+				{
+				case DBT_DEVICEARRIVAL:
+				{
+					for (auto& dev : usb_list)
+					{
+						if (path.find(dev, 0) != wstring::npos)
+						{
+							wstring s = L"New device connected: ";
+							s += path;
+							Log(s);
+						}
+					}
+				}break;
 
+				case DBT_DEVICEREMOVECOMPLETE:
+				{
+					for (auto& dev : usb_list)
+					{
+						if (path.find(dev, 0) != wstring::npos)
+						{
+							wstring s = L"Device disconnected: ";
+							s += path;
+							Log(s);
+						}
+					}
+				}break;
+				default:break;
+				}
+			}
+		}
+	}break;
+	*/
 	case WM_WTSSESSION_CHANGE:
 	{
 		if (wParam == WTS_REMOTE_CONNECT)
@@ -565,11 +634,6 @@ bool ReadConfigFile()
 			if (!j.empty() && j.is_boolean())
 				Prefs.AdhereTopology = j.get<bool>();
 
-/*
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_ADVANCEDIDLE];
-			if (!j.empty() && j.is_boolean())
-				Prefs.bAdvancedUserIdle = j.get<bool>();
-
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST];
 			if (!j.empty() && j.is_boolean())
 				Prefs.bIdleWhitelistEnabled = j.get<bool>();
@@ -581,14 +645,19 @@ bool ReadConfigFile()
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
 			if (!j.empty() && j.size() > 0)
 			{
-				for (auto& elem : j.items())
+				for (auto& item : j.items())
 				{
-					string temp = elem.value().get<string>();
-					if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
-						Prefs.EventLogRestartString.push_back(temp);
+					if (item.value().is_string())
+					{
+						WHITELIST w;
+						w.Name = widen(item.key());
+						w.Application = widen(item.value().get<string>());
+						Prefs.WhiteList.push_back(w);
+					}
+
 				}
 			}
-*/
+
 			return true;
 		}
 	}
@@ -919,53 +988,54 @@ bool VerifyTopology(void)
 	}
 	return true;
 }
-bool GetLastUserInputTime(PLASTINPUTINFO pLII)
+
+string WhitelistProcessRunning(void)
 {
-	if (SavedLII.dwTime == 0)
-		SavedLII.dwTime = GetTickCount();
-
-	//white list management
-	if (Prefs.bIdleWhitelistEnabled)
+	if (Prefs.WhiteList.size() > 0)
 	{
-		if (WhitelistProcessRunning())
-		{
-			pLII->dwTime = GetTickCount();
-			Log(L"Whitelist process prohibiting idle.");
-			return true;
+		PROCESSENTRY32 entry;
+		entry.dwSize = sizeof(PROCESSENTRY32);
+
+		const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
+
+		if (!Process32First(snapshot, &entry)) {
+			CloseHandle(snapshot);
+			Log(L"Failed to iterate running processes");
+			return "";
 		}
+
+		do {
+			for (auto &w : Prefs.WhiteList)
+			{
+				if (w.Application != L"")
+				{
+					if (!_tcsicmp(entry.szExeFile, w.Application.c_str())) 
+					{
+						CloseHandle(snapshot);
+						return narrow(w.Name);
+					}
+				}
+			}
+		} while (Process32Next(snapshot, &entry));
+
+		CloseHandle(snapshot);
 	}
-	//fullscreen management
-	if (Prefs.bFullscreenCheckEnabled)
-	{
-		if (FullscreenApplicationRunning())
-		{
-			pLII->dwTime = GetTickCount();
-			Log(L"Fullscreen process prohibiting idle.");
-			return true;
-		}
-	}
-
-	if (Prefs.bAdvancedUserIdle)
-	{
-		MyGetLastinputInfo(pLII);
-	}
-	else
-		GetLastInputInfo(pLII);
-
-	SavedLII.dwTime = pLII->dwTime;
-
-	return true;
-}
-
-bool WhitelistProcessRunning(void)
-{
-	return false;
+	return "";
 }
 bool FullscreenApplicationRunning(void)
 {
+	QUERY_USER_NOTIFICATION_STATE pquns;
+	if (SHQueryUserNotificationState(&pquns) == S_OK)
+	{
+		if (pquns == QUNS_RUNNING_D3D_FULL_SCREEN ||
+			pquns == QUNS_PRESENTATION_MODE ||
+			pquns == QUNS_BUSY ||
+			pquns == QUNS_APP)
+		{
+			return true;
+		}
+	}
+
 	return false;
 }
-bool MyGetLastinputInfo(PLASTINPUTINFO plii)
-{
-	return false;
-}
+

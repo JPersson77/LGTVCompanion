@@ -53,7 +53,7 @@
 
 #define			APPNAME_SHORT					L"LGTVcomp"
 #define			APPNAME_FULL					L"LGTV Companion"
-#define         APP_VERSION                     L"1.8.7"
+#define         APP_VERSION                     L"1.9.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_COMMANDLINE			1
 
@@ -67,6 +67,10 @@
 #define         JSON_IDLEBLANK                  "BlankWhenIdle"
 #define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
 #define         JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
+#define         JSON_IDLEWHITELIST				"IdleWhiteListEnabled"
+#define         JSON_IDLEFULLSCREEN				"IdleFullscreen"
+#define         JSON_WHITELIST					"IdleWhiteList"
+
 #define         DEFAULT_RESTART                 {"restart"}
 #define         DEFAULT_SHUTDOWN                {"shutdown","power off"}
 #define         JSON_RDP_POWEROFF               "PowerOffDuringRDP"
@@ -89,6 +93,10 @@
 #define         APP_TOP_PHASE_2	                WM_USER+11
 #define         APP_TOP_PHASE_3                 WM_USER+12
 #define         APP_TOP_NEXT_DISPLAY            WM_USER+13
+#define         APP_LISTBOX_EDIT	            WM_USER+14
+#define         APP_LISTBOX_ADD					WM_USER+15
+#define         APP_LISTBOX_DELETE	            WM_USER+16
+#define         APP_LISTBOX_REDRAW				WM_USER+17
 
 #define         APP_CMDLINE_ON                  1
 #define         APP_CMDLINE_OFF                 2
@@ -109,6 +117,10 @@
 #define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases"
 #define         DONATELINK                      L"https://www.paypal.com/donate/?hosted_button_id=TGZRPAHV4QC62"
 
+struct WHITELIST {
+	std::wstring Name;
+	std::wstring Application;
+};
 struct PREFS {
 	std::vector<std::string> EventLogRestartString = DEFAULT_RESTART;
 	std::vector<std::string> EventLogShutdownString = DEFAULT_SHUTDOWN;
@@ -121,6 +133,9 @@ struct PREFS {
 	int BlankScreenWhenIdleDelay = 10;
 	bool PowerOffDuringRDP = false;
 	bool AdhereTopology = false;
+	bool bIdleWhitelistEnabled = false;
+	bool bFullscreenCheckEnabled = false;
+	std::vector<WHITELIST> WhiteList;
 };
 struct SESSIONPARAMETERS {
 	std::string DeviceId;
@@ -156,6 +171,7 @@ LRESULT CALLBACK    DeviceWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK    OptionsWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK    ConfigureTopologyWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK    UserIdleConfWndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK    WhitelistConfWndProc(HWND, UINT, WPARAM, LPARAM);
 
 bool                MessageExistingProcess(std::wstring);
 bool				ReadConfigFile();
