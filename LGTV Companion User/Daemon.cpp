@@ -6,7 +6,7 @@ using json = nlohmann::json;
 
 // Globals:
 HINSTANCE                       hInstance;  // current instance
-HWND                            hMainWnd;
+HWND                            hMainWnd = NULL;
 bool                            bIdle = false;
 bool                            bIdlePreventEarlyWakeup = false;
 bool                            bDaemonVisible = true;
@@ -21,6 +21,9 @@ HANDLE                          hPipe = INVALID_HANDLE_VALUE;
 INT64                           idToastFirstrun = NULL;
 INT64                           idToastNewversion = NULL;
 vector <SESSIONPARAMETERS>      Devices;     
+string							sCurrentlyRunningWhitelistedProcess = "";
+UINT							shellhookMessage;
+DWORD							daemon_startup_user_input_time = 0;
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -59,6 +62,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		}
 	}
 
+
+	shellhookMessage = RegisterWindowMessageW(L"SHELLHOOK");
+
 	//Initialize toast notifications
 	WinToast::WinToastError error;
 	WinToast::instance()->setAppName(L"LGTV Companion (Daemon)");
@@ -87,6 +93,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		return false;
 	}
 
+
+
 	// create main window (dialog)
 	hMainWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndProc);
 	SetWindowText(hMainWnd, WindowTitle.c_str());
@@ -106,7 +114,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		SetTimer(hMainWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
 	}
 	if (Prefs.AdhereTopology)
-		SetTimer(hMainWnd, TIMER_TOPOLOGY, 8000, (TIMERPROC)NULL);
+		SetTimer(hMainWnd, TIMER_TOPOLOGY, TIMER_TOPOLOGY_DELAY, (TIMERPROC)NULL);
+	
+	if(Prefs.RemoteStreamingCheck || Prefs.bIdleWhitelistEnabled)
+		SetTimer(hMainWnd, TIMER_CHECK_PROCESSES, TIMER_CHECK_PROCESSES_DELAY, (TIMERPROC)NULL);
 
 	wstring startupmess = WindowTitle;
 	startupmess += L" is running.";
@@ -114,16 +125,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 
 	HPOWERNOTIFY rsrn = RegisterSuspendResumeNotification(hMainWnd, DEVICE_NOTIFY_WINDOW_HANDLE);
 	HPOWERNOTIFY rpsn = RegisterPowerSettingNotification(hMainWnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
-	/*
+	
 	DEV_BROADCAST_DEVICEINTERFACE NotificationFilter;
-	ZeroMemory(&NotificationFilter, sizeof(NotificationFilter));
-	NotificationFilter.dbcc_size = sizeof(DEV_BROADCAST_DEVICEINTERFACE);
-	NotificationFilter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
-	memcpy(&(NotificationFilter.dbcc_classguid), &(GUID_DEVINTERFACE_USB_DEVICE), sizeof(struct _GUID));
-	HDEVNOTIFY dev_notify = RegisterDeviceNotification(hMainWnd, &NotificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
-	*/
-
-	WTSRegisterSessionNotification(hMainWnd, NOTIFY_FOR_ALL_SESSIONS);
+	HDEVNOTIFY dev_notify = NULL;
+	if (Prefs.RemoteStreamingCheck)
+	{
+		ZeroMemory(&NotificationFilter, sizeof(NotificationFilter));
+		NotificationFilter.dbcc_size = sizeof(DEV_BROADCAST_DEVICEINTERFACE);
+		NotificationFilter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
+		memcpy(&(NotificationFilter.dbcc_classguid), &(GUID_DEVINTERFACE_USB_DEVICE), sizeof(struct _GUID));
+		dev_notify = RegisterDeviceNotification(hMainWnd, &NotificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
+	}
+	if(Prefs.RemoteStreamingCheck)
+		WTSRegisterSessionNotification(hMainWnd, NOTIFY_FOR_ALL_SESSIONS);
 
 	CommunicateWithService("-daemon started");
 
@@ -148,11 +162,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			WinToast::instance()->clear();
 		}
 	}
-
 	UnregisterSuspendResumeNotification(rsrn);
 	UnregisterPowerSettingNotification(rpsn);
-//	UnregisterDeviceNotification(dev_notify);
-	WTSUnRegisterSessionNotification(hMainWnd);
+	if(dev_notify)
+		UnregisterDeviceNotification(dev_notify);
+	if(Prefs.RemoteStreamingCheck)
+		WTSUnRegisterSessionNotification(hMainWnd);
 	return (int)msg.wParam;
 }
 
@@ -252,6 +267,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			lii.cbSize = sizeof(LASTINPUTINFO);
 			if (GetLastInputInfo(&lii))
 			{
+				// do this first time the timer is triggered
+				if (daemon_startup_user_input_time == 0)
+					daemon_startup_user_input_time = lii.dwTime;
+
+				//fix for the fullscreen idle detection on system startup because windows will return QUNS_BUSY until the user has interacted with the PC
+				if (lii.dwTime != daemon_startup_user_input_time)
+					daemon_startup_user_input_time = -1;
+
 				if (bDaemonVisible)
 				{
 					wstring tick = widen(to_string(lii.dwTime));
@@ -269,11 +292,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						{
 							dwLastInputTick = lii.dwTime;
 							bIdlePreventEarlyWakeup = true;
-							Prefs.DisableSendingViaIPC = false;
 						}
 						else
 						{
-							SetTimer(hWnd, TIMER_MAIN, bDaemonVisible?(TIMER_MAIN_DELAY_WHEN_BUSY)/10: TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
+							SetTimer(hWnd, TIMER_MAIN, bDaemonVisible?1000: TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 							SetTimer(hWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
 							dwLastInputTick = lii.dwTime;
 							bIdlePreventEarlyWakeup = false;
@@ -296,9 +318,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			return 0;
 		}break;
+
 		case TIMER_IDLE:
 		{
-			if (Prefs.bFullscreenCheckEnabled)
+			if (Prefs.bFullscreenCheckEnabled && (daemon_startup_user_input_time == -1))
 				if (FullscreenApplicationRunning())
 				{
 					Log(L"Fullscreen application prohibiting idle");
@@ -306,11 +329,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}
 			if (Prefs.bIdleWhitelistEnabled)
 			{
-				string proc = WhitelistProcessRunning();
-				if (proc != "")
+				if (sCurrentlyRunningWhitelistedProcess != "")
 				{
 					wstring mess = L"Whitelisted application prohibiting idle (";
-					mess += widen(proc);
+					mess += widen(sCurrentlyRunningWhitelistedProcess);
 					mess += L")";
 					Log(mess);
 					return 0;
@@ -326,33 +348,51 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			
 			return 0;
 		}break;
-
-		case TIMER_RDP:
+		case TIMER_CHECK_PROCESSES:
 		{
-			KillTimer(hWnd, TIMER_RDP);
-			if (Prefs.BlankScreenWhenIdle)
-			{
-				if (bIdle)
-					CommunicateWithService("-daemon remoteconnect_idle");
-				else
-					CommunicateWithService("-daemon remoteconnect_busy");
-			}
-			else
-				CommunicateWithService("-daemon remoteconnect");
-			Prefs.DisableSendingViaIPC = true;
-			return 0;
+			RemoteStreamingEvent(CheckRunningProcesses() ? REMOTE_STEAM_CONNECTED : REMOTE_STEAM_NOT_CONNECTED);
 		}break;
+		case REMOTE_STEAM_CONNECTED:
+		case REMOTE_NVIDIA_CONNECTED:
+		case REMOTE_RDP_CONNECTED:
+		{
+			KillTimer(hWnd, (UINT_PTR)wParam);
+			CommunicateWithService("-daemon remote_connect");
+		}break;
+		case REMOTE_STEAM_NOT_CONNECTED:
+		case REMOTE_NVIDIA_NOT_CONNECTED:
+		case REMOTE_RDP_NOT_CONNECTED:
+		{
+			KillTimer(hWnd, (UINT_PTR)wParam);
+			CommunicateWithService("-daemon remote_disconnect");
+		}break;
+
 		case TIMER_TOPOLOGY:
 		{
 			KillTimer(hWnd, TIMER_TOPOLOGY);
+			if (!Prefs.AdhereTopology)
+				break;
 
-			if(VerifyTopology())
+			int result = VerifyTopology();
+
+			if (result == TOPOLOGY_OK)
 				PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
-			else
+			else if (result == TOPOLOGY_UNDETERMINED)
 			{
+				Log(L"No active devices detected when verifying Windows Monitor Topology. Topology feature has been disabled");
+				CommunicateWithService("-daemon topology undetermined");
+				Prefs.AdhereTopology = false;
+			}
+			else if (result == TOPOLOGY_OK_DISABLE)
+			{
+				Prefs.AdhereTopology = false;
+			}
+			else if (result = TOPOLOGY_ERROR)
+			{
+				Prefs.AdhereTopology = false;
 				CommunicateWithService("-daemon topology invalid");
 
-				wstring s = L"A recent change to the system seem to have invalidated the monitor topology configuration. "
+				wstring s = L"A change to the system has invalidated the monitor topology configuration and the feature has been disabled. "
 					"Please run the configuration guide in the global options to ensure correct operation.";
 				Log(s);
 
@@ -370,7 +410,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					templ.setImagePath(imgpath);
 
 					templ.setTextField(L"Invalidated monitor topology configuration!", WinToastTemplate::FirstLine);
-					templ.setTextField(L"A recent change to the system seem to have invalidated the multi-monitor configuration. Please run the configuration guide in the global options again.", WinToastTemplate::SecondLine);
+					templ.setTextField(L"A change to the system has invalidated the multi-monitor configuration. Please run the configuration guide in the global options.", WinToastTemplate::SecondLine);
 
 //					templ.addAction(L"Download");
 
@@ -461,17 +501,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	
 	case WM_DISPLAYCHANGE:
 	{
-
 		if (Prefs.AdhereTopology)
 		{
 			PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
 		}
-	
 	}break;
-	/*
+	
 	case WM_DEVICECHANGE:
 	{
-		if (lParam)
+		if (Prefs.RemoteStreamingCheck && lParam)
 		{
 			PDEV_BROADCAST_HDR lpdb = (PDEV_BROADCAST_HDR)lParam;
 			PDEV_BROADCAST_DEVICEINTERFACE lpdbv = (PDEV_BROADCAST_DEVICEINTERFACE)lpdb;
@@ -479,30 +517,29 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (lpdb->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
 			{
 				path = wstring(lpdbv->dbcc_name);
+				transform(path.begin(), path.end(), path.begin(), ::tolower);
+
 				switch (wParam)
 				{
 				case DBT_DEVICEARRIVAL:
 				{
-					for (auto& dev : usb_list)
+					for (auto& dev : Prefs.Remote.stream_usb_list)
 					{
 						if (path.find(dev, 0) != wstring::npos)
 						{
-							wstring s = L"New device connected: ";
-							s += path;
-							Log(s);
+							RemoteStreamingEvent(REMOTE_NVIDIA_CONNECTED);
+							return true;
 						}
 					}
 				}break;
-
 				case DBT_DEVICEREMOVECOMPLETE:
 				{
-					for (auto& dev : usb_list)
+					for (auto& dev : Prefs.Remote.stream_usb_list)
 					{
 						if (path.find(dev, 0) != wstring::npos)
 						{
-							wstring s = L"Device disconnected: ";
-							s += path;
-							Log(s);
+							RemoteStreamingEvent(REMOTE_NVIDIA_NOT_CONNECTED);	
+							return true;
 						}
 					}
 				}break;
@@ -511,18 +548,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 		}
 	}break;
-	*/
+	
 	case WM_WTSSESSION_CHANGE:
 	{
 		if (wParam == WTS_REMOTE_CONNECT)
 		{
-			SetTimer(hMainWnd, TIMER_RDP, TIMER_RDP_DELAY, (TIMERPROC)NULL);
+			RemoteStreamingEvent(REMOTE_RDP_CONNECTED);
 		}
 		else if (wParam == WTS_REMOTE_DISCONNECT)
 		{
-			Prefs.DisableSendingViaIPC = false;
-			CommunicateWithService("-daemon remotedisconnect");
-			Prefs.DisableSendingViaIPC = true; // to prevent user idle screen blanking on login screen, which cannot be unblanked without using the remote.
+			RemoteStreamingEvent(REMOTE_RDP_NOT_CONNECTED);
 		}
 	}break;
 	case WM_COPYDATA:
@@ -642,6 +677,10 @@ bool ReadConfigFile()
 			if (!j.empty() && j.is_boolean())
 				Prefs.bFullscreenCheckEnabled = j.get<bool>();
 
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM];
+			if (!j.empty() && j.is_boolean())
+				Prefs.RemoteStreamingCheck = j.get<bool>();
+
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
 			if (!j.empty() && j.size() > 0)
 			{
@@ -697,31 +736,30 @@ string narrow(wstring sInput) {
 }
 
 //   Send the commandline to the service
-void CommunicateWithService(string input, bool OverrideDisable)
+void CommunicateWithService(string input)
 {
 	DWORD dwWritten;
 
 	if (input == "")
 		return;
-	if (!Prefs.DisableSendingViaIPC || OverrideDisable)
+
+	hPipe = CreateFile(PIPENAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+
+	if (hPipe != INVALID_HANDLE_VALUE)
 	{
-		hPipe = CreateFile(PIPENAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-
-		if (hPipe != INVALID_HANDLE_VALUE)
-		{
-			WriteFile(hPipe,
-				input.c_str(),
-				(DWORD)input.length() + 1,   // = length of string + terminating '\0' !!!
-				&dwWritten,
-				NULL);
-			Log(widen(input));
-		}
-		else
-			Log(L"Failed to connect to named pipe. Service may be stopped.");
-
-		if (hPipe != INVALID_HANDLE_VALUE)
-			CloseHandle(hPipe);
+		WriteFile(hPipe,
+			input.c_str(),
+			(DWORD)input.length() + 1,   // = length of string + terminating '\0' !!!
+			&dwWritten,
+			NULL);
+		Log(widen(input));
 	}
+	else
+		Log(L"Failed to connect to named pipe. Service may be stopped.");
+
+	if (hPipe != INVALID_HANDLE_VALUE)
+		CloseHandle(hPipe);
+	
 }
 
 void Log(wstring input)
@@ -853,6 +891,7 @@ void ReadDeviceConfig()
 	return;
 }
 
+// get a vector of all currently active LG displays
 vector<DISPLAY_INFO> QueryDisplays()
 {
 	vector<DISPLAY_INFO> targets;
@@ -872,14 +911,12 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 	UINT32 requiredPaths, requiredModes;
 	vector<DISPLAYCONFIG_PATH_INFO> paths;
 	vector<DISPLAYCONFIG_MODE_INFO> modes;
-//	DISPLAYCONFIG_TOPOLOGY_ID currentTopologyId;
 	MONITORINFOEX mi;
 	LONG isError = ERROR_INSUFFICIENT_BUFFER;
 
 	ZeroMemory(&mi, sizeof(mi));
 	mi.cbSize = sizeof(mi);
 	GetMonitorInfo(hMonitor, &mi);
-	//	wprintf(L"DisplayDevice: %s\n", mi.szDevice);
 
 	isError = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &requiredPaths, &requiredModes);
 	if (isError)
@@ -917,7 +954,8 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 			name.header.id = p.targetInfo.id;
 			DisplayConfigGetDeviceInfo(&name.header);
 			wstring FriendlyName = name.monitorFriendlyDeviceName;
-			if (FriendlyName.find(L"LG TV") != wstring::npos)
+			transform(FriendlyName.begin(), FriendlyName.end(), FriendlyName.begin(), ::tolower);
+			if (FriendlyName.find(L"lg tv") != wstring::npos)
 			{
 				DISPLAY_INFO di;
 				di.monitorinfo = mi;
@@ -946,7 +984,11 @@ bool CheckDisplayTopology(void)
 		{
 			for (auto &dev : Devices)
 			{
-				if (narrow(disp.target.monitorDevicePath) == dev.UniqueDeviceKey)
+				string ActiveDisplay = narrow(disp.target.monitorDevicePath);
+				string DeviceString = dev.UniqueDeviceKey;
+				transform(ActiveDisplay.begin(), ActiveDisplay.end(), ActiveDisplay.begin(), ::tolower);
+				transform(DeviceString.begin(), DeviceString.end(), DeviceString.begin(), ::tolower);
+				if (ActiveDisplay == DeviceString)
 				{
 					s << dev.DeviceId << " ";
 				}
@@ -954,88 +996,226 @@ bool CheckDisplayTopology(void)
 		}
 	}
 	s << "*";
-	CommunicateWithService(s.str(),true);
+	CommunicateWithService(s.str());
 	return true;
 }
 
-bool VerifyTopology(void)
+int VerifyTopology(void)
 {
 	bool match = false;
-	vector<DISPLAY_INFO> displays = QueryDisplays();
 
 	if (!Prefs.AdhereTopology)
-		return true;
+		return TOPOLOGY_OK_DISABLE;
 	if (Devices.size() == 0)
-		return true;
-	if (displays.size() > 0)
+		return TOPOLOGY_OK_DISABLE;
+
+	vector<DISPLAY_INFO> displays = QueryDisplays();
+	if (displays.size() == 0)
+		return TOPOLOGY_UNDETERMINED;
+
+	for (auto& disp : displays)
 	{
+		match = false;
+
 		for (auto& dev : Devices)
 		{
-			match = false;
-			if (dev.Enabled && dev.UniqueDeviceKey != "")
-			{		
-				for (auto& disp : displays)
-				{
-					if (narrow(disp.target.monitorDevicePath) == dev.UniqueDeviceKey)
-					{
-						match = true;;
-					}
-				}
-				if (!match)
-					return false;
-			}
+			string ActiveDisplay = narrow(disp.target.monitorDevicePath);
+			string DeviceString = dev.UniqueDeviceKey;
+			transform(ActiveDisplay.begin(), ActiveDisplay.end(), ActiveDisplay.begin(), ::tolower);
+			transform(DeviceString.begin(), DeviceString.end(), DeviceString.begin(), ::tolower);
+			if (ActiveDisplay == DeviceString)
+				match = true;
 		}
+		if (!match)
+			return TOPOLOGY_ERROR;
 	}
-	return true;
+	return TOPOLOGY_OK;
 }
 
-string WhitelistProcessRunning(void)
+bool CheckRunningProcesses(void)
 {
-	if (Prefs.WhiteList.size() > 0)
-	{
-		PROCESSENTRY32 entry;
-		entry.dwSize = sizeof(PROCESSENTRY32);
+	bool bWhiteListConfigured = Prefs.WhiteList.size() > 0 ? true : false;
+	string sWhitelistProcessFound = "";
+	bool bWhitelistProessFound = false;
+	bool bStreamingProcessFound = false;
+	PROCESSENTRY32 entry;
 
-		const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
+	entry.dwSize = sizeof(PROCESSENTRY32);
 
-		if (!Process32First(snapshot, &entry)) {
-			CloseHandle(snapshot);
-			Log(L"Failed to iterate running processes");
-			return "";
-		}
+	const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
 
-		do {
-			for (auto &w : Prefs.WhiteList)
+	if (!Process32First(snapshot, &entry)) {
+		CloseHandle(snapshot);
+		Log(L"Failed to iterate running processes");
+		return "";
+	}
+
+	do {
+		if (Prefs.bIdleWhitelistEnabled && bWhiteListConfigured && !bWhitelistProessFound)
+		{
+			for (auto& w : Prefs.WhiteList)
 			{
 				if (w.Application != L"")
 				{
-					if (!_tcsicmp(entry.szExeFile, w.Application.c_str())) 
+					if (!_tcsicmp(entry.szExeFile, w.Application.c_str()))
 					{
-						CloseHandle(snapshot);
-						return narrow(w.Name);
+						if(w.Name != L"")
+							sWhitelistProcessFound = narrow(w.Name);
+						else
+							sWhitelistProcessFound = "Generic";
+						bWhitelistProessFound = true;
 					}
 				}
 			}
-		} while (Process32Next(snapshot, &entry));
+		}
+		if (Prefs.RemoteStreamingCheck && !bStreamingProcessFound)
+		{
+			for (auto& w : Prefs.Remote.stream_proc_list)
+			{
+				if (!_tcsicmp(entry.szExeFile, w.c_str()))
+				{
+					bStreamingProcessFound = true;
+				}
+			}
+		}
 
-		CloseHandle(snapshot);
-	}
-	return "";
+	} while (Process32Next(snapshot, &entry) && !(bStreamingProcessFound && bWhitelistProessFound));
+
+	CloseHandle(snapshot);
+
+	sCurrentlyRunningWhitelistedProcess = sWhitelistProcessFound;
+
+	return bStreamingProcessFound;
 }
 bool FullscreenApplicationRunning(void)
 {
+
+	WorkaroundFalseFullscreenWindows();
+
 	QUERY_USER_NOTIFICATION_STATE pquns;
+
 	if (SHQueryUserNotificationState(&pquns) == S_OK)
 	{
 		if (pquns == QUNS_RUNNING_D3D_FULL_SCREEN ||
 			pquns == QUNS_PRESENTATION_MODE ||
 			pquns == QUNS_BUSY ||
-			pquns == QUNS_APP)
+			pquns == QUNS_APP)			
 		{
 			return true;
 		}
 	}
-
 	return false;
 }
+void WorkaroundFalseFullscreenWindows(void)
+{
+	EnumWindows(EnumWindowsProc, 0);
+}
+static BOOL	CALLBACK	EnumWindowsProc(HWND hWnd, LPARAM lParam)
+{
+	if (!IsWindowVisible(hWnd))
+		return true;
 
+	const wchar_t* const nonRude = L"NonRudeHWND";
+	{
+		wstring window_name = GetWndText(hWnd);
+		transform(window_name.begin(), window_name.end(), window_name.begin(), ::tolower);
+		if (window_name.find(L"nvidia geforce overlay") != wstring::npos)
+		{
+			if (GetProp(hWnd, nonRude) == NULL)
+			{
+				if (SetProp(hWnd, nonRude, INVALID_HANDLE_VALUE))
+				{
+					DWORD recipients = BSM_APPLICATIONS;
+					if (BroadcastSystemMessage(BSF_POSTMESSAGE | BSF_IGNORECURRENTTASK, &recipients, shellhookMessage, HSHELL_UNDOCUMENTED_FULLSCREEN_EXIT, (LPARAM)hWnd) < 0)
+					{
+						Log(L"BroadcastSystemMessage() failed");
+					}
+					else {
+						CommunicateWithService("-daemon gfe");
+						Log(L"Unset NVIDIA GFE overlay fullscreen");
+					}
+
+
+					return false;
+				}
+			}
+		}
+	}
+	return true;
+}
+void RemoteStreamingEvent(int iEvent)
+{
+	if (Prefs.RemoteStreamingCheck)
+	{
+		bool bConnected = Prefs.Remote.bRemoteCurrentStatusSteam || Prefs.Remote.bRemoteCurrentStatusNvidia || Prefs.Remote.bRemoteCurrentStatusRDP;
+		switch (iEvent)
+		{
+		case REMOTE_STEAM_CONNECTED:
+		{
+			if (!bConnected)
+			{	
+				Log(L"Steam Stream connected.");
+				Prefs.Remote.bRemoteCurrentStatusSteam = true;
+				SetTimer(hMainWnd, (UINT_PTR)iEvent, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
+			}
+		}break;
+		case REMOTE_STEAM_NOT_CONNECTED:
+		{
+			if (Prefs.Remote.bRemoteCurrentStatusSteam)
+			{
+				Log(L"Steam Stream disconnected.");
+				Prefs.Remote.bRemoteCurrentStatusSteam = false;
+				SetTimer(hMainWnd, (UINT_PTR)iEvent, 1000, (TIMERPROC)NULL);
+			}
+		}break;
+		case REMOTE_NVIDIA_CONNECTED:
+		{
+			if (!bConnected)
+			{
+				Log(L"Nvidia Gamestream connected.");
+				Prefs.Remote.bRemoteCurrentStatusNvidia = true;
+				SetTimer(hMainWnd, (UINT_PTR)iEvent, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
+			}
+		}break;
+		case REMOTE_NVIDIA_NOT_CONNECTED:
+		{
+			if (Prefs.Remote.bRemoteCurrentStatusNvidia)
+			{
+				Log(L"Nvidia Gamestream disconnected.");
+				Prefs.Remote.bRemoteCurrentStatusNvidia = false;
+				SetTimer(hMainWnd, (UINT_PTR)iEvent, 1000, (TIMERPROC)NULL);
+			}
+		}break;
+		case REMOTE_RDP_CONNECTED:
+		{
+			if (!bConnected)
+			{
+				Log(L"RDP connected.");
+				Prefs.Remote.bRemoteCurrentStatusRDP = true;
+				SetTimer(hMainWnd, (UINT_PTR)iEvent, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
+			}
+		}break;
+		case REMOTE_RDP_NOT_CONNECTED:
+		{
+			if (Prefs.Remote.bRemoteCurrentStatusRDP)
+			{
+				Log(L"RDP connected.");
+				Prefs.Remote.bRemoteCurrentStatusRDP = false;
+				SetTimer(hMainWnd, (UINT_PTR)iEvent, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
+			}
+		}break;
+		default:break;
+		}
+	}
+	return;
+}
+wstring GetWndText(HWND hWnd)
+{
+	int len = GetWindowTextLength(hWnd) + 1;
+	if (len == 1)
+		return L"";
+	vector<wchar_t> buf(len);
+	GetWindowText(hWnd, &buf[0], len);
+	wstring text = &buf[0];
+	return text;
+}

@@ -1,6 +1,7 @@
 // See LGTV Companion UI.cpp for additional details
 
 #include "Service.h"
+#include <powrprof.h>
 
 using namespace std;
 using json = nlohmann::json;
@@ -697,9 +698,9 @@ bool ReadConfigFile()
 			if (!j.empty() && j.is_number())
 				Prefs.BlankScreenWhenIdleDelay = j.get<int>();
 
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_RDP_POWEROFF];
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE];
 			if (!j.empty() && j.is_boolean())
-				Prefs.PowerOffDuringRDP = j.get<bool>();
+				Prefs.TopologyPreferPowerEfficiency = j.get<bool>();
 
 			Log(st);
 			Log("Configuration file successfully read");
@@ -744,6 +745,10 @@ void InitDeviceSessions()
 		if (item.value()["Enabled"].is_boolean())
 			params.Enabled = item.value()["Enabled"].get<bool>();
 		s << "Enabled:" << (params.Enabled ? "yes" : "no") << ", ";
+		//NewConnectionMethod
+		if (item.value()["NewSockConnect"].is_boolean())
+			params.SSL = item.value()["NewSockConnect"].get<bool>();
+		s << "NewConn:" << (params.SSL ? "yes" : "no") << ", ";
 		//SUBNET AND WOL TYPE
 		if (item.value()["Subnet"].is_string())
 			params.Subnet = item.value()["Subnet"].get<string>();
@@ -1086,50 +1091,30 @@ void IPCThread(void)
 									}
 									DispatchSystemPowerEvent(SYSTEM_EVENT_USERIDLE);
 								}
-								else if (param == "remoteconnect_busy")
+								else if (param == "remote_connect")
 								{
-									if (Prefs.PowerOffDuringRDP)
-									{
-										Log("IPC, Remote session connected. User idle management disabled, Powering off managed displays.");
+										Log("IPC, Remote streaming client connected. Managed devices will power off.");
 										DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
-									}
-									else
-										Log("IPC, Remote session connected. User idle management disabled.");
+
+										for (auto& d : DeviceCtrlSessions)
+										{
+											d.RemoteHostConnected();
+										}
 								}
-								else if (param == "remoteconnect_idle")
+								else if (param == "remote_disconnect")
 								{
-									if (Prefs.PowerOffDuringRDP)
+									for (auto& d : DeviceCtrlSessions)
 									{
-										Log("IPC, Remote session connected. User idle management disabled. Powering off managed displays.");
-										DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
+										d.RemoteHostDisconnected();
 									}
-									else
-									{
-										Log("IPC, Remote session connected. User idle management disabled");
-										DispatchSystemPowerEvent(SYSTEM_EVENT_UNBLANK);
-									}
-								}
-								else if (param == "remoteconnect")
-								{
-									if (Prefs.PowerOffDuringRDP)
-									{
-										Log("IPC, Remote session connected. Powering off managed displays.");
-										DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
-									}
-									else
-										Log("IPC, Remote session connected.");
-								}
-								else if (param == "remotedisconnect")
-								{
 									if (Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows)
 									{
-										Log("IPC, Remote session disconnected. Powering on managed displays.");
+										Log("IPC, Remote streaming client disconnected. Powering on managed displays");
 										DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYON);
 									}
 									else
-									{
-										Log("IPC, Remote session disconnected.");
-									}
+										Log("IPC, Remote streaming client disconnected. Managed displays will remain powered off,");
+
 								}
 								else if (param == "topology")
 								{
@@ -1140,14 +1125,22 @@ void IPCThread(void)
 										d.SetTopology(false);
 									}
 								}
+								else if (param == "gfe")
+								{
 
+									Log("IPC, NVIDIA GFE overlay fullscreen compatibility set");
+								}
 							}
 							else if (param1 == APP_IPC_DAEMON_TOPOLOGY)
 							{
 								if (param == "invalid")
 								{
-									Log("IPC, A recent change to the system seem to have invalidated the monitor topology configuration. "
+									Log("IPC, A recent change to the system have invalidated the monitor topology configuration. "
 										"Please run the configuration guide in the global options again to ensure correct operation.");
+								}
+								if (param == "undetermined")
+								{
+									Log("IPC, No active devices detected when verifying Windows Monitor Topology. Topology feature has been disabled");
 								}
 								if (param == "*")
 								{

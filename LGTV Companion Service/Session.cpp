@@ -1,5 +1,15 @@
 // See LGTV Companion UI.cpp for additional details
 #include "Service.h"
+//#include <boost/beast/websocket/ssl.hpp>
+//#include <boost/asio/ssl/stream.hpp>
+
+#include <boost/beast/core.hpp>
+#include <boost/beast/ssl.hpp>
+//#include <boost/beast/websocket.hpp>
+#include <boost/beast/websocket/ssl.hpp>
+#include <boost/asio/connect.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl/stream.hpp>
 
 using namespace std;
 namespace beast = boost::beast;         // from <boost/beast.hpp>
@@ -7,7 +17,10 @@ namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace websocket = beast::websocket; // from <boost/beast/websocket.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+namespace ssl = boost::asio::ssl;       // from <boost/asio/ssl.hpp>
 using json = nlohmann::json;
+
+
 
 mutex mMutex;
 
@@ -90,6 +103,22 @@ void CSession::Run()
 	while (!mMutex.try_lock())
 		Sleep(MUTEX_WAIT);
 	Parameters.Enabled = true;
+	mMutex.unlock();
+}
+void CSession::RemoteHostConnected()
+{
+	//thread safe section
+	while (!mMutex.try_lock())
+		Sleep(MUTEX_WAIT);
+	bRemoteHostConnected = true;
+	mMutex.unlock();
+}
+void CSession::RemoteHostDisconnected()
+{
+	//thread safe section
+	while (!mMutex.try_lock())
+		Sleep(MUTEX_WAIT);
+	bRemoteHostConnected = false;
 	mMutex.unlock();
 }
 void CSession::Stop()
@@ -264,6 +293,7 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 	{
 	case SYSTEM_EVENT_REBOOT:
 	{
+		bRemoteHostConnected = false;
 		ActivePowerState = false;
 	}break;
 	case SYSTEM_EVENT_UNSURE:
@@ -271,12 +301,15 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 	{
 		TurnOffDisplay(false, false, false);
 		ActivePowerState = false;
+		bRemoteHostConnected = false;
 	}break;
 	case SYSTEM_EVENT_SUSPEND:
 	{
+		bRemoteHostConnected = false;
 	}break;
 	case SYSTEM_EVENT_RESUME:
 	{
+		bRemoteHostConnected = false;
 	}break;
 	case SYSTEM_EVENT_RESUMEAUTO:
 	{
@@ -290,10 +323,13 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 			else
 				SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
 		}
+		bRemoteHostConnected = false;
 	}break;
 
 	case SYSTEM_EVENT_DISPLAYON:
 	{
+		if (bRemoteHostConnected)
+			break;
 		if (AdhereTopology)
 		{
 			if (TopologyEnabled)
@@ -305,16 +341,22 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 	}break;
 	case SYSTEM_EVENT_DISPLAYOFF:
 	{
+		if (bRemoteHostConnected)
+			break;
 		TurnOffDisplay(false, false, false);
 		ActivePowerState = false;
 	}break;
 	case SYSTEM_EVENT_DISPLAYDIMMED:
 	{
+		if (bRemoteHostConnected)
+			break;
 		TurnOffDisplay(false, true, false);
 		ActivePowerState = false;
 	}break;
 	case SYSTEM_EVENT_USERIDLE:
 	{
+		if (bRemoteHostConnected)
+			break;
 		if (Parameters.BlankWhenIdle)
 		{
 			if (AdhereTopology)
@@ -329,6 +371,8 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 	}break;
 	case SYSTEM_EVENT_USERBUSY:
 	{
+		if (bRemoteHostConnected)
+			break;
 		if (Parameters.BlankWhenIdle)
 		{
 			if (AdhereTopology)
@@ -354,13 +398,10 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 				SetDisplayHdmiInput(Parameters.SetHDMIInputOnResumeToNumber);
 		}
 	}break;
-	case SYSTEM_EVENT_UNBLANK:
-	{
-		TurnOnDisplay(false);
-		ActivePowerState = false;
-	}break;
 	case SYSTEM_EVENT_TOPOLOGY:
 	{
+		if (bRemoteHostConnected)
+			break;
 		if (!ActivePowerState)
 			break;
 		if (AdhereTopology)
@@ -386,6 +427,7 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 	string hostip = CallingSessionParameters->IP;
 	string key = CallingSessionParameters->SessionKey;
 	string device = CallingSessionParameters->DeviceId;
+	bool SSL = CallingSessionParameters->SSL;
 	string logmsg;
 	string ck = "CLIENTKEYx0x0x0";
 	string handshake;
@@ -414,35 +456,81 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 		try
 		{
 			//BOOST::BEAST
-			net::io_context ioc;
-			tcp::resolver resolver{ ioc };
-			websocket::stream<tcp::socket> ws{ ioc };
 			beast::flat_buffer buffer;
+			net::io_context ioc;
+			tcp::resolver resolver{ ioc };	
+			
+			//context holds certificates
+			ssl::context ctx{ ssl::context::tlsv12_client };
+			//load_root_certificates(ctx); 
+
+		
+			//SSL
+			websocket::stream<beast::ssl_stream<tcp::socket>> wss{ ioc, ctx };	
+			websocket::stream<tcp::socket> ws{ ioc };
+
+
 			string host = hostip;
 
 			// try communicating with the display
-			auto const results = resolver.resolve(host, SERVICE_PORT);
-			auto ep = net::connect(ws.next_layer(), results);
-			host += ':' + std::to_string(ep.port());
+			auto const results = resolver.resolve(host, SSL?SERVICE_PORT_SSL:SERVICE_PORT);
+			auto ep = net::connect(SSL? get_lowest_layer(wss):ws.next_layer(), results);
 
-			ws.set_option(websocket::stream_base::decorator(
-				[](websocket::request_type& req)
-				{
-					req.set(http::field::user_agent,
-						std::string(BOOST_BEAST_VERSION_STRING) +
-						" websocket-client-LGTVsvc");
-				}));
-			ws.handshake(host, "/");
-			ws.write(net::buffer(std::string(handshake)));
-			ws.read(buffer); // read the first response
+			//SSL set SNI Hostname
+			if(SSL)
+				SSL_set_tlsext_host_name(wss.next_layer().native_handle(), host.c_str());
+
+			//build the host string for the decorator
+			host += ':' + std::to_string(ep.port());
+			
+			//SSL handshake
+			if(SSL)
+				wss.next_layer().handshake(ssl::stream_base::client);
+
+			if (SSL)
+			{
+				wss.set_option(websocket::stream_base::decorator(
+					[](websocket::request_type& req)
+					{
+						req.set(http::field::user_agent,
+							std::string(BOOST_BEAST_VERSION_STRING) +
+							" websocket-client-LGTVsvc");
+					}));
+				wss.handshake(host, "/");
+				wss.write(net::buffer(std::string(handshake)));
+				wss.read(buffer); // read the first response
+			}
+			else
+			{
+				ws.set_option(websocket::stream_base::decorator(
+					[](websocket::request_type& req)
+					{
+						req.set(http::field::user_agent,
+							std::string(BOOST_BEAST_VERSION_STRING) +
+							" websocket-client-LGTVsvc");
+					}));
+				ws.handshake(host, "/");
+				ws.write(net::buffer(std::string(handshake)));
+				ws.read(buffer); // read the first response
+			}
+
+			//debuggy
+			{
+				string tt = beast::buffers_to_string(buffer.data());
+				string st = SSL ? "[DEBUG] (SSL) ON response 1: " : "[DEBUG] ON Response 1: ";
+				st += tt;
+				Log(st);
+			}
 
 			json j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
 			boost::string_view check = j["type"];
 
+			buffer.consume(buffer.size());
+
 			// parse for pairing key if needed
 			if (std::string(check) != "registered")
 			{
-				buffer.consume(buffer.size());
+				
 				if (key != "")
 				{
 					logmsg = device;
@@ -450,12 +538,33 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 					Log(logmsg);
 
 					handshake = narrow(HANDSHAKE_NOTPAIRED);
-					ws.write(net::buffer(std::string(handshake)));
-					ws.read(buffer); // read the first response
+					if (SSL)
+					{
+						wss.write(net::buffer(std::string(handshake)));
+						wss.read(buffer); // read the first response
+					}
+					else
+					{
+						ws.write(net::buffer(std::string(handshake)));
+						ws.read(buffer); // read the first response
+					}
 				}
 
-				ws.read(buffer); //read the second response which should now contain the session key
+				buffer.consume(buffer.size());
+
+				if(SSL)
+					wss.read(buffer);
+				else
+					ws.read(buffer); //read the second response which should now contain the session key
 				string t = beast::buffers_to_string(buffer.data());
+							
+				//debuggy
+				string ss = SSL?"[DEBUG] (SSL) ON response key: ": "[DEBUG] ON response key: ";
+				ss += t;
+				Log(ss);
+				
+				buffer.consume(buffer.size());
+
 				size_t u = t.find("client-key\":\"");
 				if (u != string::npos) // so did we get a session key?
 				{
@@ -481,13 +590,44 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 				}
 			}
 
-			ws.write(net::buffer(std::string(screenonmess)));
-			ws.read(buffer);
+			if (SSL)
+			{
+				wss.write(net::buffer(std::string(screenonmess)));
+				wss.read(buffer);
+			}
+			else
+			{
+				ws.write(net::buffer(std::string(screenonmess)));
+				ws.read(buffer);
+			}
+			//debuggy
+			{
+				string tt = beast::buffers_to_string(buffer.data());
+				string st = SSL ? "[DEBUG] (SSL) ON response 2: " : "[DEBUG] ON response 2: ";
+				st += tt;
+				Log(st);
+			}
 			buffer.consume(buffer.size());
 						
 			//retreive power state from device to determine if the device is powered on
-			ws.write(net::buffer(getpowerstatemess));
-			ws.read(buffer);
+			if (SSL)
+			{
+				wss.write(net::buffer(getpowerstatemess));
+				wss.read(buffer);
+			}
+			else
+			{
+				ws.write(net::buffer(getpowerstatemess));
+				ws.read(buffer);
+			}
+			//debuggy
+			{
+				string tt = beast::buffers_to_string(buffer.data());
+				string st = SSL ? "[DEBUG] (SSL) ON response 3: " : "[DEBUG] ON response 3: ";
+				st += tt;
+				Log(st);
+			}
+
 			j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
 
 			boost::string_view type = j["type"];
@@ -499,11 +639,21 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 					logmsg = device;
 					logmsg += ", power state is: ON";
 					Log(logmsg);
-					ws.close(websocket::close_code::normal);
+
+					buffer.consume(buffer.size());
+					if(SSL)
+						wss.close(websocket::close_code::normal);
+					else
+						ws.close(websocket::close_code::normal);
 					break;
 				}
 			}
 			buffer.consume(buffer.size());
+			if (SSL)
+				wss.close(websocket::close_code::normal);
+			else
+				ws.close(websocket::close_code::normal);
+
 		}
 		catch (std::exception const& e)
 		{
@@ -741,9 +891,11 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 	}
 	if (CallingSessionParameters->SessionKey != "") 
 	{
-		string host = CallingSessionParameters->IP;
+		string hostip = CallingSessionParameters->IP;
 		string key = CallingSessionParameters->SessionKey;
 		string device = CallingSessionParameters->DeviceId;
+		int hdmi_number = CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs;
+		bool SSL = CallingSessionParameters->SSL;
 		string logmsg;
 		string getpowerstatemess = R"({"id": "1", "type": "request", "uri": "ssap://com.webos.service.tvpower/power/getPowerState"})";
 		string getactiveinputmess = R"({"id": "2", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})";
@@ -751,7 +903,6 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 		string screenoffmess = R"({"id": "4", "type" : "request", "uri" : "ssap://com.webos.service.tvpower/power/turnOffScreen"})";
 		string handshake = narrow(HANDSHAKE_PAIRED);
 		string ck = "CLIENTKEYx0x0x0";
-		beast::flat_buffer buffer; 
 		json j;
 		boost::string_view type;
 		boost::string_view state;
@@ -759,17 +910,35 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 
 		try
 		{
+			//BOOST::BEAST
+			beast::flat_buffer buffer;
 			net::io_context ioc;
-
-			size_t ckf = handshake.find(ck);
-			handshake.replace(ckf, ck.length(), key);
 			tcp::resolver resolver{ ioc };
+
+			//context holds certificates
+			ssl::context ctx{ ssl::context::tlsv12_client };
+			//load_root_certificates(ctx); 
+
+			websocket::stream<beast::ssl_stream<tcp::socket>> wss{ ioc, ctx };
 			websocket::stream<tcp::socket> ws{ ioc };
 
-			auto const results = resolver.resolve(host, SERVICE_PORT);
-			auto ep = net::connect(ws.next_layer(), results);
+			string host = hostip;
 
+			auto const results = resolver.resolve(host, SSL ? SERVICE_PORT_SSL : SERVICE_PORT);
+			auto ep = net::connect(SSL ? get_lowest_layer(wss) : ws.next_layer(), results);
+
+			//SSL set SNI Hostname
+			if (SSL)
+				SSL_set_tlsext_host_name(wss.next_layer().native_handle(), host.c_str());
+
+			//build the host string for the decorator
 			host += ':' + std::to_string(ep.port());
+
+			//SSL handshake
+			if (SSL)
+				wss.next_layer().handshake(ssl::stream_base::client);
+
+
 			if (time(0) - origtim > 10) // this thread should not run too long
 			{
 				logmsg = device;
@@ -778,50 +947,89 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 				goto threadoffend;
 			}
 			// Set a decorator to change the User-Agent of the handshake
-			ws.set_option(websocket::stream_base::decorator(
-				[](websocket::request_type& req)
-				{
-					req.set(http::field::user_agent,
-						std::string(BOOST_BEAST_VERSION_STRING) +
-						" websocket-client-LGTVsvc");
-				}));
-			if (time(0) - origtim > 10) // this thread should not run too long
+			if (SSL)
 			{
-				logmsg = device;
-				logmsg += ", WARNING! DisplayPowerOffThread() - forced exit";
-				Log(logmsg);
-				goto threadoffend;
+				wss.set_option(websocket::stream_base::decorator(
+					[](websocket::request_type& req)
+					{
+						req.set(http::field::user_agent,
+							std::string(BOOST_BEAST_VERSION_STRING) +
+							" websocket-client-LGTVsvc");
+					}));
+				wss.handshake(host, "/");
 			}
-
-			ws.handshake(host, "/");
-			if (time(0) - origtim > 10) // this thread should not run too long
+			else
 			{
-				logmsg = device;
-				logmsg += ", WARNING! DisplayPowerOffThread() - forced exit";
-				Log(logmsg);
-				goto threadoffend;
+				ws.set_option(websocket::stream_base::decorator(
+					[](websocket::request_type& req)
+					{
+						req.set(http::field::user_agent,
+							std::string(BOOST_BEAST_VERSION_STRING) +
+							" websocket-client-LGTVsvc");
+					}));
+				ws.handshake(host, "/");
 			}
 
 			//send a handshake and check validity of the handshake pairing key.
-			ws.write(net::buffer(std::string(handshake)));
-			ws.read(buffer); // read the response
+			size_t ckf = handshake.find(ck);
+			handshake.replace(ckf, ck.length(), key);
+			if (SSL)
+			{
+				wss.write(net::buffer(std::string(handshake)));
+				wss.read(buffer); // read the response
+			}
+			else
+			{
+				ws.write(net::buffer(std::string(handshake)));
+				ws.read(buffer); // read the response
+			}
+
+			//debuggy
+			{
+				string tt = beast::buffers_to_string(buffer.data());
+				string st = SSL ? "[DEBUG] (SSL) OFF response 1: " : "[DEBUG] OFF response 1: ";
+				st += tt;
+				Log(st);
+			}
+
 			j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
 			type = j["type"];
-
+			buffer.consume(buffer.size());
 			if (std::string(type) != "registered")
 			{
 				logmsg = device;
 				logmsg += ", WARNING! DisplayPowerOffThread() - Pairing key is invalid.";
 				Log(logmsg);
-				ws.close(websocket::close_code::normal);
+				if(SSL)
+					wss.close(websocket::close_code::normal);
+				else
+					ws.close(websocket::close_code::normal);
 				goto threadoffend;
 			}
-			buffer.consume(buffer.size());
-			
+
+
 			//retreive power state from device to determine if the device is powered on
-			ws.write(net::buffer(getpowerstatemess));
-			ws.read(buffer);
+			if (SSL)
+			{
+				wss.write(net::buffer(getpowerstatemess));
+				wss.read(buffer);
+			}
+			else
+			{
+				ws.write(net::buffer(getpowerstatemess));
+				ws.read(buffer);
+			}
+
+			//debuggy
+			{
+				string tt = beast::buffers_to_string(buffer.data());
+				string st = SSL ? "[DEBUG] (SSL) OFF response 2: " : "[DEBUG] OFF response 2: ";
+				st += tt;
+				Log(st);
+			}
+
 			j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
+			buffer.consume(buffer.size());
 			
 			type = j["type"]; 
 			state = j["payload"]["state"];
@@ -833,7 +1041,10 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 					logmsg += ", power state is: ";
 					logmsg += std::string(state);
 					Log(logmsg);
-					ws.close(websocket::close_code::normal);
+					if(SSL)
+						wss.close(websocket::close_code::normal);
+					else
+						ws.close(websocket::close_code::normal);
 					goto threadoffend;
 				}
 			}
@@ -842,10 +1053,12 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 				logmsg = device;
 				logmsg += ", WARNING! DisplayPowerOffThread() - Invalid response from device - PowerState.";
 				Log(logmsg);
-				ws.close(websocket::close_code::normal);
+				if(SSL)
+					wss.close(websocket::close_code::normal);
+				else
+					ws.close(websocket::close_code::normal);
 				goto threadoffend;
 			}
-			buffer.consume(buffer.size());
 
 			bool shouldPowerOff = true;
 
@@ -856,8 +1069,24 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 				shouldPowerOff = false;
 
 				// get information about active input
-				ws.write(net::buffer(std::string(getactiveinputmess)));
-				ws.read(buffer);
+				if (SSL)
+				{
+					wss.write(net::buffer(std::string(getactiveinputmess)));
+					wss.read(buffer);
+				}
+				else
+				{
+					ws.write(net::buffer(std::string(getactiveinputmess)));
+					ws.read(buffer);
+				}
+
+				//debuggy
+				{
+					string tt = beast::buffers_to_string(buffer.data());
+					string st = SSL ? "[DEBUG] (SSL) OFF response 3: " : "[DEBUG] OFF response 3: ";
+					st += tt;
+					Log(st);
+				}
 				j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
 				
 				appId = j["payload"]["appId"];
@@ -866,7 +1095,7 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 				if (appId.starts_with(prefix))
 				{
 					appId.remove_prefix(prefix.size());
-					if (std::to_string(CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs) == appId) {
+					if (std::to_string(hdmi_number) == appId) {
 						logmsg = device;
 						logmsg += ", HDMI";
 						logmsg += std::string(appId);
@@ -878,7 +1107,7 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 					{
 						logmsg = device;
 						logmsg += ", HDMI";
-						logmsg += std::to_string(CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs);
+						logmsg += std::to_string(hdmi_number);
 						logmsg += " input inactive.";
 						Log(logmsg);
 					}
@@ -899,8 +1128,24 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 			if (shouldPowerOff)
 			{
 				// send device or screen off command to device
-				ws.write(net::buffer(std::string(BlankScreen ? screenoffmess : poweroffmess)));
-				ws.read(buffer); // read the response
+				if (SSL)
+				{
+					wss.write(net::buffer(std::string(BlankScreen ? screenoffmess : poweroffmess)));
+					wss.read(buffer); // read the response
+				}
+				else
+				{
+					ws.write(net::buffer(std::string(BlankScreen ? screenoffmess : poweroffmess)));
+					ws.read(buffer); // read the response
+				}
+
+				//debuggy
+				{
+					string tt = beast::buffers_to_string(buffer.data());
+					string st = SSL ? "[DEBUG] (SSL) OFF response 4: " : "[DEBUG] OFF response 4: ";
+					st += tt;
+					Log(st);
+				}
 
 				logmsg = device;
 				if (BlankScreen)
@@ -917,7 +1162,10 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 				Log(logmsg);
 			}
 
-			ws.close(websocket::close_code::normal);
+			if(SSL)
+				wss.close(websocket::close_code::normal);
+			else
+				ws.close(websocket::close_code::normal);
 		}
 		catch (std::exception const& e)
 		{
@@ -959,6 +1207,7 @@ void SetDisplayHdmiInputThread(SESSIONPARAMETERS* CallingSessionParameters, bool
 	string hostip = CallingSessionParameters->IP;
 	string key = CallingSessionParameters->SessionKey;
 	string device = CallingSessionParameters->DeviceId;
+	bool SSL = CallingSessionParameters->SSL;
 	string logmsg;
 	time_t origtim = time(0);
 	string hdmino = "HDMIINPUT";
@@ -982,33 +1231,68 @@ void SetDisplayHdmiInputThread(SESSIONPARAMETERS* CallingSessionParameters, bool
 		time_t looptim = time(0);
 		try
 		{
+
 			//BOOST::BEAST
-			net::io_context ioc;
-			tcp::resolver resolver{ ioc };
-			websocket::stream<tcp::socket> ws{ ioc };
 			beast::flat_buffer buffer;
 			string host = hostip;
+			net::io_context ioc;
+			tcp::resolver resolver{ ioc };
+
+			//context holds certificates
+			ssl::context ctx{ ssl::context::tlsv12_client };
+			//load_root_certificates(ctx); 
+
+			websocket::stream<beast::ssl_stream<tcp::socket>> wss{ ioc, ctx };
+			websocket::stream<tcp::socket> ws{ ioc };
+
 
 			// try communicating with the display
-			auto const results = resolver.resolve(host, SERVICE_PORT);
-			auto ep = net::connect(ws.next_layer(), results);
+			auto const results = resolver.resolve(host, SSL?SERVICE_PORT_SSL:SERVICE_PORT);
+			auto ep = net::connect(SSL ? get_lowest_layer(wss) : ws.next_layer(), results);
+
+			//SSL set SNI Hostname
+			if (SSL)
+				SSL_set_tlsext_host_name(wss.next_layer().native_handle(), host.c_str());
+
+			//build the host string for the decorator
 			host += ':' + std::to_string(ep.port());
 
-			ws.set_option(websocket::stream_base::decorator(
-				[](websocket::request_type& req)
-				{
-					req.set(http::field::user_agent,
-						std::string(BOOST_BEAST_VERSION_STRING) +
-						" websocket-client-LGTVsvc");
-				}));
-			ws.handshake(host, "/");
-			ws.write(net::buffer(std::string(handshake)));
-			ws.read(buffer); // read the first response
+			//SSL handshake
+			if (SSL)
+				wss.next_layer().handshake(ssl::stream_base::client);
 
-			ws.write(net::buffer(std::string(setinputmess)));
-			ws.read(buffer);
-
-			ws.close(websocket::close_code::normal);
+			if (SSL)
+			{
+				wss.set_option(websocket::stream_base::decorator(
+					[](websocket::request_type& req)
+					{
+						req.set(http::field::user_agent,
+							std::string(BOOST_BEAST_VERSION_STRING) +
+							" websocket-client-LGTVsvc");
+					}));
+				wss.handshake(host, "/");
+				wss.write(net::buffer(std::string(handshake)));
+				wss.read(buffer); // read the first response
+				wss.write(net::buffer(std::string(setinputmess)));
+				wss.read(buffer);
+				wss.close(websocket::close_code::normal);
+			}
+			else
+			{
+				ws.set_option(websocket::stream_base::decorator(
+					[](websocket::request_type& req)
+					{
+						req.set(http::field::user_agent,
+							std::string(BOOST_BEAST_VERSION_STRING) +
+							" websocket-client-LGTVsvc");
+					}));
+				ws.handshake(host, "/");
+				ws.write(net::buffer(std::string(handshake)));
+				ws.read(buffer); // read the first response
+				ws.write(net::buffer(std::string(setinputmess)));
+				ws.read(buffer);
+				ws.close(websocket::close_code::normal);
+			}
 			logmsg = device;
 			logmsg += ", Setting HDMI input: ";
 			logmsg += std::to_string(HdmiInput);

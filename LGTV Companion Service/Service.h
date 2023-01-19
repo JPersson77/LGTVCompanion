@@ -4,6 +4,7 @@
 #include <SDKDDKVer.h>
 #include <boost/beast.hpp>
 #include <boost/asio.hpp>
+//#include <boost/beast/websocket/ssl.hpp>
 #include <Windows.h>
 #include <system_error>
 #include <memory>
@@ -13,7 +14,6 @@
 #include <iomanip>
 #include <string>
 #include <powerbase.h>
-#include <powrprof.h>
 #include <Shlobj_core.h>
 #include <winevt.h>
 #include <thread>
@@ -26,6 +26,8 @@
 #include <boost/optional.hpp>
 #include <boost/utility/string_view.hpp>
 #include <Iphlpapi.h>
+//#include <powrprof.h>
+
 
 #include "nlohmann/json.hpp"
 #include "Handshake.h"
@@ -37,10 +39,11 @@
 #pragma comment(lib, "Iphlpapi.lib")
 
 #define APPNAME						    L"LGTV Companion"
-#define APPVERSION					    L"1.9.0"
+#define APPVERSION					    L"2.0.0"
 #define SVCNAME						    L"LGTVsvc"
 #define SVCDISPLAYNAME				    L"LGTV Companion Service"
 #define SERVICE_PORT                    "3000"
+#define SERVICE_PORT_SSL                "3001"
 
 #define JSON_PREFS_NODE                 "LGTV Companion"
 #define JSON_EVENT_RESTART_STRINGS      "LocalEventLogRestartString"
@@ -54,6 +57,7 @@
 #define JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
 #define JSON_RDP_POWEROFF               "PowerOffDuringRDP"
 #define JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
+#define JSON_TOPOLOGYMODE				"TopologyPreferPowerEfficient"
 
 #define SERVICE_DEPENDENCIES		    L"Dhcp\0Dnscache\0LanmanServer\0\0"
 #define SERVICE_ACCOUNT				    NULL //L"NT AUTHORITY\\LocalService"
@@ -77,8 +81,7 @@
 #define SYSTEM_EVENT_USERIDLE           14
 #define SYSTEM_EVENT_FORCESETHDMI       15
 #define SYSTEM_EVENT_BOOT               16
-#define SYSTEM_EVENT_UNBLANK            17
-#define SYSTEM_EVENT_TOPOLOGY           18
+#define SYSTEM_EVENT_TOPOLOGY           17
 
 #define APP_CMDLINE_ON                  1
 #define APP_CMDLINE_OFF                 2
@@ -120,8 +123,8 @@ struct PREFS {
 	int PowerOnTimeout = 40;
 	bool BlankWhenIdle = false;
 	int BlankScreenWhenIdleDelay = 10;
-	bool PowerOffDuringRDP = false;
 	bool DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
+	bool TopologyPreferPowerEfficiency = true;
 };
 
 struct SESSIONPARAMETERS {
@@ -140,6 +143,7 @@ struct SESSIONPARAMETERS {
 	int BlankScreenWhenIdleDelay = 10;
 	bool SetHDMIInputOnResume = false;
 	int SetHDMIInputOnResumeToNumber = 1;
+	bool SSL = true;
 };
 
 class CSession {
@@ -147,6 +151,8 @@ public:
 	CSession(SESSIONPARAMETERS*);
 	~CSession();
 	void Run();
+	void RemoteHostConnected();
+	void RemoteHostDisconnected();
 	void Stop();
 	void SystemEvent(DWORD, int param = 0);
 	SESSIONPARAMETERS GetParams();
@@ -166,7 +172,7 @@ private:
 	void TurnOnDisplay(bool SendWOL);
 	void TurnOffDisplay(bool forced, bool dimmed, bool blankscreen);
 	void SetDisplayHdmiInput(int HdmiInput);
-
+	bool bRemoteHostConnected = false;
 	SESSIONPARAMETERS   Parameters;
 };
 

@@ -15,89 +15,9 @@ BACKGROUND
 	response to power events in windows. With OLED monitors this is particularly important to
 	prevent "burn-in", or more accurately pixel-wear.
 
-INSTALLATION AND USAGE
-	0) Important prerequisites:
-		a) Power ON all TVs
-		b) Ensure that the TV can be woken via the network. For the CX line of displays this is
-		  accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->
-		  Mobile Connection Management->TV On with Mobile and enable 'Turn On via Wi-Fi'.
-		c) Open the admin interface of your router, and set a static DHCP lease for your WebOS
-		  devices, i.e. to ensure that the displays always have the same IP-address on your LAN.
+INSTALLATION, USAGE ETC
 
-	1) Download the setup package and install. This will install and start the service
-	(LGTVsvc.exe), and also install the user interface (LGTV Companion.exe).
-
-	2) Open the user interface from the Windows start menu.
-
-	3) Click the 'Scan' button to let the application try and automatically find network attached WebOs
-	devices (TVs)
-
-	4) Optionally, click the drop down button to manually add, remove, configure the parameters of respective
-	devices, this includes the network IP-address, and the physical address, i.e. the MAC(s). This information
-	can easily be found in the network settings of the TV.
-
-	5) In the main application window, use the checkboxes to select what power events (shutdown, restart,
-	suspend, resume, idle) the respective devices shall respond to.
-
-	6) Optionally, tweak additional settings, by clicking on the hamburger icon. Note that enabling logging can
-	be very useful if you are facing any issues.
-
-	IMPORTANT NOTICE: if your OS is not localised in english, you must in the 'additional settings'
-	dialog click the correct checkboxes to indicate what words refer to the system restarting/rebooting
-	(as opposed to shutting down). This is needed because there is no better (at least known to me)
-	way for a service to know if the system is being restarted or shut down than looking at a certain event
-	in the event log. But the event log is localised, and this approach saves me from having to build a language
-	table for all languages in the world. Note that if you don't do this on a non-english OS the application
-	will not be able to determine if the system is being restarted or shut down. The difference is of course
-	that the displays should not power off when the system is restarted.
-
-	7) Click Apply, to save the configuration file and automatically restart the service.
-
-	8) At this point your respective WebOS TV will display a pairing dialog which you need to accept.
-
-	All systems are now GO!
-
-	9) Please go ahead and use the drop down menu again and select 'Test', to ensure that the displays
-	properly react to power on/off commands.
-
-LIMITATIONS
-	The OLED displays cannot be turned on via network when an automatic pixel refresh is being performed. You can hear
-	an internal relay click after the display is actually powered down, at which point it can be turned on again at any
-	time by the application.
-
-	The WebOS displays can only be turned on/off when both the PC and the display is connected to a network.
-
-SYSTEM REQUIREMENTS
-	- The application must be run in a modern windows environment, i.e. any potato running Windows 10 is fine.
-	- A LAN
-
-COMMAND LINE ARGUMENTS
-
-	LGTV Companion.exe -[poweron|poweroff|screenon|screenoff|autoenable|autodisable|sethdmi1|sethdmi2|sethdmi3|sethdmi4] [Device1|Name] [Device2|Name] ... [DeviceX|Name]
-
-	-poweron        - power on a device.
-	-screenon       - power on a device
-	-poweroff       - power off a device.
-	-screenoff      - disable emitters, i.e. enter power saving mode where screen is blanked.
-	-sethdmi1       - set HDMI input 1
-	-sethdmi2       - set HDMI input 2
-	-sethdmi3       - set HDMI input 3
-	-sethdmi4       - set HDMI input 4
-	-autoenable     - temporarily enable the automatic management of a device, i.e. to respond to power events. This
-					  is effective until next restart of the service. (I personally use this for my home automation system).
-	-autodisable    - temporarily disable the automatic management of a device, i.e. to respond to power events. This
-					  is effective until next restart of the service.
-
-	[DeviceX|Name]  - device identifier. Either use Device1, Device2, ..., DeviceX or the friendly device name as found
-					  in the User Interface, for example OLED48CX.
-
-	Example usage: LGTV Companion.exe -poweron Device1 Device2 "LG OLED48CX" -autodisable Device4
-
-	This command will power on device 1, device 2 and the device named LG OLED48CX, and additionally device4 is set to
-	temporarily not respond to automatic power events (on/off).
-
-ADDITIONAL NOTES
-	N/A
+https://github.com/JPersson77/LGTVCompanion
 
 CHANGELOG
 	v 1.0.0             - Initial release
@@ -132,18 +52,24 @@ CHANGELOG
 
 	v 1.8.0             - Option to conform to windows monitor topology (active display outputs only)
 
+	v 1.9.0				- More granular user idle mode
+	
+	v 2.0.0				- Support for LG's newest firmware which changed the connection method (SSL)
+						- Option to revert to legacy connection method for (presumably) older models
+						- Optional support for NVIDIA Gamestream, Steam Link, Sunshine and RDP
+						- Fixed a bug where the fullscreen detection for user idle mode was triggered by the NVIDIA GFE overlay sometimes
+						- Improved logic for the monitor topology feature
+						- More help texts
+
 	TODO:
 
-	v 1.9.0				- [ ] Enhanced support for GameStream/Moonlight/SteamLink - check added virtual devices
-						- [ ] Advanced configuration for user idle detection. Separate mouse/keyboard/controller, and implement app whitelist
-						https://learn.microsoft.com/en-us/windows/win32/inputdev/using-raw-input?source=recommendations
-						https://stackoverflow.com/questions/7009080/detecting-full-screen-mode-in-windows
-						- [x] bugfix random power onoff potentially related to wm_displaychange triggering not only on topology change
-						- [x] clearly explain that change of GPU will cause problems with the topology feature. Possible to identify GPU changes?
-						- [x] identify invalid pairing keys
-						- [x] more help texts
+						- [ ] Feature to power on only when PC input s selected on TV (if possible)
+						- [ ] Device on/off indicator
+						- [ ] compatibility mode for topology
+						- [ ] Exclusion list from fullscreen detection, or detect which monitor fullscreen is happening on. https://github.com/JPersson77/LGTVCompanion/issues/96
+
 LICENSE
-	Copyright (c) 2021-2022 Jörgen Persson
+	Copyright (c) 2021-2023 Jörgen Persson
 
 	Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation
 	files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy,
@@ -162,6 +88,7 @@ THANKS TO
 	- Boost libs - Boost and Beast https://www.boost.org/
 	- Maassoft for initial inspo and understanding re the WebOS comms - https://github.com/Maassoft
 	- Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
+	- OpenSSL https://github.com/openssl/openssl
 	- Etienne Dechanmps - valuable contributions
 
 COPYRIGHT
@@ -390,7 +317,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		CheckDlgButton(hDeviceWindow, IDC_SET_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
 		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_INPUT_NUMBER), false);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), L"1");
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_INPUT_NUMBER), L"1");
+
+		wstring s;
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		s = L"Auto";
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		s = L"Legacy";
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 
 		EnableWindow(GetDlgItem(hDeviceWindow, IDOK), false);
 
@@ -426,6 +361,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (item != Devices[sel].MAC.back())
 				str += L"\r\n";
 		}
+
+		wstring s;
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		s = L"Auto";
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		s = L"Legacy";
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_SETCURSEL, (WPARAM)Devices[sel].SSL ? 0 : 1, (LPARAM)0);
+
 		SetWindowText(GetDlgItem(hDeviceWindow, IDC_DEVICEMACS), str.c_str());
 		EnableWindow(GetDlgItem(hDeviceWindow, IDOK), false);
 
@@ -984,6 +928,9 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		SendDlgItemMessage(hWnd, IDC_SUBNET, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SET_HDMI_INPUT_NUMBER, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SET_HDMI_INPUT_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(4, 1));
+		SendDlgItemMessage(hWnd, IDC_COMBO_SSL, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+
+
 	}break;
 	case WM_NOTIFY:
 	{
@@ -1023,6 +970,14 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 					"WebOS-device from powering off while you are not using it for your PC, i e when you are busy watching Netflix or gaming on your console.\n\n"
 					"The option to set an HDMI input on startup or resume can be used to force the device to automatically switch to the input "
 					" the PC is connected to when powering on.", 
+					L"Information", MB_OK | MB_ICONINFORMATION);
+			}
+			// explain the firmware options
+			else if (wParam == IDC_SYSLINK10)
+			{
+				MessageBox(hWnd,
+					L"In Q1 2023 a firmware upgrade was pushed by LG to many WebOS-devices which caused connectivity issues. A new method for connection was implemented "
+					"and it is now recommended for most users to use the \"Auto\" option. The legacy option will force the usage of the original connection method.",
 					L"Information", MB_OK | MB_ICONINFORMATION);
 			}
 		}break;
@@ -1129,6 +1084,12 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							else
 								Devices[sel].WOLtype = WOL_NETWORKBROADCAST;
 
+							int SSL_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_SSL), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+							if (SSL_selection != CB_ERR)
+							{
+								Devices[sel].SSL = SSL_selection == 0 ? true : false;
+							}
+
 							int ind = (int)SendMessage(GetDlgItem(hParentWnd, IDC_COMBO), (UINT)CB_DELETESTRING, (WPARAM)sel, (LPARAM)0);
 							SendMessage(GetDlgItem(hParentWnd, IDC_COMBO), (UINT)CB_INSERTSTRING, (WPARAM)sel, (LPARAM)widen(Devices[sel].Name).c_str());
 							SendMessage(GetDlgItem(hParentWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)sel, (LPARAM)0);
@@ -1159,6 +1120,12 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							sess.OnlyTurnOffIfCurrentHDMIInputNumberIs = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER))).c_str());
 							sess.SetHDMIInputOnResume = IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
 							sess.SetHDMIInputOnResumeToNumber = atoi(narrow(GetWndText(GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_NUMBER))).c_str());
+
+							int SSL_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_SSL), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+							if (SSL_selection != CB_ERR)
+							{
+								sess.SSL = SSL_selection == 0 ? true : false;
+							}
 
 							Devices.push_back(sess);
 
@@ -1226,6 +1193,10 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 			default:break;
 			}
 		}break;
+		case CBN_SELCHANGE:
+		{
+			EnableWindow(GetDlgItem(hWnd, IDOK), true);
+		}break;
 		default:break;
 		}
 	}break;
@@ -1287,7 +1258,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		vector<wstring> str;
 
 		SendDlgItemMessage(hWnd, IDC_STATIC_C, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-
+		SendDlgItemMessage(hWnd, IDC_COMBO_MODE, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_TIMEOUT, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(100, 1));
@@ -1388,8 +1359,20 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		CheckDlgButton(hWnd, IDC_LOGGING, Prefs.Logging ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_AUTOUPDATE, Prefs.AutoUpdate ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_BLANK, Prefs.BlankScreenWhenIdle ? BST_CHECKED : BST_UNCHECKED);
-		CheckDlgButton(hWnd, IDC_CHECK_RDPBLANK, Prefs.PowerOffDuringRDP ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_REMOTE, Prefs.RemoteStreamingCheck ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, Prefs.AdhereTopology ? BST_CHECKED : BST_UNCHECKED);
+
+		wstring s;
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		s = L"Power efficiency (display off)";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		s = L"Compatibility (display blanked)";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.TopologyPreferPowerEfficiency ? 0 : 1, (LPARAM) 0);
+
+//		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), Prefs.AdhereTopology ? true :  false);
+		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), false); //REMOVE
+
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
 	}break;
 	case WM_COMMAND:
@@ -1423,39 +1406,56 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			}break;
 			case IDC_CHECK_TOPOLOGY:
 			{
-				bool found = false;
-				if (Devices.size() == 0)
+				if (Prefs.version < 2 && !Prefs.ResetAPIkeys)
 				{
-					MessageBox(hWnd, L"Please configure devices before enabling and configuring this option", L"Error", MB_ICONEXCLAMATION | MB_OK);
-					CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, BST_UNCHECKED);
+					int mess = MessageBox(hWnd, L"Enabling this option will enforce re-pairing of all your devices.\n\n Do you want to enable this option?", L"Device pairing", MB_YESNO | MB_ICONQUESTION);
+					if (mess == IDNO)
+					{
+						CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, BST_UNCHECKED);
+					}
+					if (mess == IDYES)
+					{
+						CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, BST_CHECKED);
+						Prefs.ResetAPIkeys = true;
+						EnableWindow(GetDlgItem(hWnd, IDOK), true);
+					}
 				}
 				else
 				{
-					for (auto& k : Devices)
+					bool found = false;
+					if (Devices.size() == 0)
 					{
-						if (k.UniqueDeviceKey != "")
-							found = true;
-					}
-
-					if (found)
-					{
-						EnableWindow(GetDlgItem(hWnd, IDOK), true);
+						MessageBox(hWnd, L"Please configure all devices before enabling and configuring this option", L"Error", MB_ICONEXCLAMATION | MB_OK);
+						CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, BST_UNCHECKED);
 					}
 					else
 					{
-						hTopologyWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)ConfigureTopologyWndProc);
-						EnableWindow(hWnd, false);
-						ShowWindow(hTopologyWindow, SW_SHOW);
+						for (auto& k : Devices)
+						{
+							if (k.UniqueDeviceKey != "")
+								found = true;
+						}
+
+						if (found)
+						{
+							EnableWindow(GetDlgItem(hWnd, IDOK), true);
+						}
+						else
+						{
+							hTopologyWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)ConfigureTopologyWndProc);
+							EnableWindow(hWnd, false);
+							ShowWindow(hTopologyWindow, SW_SHOW);
+						}
 					}
 				}
-
+//				EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY));
 
 
 			}break;
 
 			case IDC_LOGGING:
 			case IDC_AUTOUPDATE:
-			case IDC_CHECK_RDPBLANK:
+			case IDC_CHECK_REMOTE:
 			{
 				EnableWindow(GetDlgItem(hWnd, IDOK), true);
 			}break;
@@ -1476,8 +1476,14 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					}
 					Prefs.AutoUpdate = IsDlgButtonChecked(hWnd, IDC_AUTOUPDATE);
 					Prefs.BlankScreenWhenIdle = IsDlgButtonChecked(hWnd, IDC_CHECK_BLANK) == BST_CHECKED;
-					Prefs.PowerOffDuringRDP = IsDlgButtonChecked(hWnd, IDC_CHECK_RDPBLANK) == BST_CHECKED;
+					Prefs.RemoteStreamingCheck = IsDlgButtonChecked(hWnd, IDC_CHECK_REMOTE) == BST_CHECKED;
 					Prefs.AdhereTopology = IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY) == BST_CHECKED;
+
+					int sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+					if (sel == 1)
+						Prefs.TopologyPreferPowerEfficiency = false;
+					else
+						Prefs.TopologyPreferPowerEfficiency = true;
 
 					int count = ListView_GetItemCount(GetDlgItem(hWnd, IDC_LIST));
 					Prefs.EventLogRestartString.clear();
@@ -1524,6 +1530,10 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			default:break;
 			}
 		}break;
+		case CBN_SELCHANGE:
+		{
+			EnableWindow(GetDlgItem(hWnd, IDOK), true);
+		}break;
 		default:break;
 		}
 	}break;
@@ -1566,32 +1576,35 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				MessageBox(hWnd, L"The power on timeout determines the maximum number of seconds the app will attempt to connect to devices when powering on. "
 					"Please consider increasing this value if your PC needs more time to establish contact with the WebOS-devices during system boot.\n\n"
 					"The option to enable logging is very useful for troubleshooting and if you are experiencing issues with the operations of this app.\n\n"
-					"The option to automatically check for updates ensure that you are always notified when a new version of LGTV Companion is available for download.",
+					"The option to automatically notify when a new version is available ensure that you are always notified when a new version of LGTV Companion is available for download.",
 					L"Global options", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the power saving options
 			else if (wParam == IDC_SYSLINK5)
 			{
-				MessageBox(hWnd, L"The option to automatically blank the screen, i e turn the transmitters off, is triggered in the absence of user input from keyboard, mouse and/or controllers. "
-					"The difference, when compared to both the screensaver and windows power plan settings, is that those OS implemented power saving functions "
+				MessageBox(hWnd, L"The user idle mode will automatically blank the screen, i e turn the transmitters off, in the absence of user input from keyboard, mouse and/or controllers. "
+					"The difference, when compared to both the screensaver and windows power plan settings, is that those OS implemented power saving features "
 					"utilize more obscured variables for determining user idle / busy states, and which can also be programmatically overridden f.e. by games, "
 					"media players, production software or your web browser, In short, and simplified, this option is a more aggressively configured screen and "
-					"power saver. Plese note that this feature is incompatible with-, and will therefore be disabled, while the system is remoted into, using "
-					"RDP.\n\nThe option to turn off the device while the system is being remoted into, using RDP, is useful to avoid the screen displaying a static "
-					"login screen during a remote RDP session. There is a delay of 10 seconds after RDP connection. Please note that depending on the configuration "
-					"of your system (primarily time to turn off screen in power options) there may be occasions where the display cannot be woken by using the local "
-					"mouse and keyboard and you must rely on the remote to see the login screen. It is recommended to combine this option with a short (<30 minutes) "
-					"time to turn off displays in Windows Power Plan Options.", 
+					"power saver. \n\n"
+					"The option to support remote streaming hosts will power off managed devices while the system is acting as streaming host or being remoted into. Supported "
+					"hosts include Nvidia gamestream, Moonlight, Steam Link and RDP. Please note that the devices will remain powered off until the remote connection is disconnected. ", 
 					L"Andvanced power options", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the pmulti-monitor conf
 			else if (wParam == IDC_SYSLINK6)
 			{
-				MessageBox(hWnd, L"The option to automatically conform to the windows monitor topology ensures that the "
+				MessageBox(hWnd, L"The option to support the windows multi-monitor topology ensures that the "
 					"power state of individual devices will match the enabled or disabled state in the Windows monitor configuration, i e "
 					"when an HDMI-output is disabled in the graphics card configuration the associated device will also power off. \n\n"
-					"If you have a multi-monitor system it is recommended to configure and enable this option.\n\n"
-					"NOTE! A change of GPU or adding more displays may invalidate the configuration. If so, please run the configuration guide "
+					"The \"Power efficiency\" option will ensure that devices are set to a powered off state in response to changes in the topology and is the recommended option. "
+					"This option will however not work on all system configuration and may fail to powere on the devices again appropriately. "
+					"Enabling \"Always Ready\" in the settings of compatible WebOS devices (2022-models, A2, B2,C2 etc, and later) will ensure that "
+					"\"Power efficiency\" works properly.\n\n In case the \"Power efficiency\" option does not work the \"Compatibility\" option "
+					"will work on all configurations and will instead blank the screen (instead of powering off) in response to "
+					"changes in the monitor topology\n\n"
+					"If you have a multi-monitor system it is recommended to configure and enable this feature.\n\n"
+					"PLEASE NOTE! A change of GPU or adding more displays may invalidate the configuration. If so, please run the configuration guide "
 					"again to ensure correct operation.",
 					L"Multi-monitor support", MB_OK | MB_ICONINFORMATION);
 			}
@@ -1643,7 +1656,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		HDC hdcStatic = (HDC)wParam;
 		SetTextColor(hdcStatic, COLORREF(COLOR_STATIC));
 		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_BLANK)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_RDPBLANK)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_REMOTE)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_LOGGING)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_AUTOUPDATE))
 		{
@@ -2514,10 +2527,6 @@ bool ReadConfigFile()
 			if (!j.empty() && j.is_number())
 				Prefs.BlankScreenWhenIdleDelay = j.get<int>();
 
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_RDP_POWEROFF];
-			if (!j.empty() && j.is_boolean())
-				Prefs.PowerOffDuringRDP = j.get<bool>();
-
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY];
 			if (!j.empty() && j.is_boolean())
 				Prefs.AdhereTopology = j.get<bool>();
@@ -2529,6 +2538,15 @@ bool ReadConfigFile()
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN];
 			if (!j.empty() && j.is_boolean())
 				Prefs.bFullscreenCheckEnabled = j.get<bool>();
+
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM];
+			if (!j.empty() && j.is_boolean())
+				Prefs.RemoteStreamingCheck = j.get<bool>();
+
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE];
+			if (!j.empty() && j.is_boolean())
+				Prefs.TopologyPreferPowerEfficiency = j.get<bool>();
+
 
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
 			if (!j.empty() && j.size() > 0)
@@ -2667,6 +2685,9 @@ void ReadDeviceConfig()
 		if (item.value()["SetHDMIInputOnResume"].is_boolean())
 			params.SetHDMIInputOnResume = item.value()["SetHDMIInputOnResume"].get<bool>();
 
+		if (item.value()["NewSockConnect"].is_boolean())
+			params.SSL = item.value()["NewSockConnect"].get<bool>();
+
 		if (item.value()["SetHDMIInputOnResumeToNumber"].is_number())
 			params.SetHDMIInputOnResumeToNumber = item.value()["SetHDMIInputOnResumeToNumber"].get<int>();
 
@@ -2798,10 +2819,11 @@ void WriteConfigFile(void)
 	prefs[JSON_PREFS_NODE][JSON_AUTOUPDATE] = (bool)Prefs.AutoUpdate;
 	prefs[JSON_PREFS_NODE][JSON_IDLEBLANK] = (bool)Prefs.BlankScreenWhenIdle;
 	prefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY] = (int)Prefs.BlankScreenWhenIdleDelay;
-	prefs[JSON_PREFS_NODE][JSON_RDP_POWEROFF] = (bool)Prefs.PowerOffDuringRDP;
 	prefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY] = (bool)Prefs.AdhereTopology;
 	prefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST] = (bool)Prefs.bIdleWhitelistEnabled;
 	prefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN] = (bool)Prefs.bFullscreenCheckEnabled;
+	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM] = (bool)Prefs.RemoteStreamingCheck;
+	prefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE] = (bool)Prefs.TopologyPreferPowerEfficiency;
 
 	for (auto& item : Prefs.EventLogRestartString)
 		prefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS].push_back(item);
@@ -2842,6 +2864,8 @@ void WriteConfigFile(void)
 
 		prefs[dev.str()]["SetHDMIInputOnResume"] = (bool)item.SetHDMIInputOnResume;
 		prefs[dev.str()]["SetHDMIInputOnResumeToNumber"] = item.SetHDMIInputOnResumeToNumber;
+
+		prefs[dev.str()]["NewSockConnect"] = (bool)item.SSL;
 
 		if (item.Subnet != "")
 			prefs[dev.str()]["Subnet"] = item.Subnet;

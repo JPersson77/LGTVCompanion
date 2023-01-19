@@ -43,18 +43,20 @@
 #define			APPNAME_SHORT					L"LGTVdaemon"
 #define			APP_PATH					    L"LGTV Companion"
 #define			APPNAME_FULL					L"LGTV Companion Daemon"
-#define         APP_VERSION                     L"1.9.0"
+#define         APP_VERSION                     L"2.0.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_PROCESS			    1
 
 #define         TIMER_MAIN                      18
 #define         TIMER_IDLE                      19
-#define         TIMER_RDP                       20
-#define         TIMER_TOPOLOGY                  21
+#define         TIMER_TOPOLOGY                  20
+#define         TIMER_CHECK_PROCESSES			21
 
-#define         TIMER_MAIN_DELAY_WHEN_BUSY      10000
+#define         TIMER_MAIN_DELAY_WHEN_BUSY      5000
 #define         TIMER_MAIN_DELAY_WHEN_IDLE      100
-#define         TIMER_RDP_DELAY                 10000
+#define         TIMER_REMOTE_DELAY              10000
+#define         TIMER_TOPOLOGY_DELAY            8000
+#define         TIMER_CHECK_PROCESSES_DELAY     5000
 
 #define         APP_NEW_VERSION                 WM_USER+9
 #define         USER_DISPLAYCHANGE              WM_USER+10
@@ -69,16 +71,39 @@
 #define         JSON_IDLEWHITELIST				"IdleWhiteListEnabled"
 #define         JSON_IDLEFULLSCREEN				"IdleFullscreen"
 #define         JSON_WHITELIST					"IdleWhiteList"
+#define         JSON_REMOTESTREAM				"RemoteStream"
+
+#define         TOPOLOGY_OK						1
+#define         TOPOLOGY_ERROR					2
+#define         TOPOLOGY_UNDETERMINED			3
+#define         TOPOLOGY_OK_DISABLE				4
 
 #define         PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
 #define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
 #define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases"
 #define         DONATELINK                      L"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=jorgen.persson@gmail.com&lc=US&item_name=Friendly+gift+for+the+development+of+LGTV+Companion&no_note=0&cn=&currency_code=EUR&bn=PP-DonationsBF:btn_donateCC_LG.gif:NonHosted"
 
-const std::vector<std::wstring> usb_list { 
-	L"USB#HID_0955", //nvidia
-	L"HID#VID_0955", //nvidia
-	L"USB#VID_413D" //dummy
+#define			HSHELL_UNDOCUMENTED_FULLSCREEN_EXIT		0x36
+
+#define			REMOTE_STEAM_CONNECTED					100
+#define			REMOTE_STEAM_NOT_CONNECTED				101
+#define			REMOTE_NVIDIA_CONNECTED					102
+#define			REMOTE_NVIDIA_NOT_CONNECTED				103
+#define			REMOTE_RDP_CONNECTED					104
+#define			REMOTE_RDP_NOT_CONNECTED				105
+
+struct REMOTE_STREAM {
+	bool bRemoteCurrentStatusNvidia = false;
+	bool bRemoteCurrentStatusSteam = false;
+	bool bRemoteCurrentStatusRDP = false;
+
+	const std::vector<std::wstring> stream_proc_list{
+	L"steam_monitor.exe" //steam server
+	//	L"streaming_client.exe",  //steam client
+	};
+	const std::vector<std::wstring> stream_usb_list{
+	L"usb#vid_0955&pid_b4f0" //nvidia
+	};
 };
 
 struct WHITELIST {
@@ -93,11 +118,12 @@ struct PREFS {
 	bool Logging = false;
 	int version = 2;
 	bool ToastInitialised = false;
-	bool DisableSendingViaIPC = false;
 	bool AdhereTopology = false;
 	bool bIdleWhitelistEnabled = false;
 	bool bFullscreenCheckEnabled = false;
 	std::vector<WHITELIST> WhiteList;
+	bool RemoteStreamingCheck = false;
+	REMOTE_STREAM Remote;
 };
 
 class WinToastHandler : public WinToastLib::IWinToastHandler
@@ -130,19 +156,23 @@ struct DISPLAY_INFO {
 };
 
 // Forward declarations of functions included in this code module:
-LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
-bool                MessageExistingProcess(void);
-bool				ReadConfigFile();
-std::wstring        widen(std::string);
-std::string         narrow(std::wstring);
+LRESULT CALLBACK		WndProc(HWND, UINT, WPARAM, LPARAM);
+bool					MessageExistingProcess(void);
+bool					ReadConfigFile();
+std::wstring			widen(std::string);
+std::string				narrow(std::wstring);
 std::vector<std::string> stringsplit(std::string, std::string);
-void                CommunicateWithService(std::string, bool OverrideDisable = false);
-void                VersionCheckThread(HWND);
-void                Log(std::wstring input);
-void				ReadDeviceConfig();
+void					CommunicateWithService(std::string);
+void					VersionCheckThread(HWND);
+void					Log(std::wstring input);
+void					ReadDeviceConfig();
 std::vector<DISPLAY_INFO> QueryDisplays();
-static BOOL			CALLBACK meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);
-bool				CheckDisplayTopology(void);
-bool				VerifyTopology();
-std::string			WhitelistProcessRunning(void);
-bool				FullscreenApplicationRunning(void);
+static BOOL	CALLBACK	meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);
+bool					CheckDisplayTopology(void);
+int						VerifyTopology();
+bool					CheckRunningProcesses(void);
+bool					FullscreenApplicationRunning(void);
+void					RemoteStreamingEvent(int iEvent);
+void					WorkaroundFalseFullscreenWindows(void);
+static BOOL	CALLBACK	EnumWindowsProc(HWND hWnd, LPARAM lParam);
+std::wstring			GetWndText(HWND);

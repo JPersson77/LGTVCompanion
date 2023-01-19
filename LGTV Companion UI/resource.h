@@ -39,6 +39,7 @@
 #define IDC_EDIT_BLANK                  1015
 #define IDC_SPIN2                       1016
 #define IDC_CHECK_RDPBLANK              1017
+#define IDC_CHECK_REMOTE                1017
 #define IDC_LIST                        1018
 #define IDC_SYSLINK3                    1019
 #define IDC_SYSLINK5                    1020
@@ -65,6 +66,7 @@
 #define IDC_STATIC_NO_2                 1033
 #define IDC_SYSLINK9                    1033
 #define IDC_STATIC_NO_3                 1034
+#define IDC_SYSLINK10                   1034
 #define IDC_STATIC_NO_4                 1035
 #define IDC_STATIC_T_1                  1036
 #define IDC_STATIC_T_11                 1036
@@ -95,9 +97,10 @@
 #define IDC_SYSLINK_INFO_2              1058
 #define IDC_EDIT_PROCESS                1058
 #define IDC_SYSLINK_INFO_3              1059
-#define IDC_SYSLINK1                    1059
 #define IDC_SYSLINK_BROWSE              1059
 #define IDC_SYSLINK_INFO_1              1060
+#define IDC_COMBO_MODE                  1061
+#define IDC_COMBO_SSL                   1063
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -124,7 +127,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        155
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1060
+#define _APS_NEXT_CONTROL_VALUE         1064
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

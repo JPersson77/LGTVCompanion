@@ -53,7 +53,7 @@
 
 #define			APPNAME_SHORT					L"LGTVcomp"
 #define			APPNAME_FULL					L"LGTV Companion"
-#define         APP_VERSION                     L"1.9.0"
+#define         APP_VERSION                     L"2.0.0"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define			NOTIFY_NEW_COMMANDLINE			1
 
@@ -70,10 +70,11 @@
 #define         JSON_IDLEWHITELIST				"IdleWhiteListEnabled"
 #define         JSON_IDLEFULLSCREEN				"IdleFullscreen"
 #define         JSON_WHITELIST					"IdleWhiteList"
+#define         JSON_REMOTESTREAM				"RemoteStream"
+#define         JSON_TOPOLOGYMODE				"TopologyPreferPowerEfficient"
 
 #define         DEFAULT_RESTART                 {"restart"}
 #define         DEFAULT_SHUTDOWN                {"shutdown","power off"}
-#define         JSON_RDP_POWEROFF               "PowerOffDuringRDP"
 
 #define			COLOR_STATIC					0x00555555
 #define			COLOR_RED						0x00000099
@@ -131,11 +132,12 @@ struct PREFS {
 	bool ResetAPIkeys = false;
 	bool BlankScreenWhenIdle = false;
 	int BlankScreenWhenIdleDelay = 10;
-	bool PowerOffDuringRDP = false;
 	bool AdhereTopology = false;
 	bool bIdleWhitelistEnabled = false;
 	bool bFullscreenCheckEnabled = false;
 	std::vector<WHITELIST> WhiteList;
+	bool RemoteStreamingCheck = false;
+	bool TopologyPreferPowerEfficiency = true;
 };
 struct SESSIONPARAMETERS {
 	std::string DeviceId;
@@ -156,6 +158,7 @@ struct SESSIONPARAMETERS {
 	int OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
 	bool SetHDMIInputOnResume = false;
 	int SetHDMIInputOnResumeToNumber = 1;
+	bool SSL = true;
 };
 struct DISPLAY_INFO {
 	DISPLAYCONFIG_TARGET_DEVICE_NAME target;
