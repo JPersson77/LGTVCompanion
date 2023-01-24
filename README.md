@@ -54,6 +54,8 @@ HOT TIP! The "User idle mode" works seprately from all other windows power optio
 
 10. Please go ahead and use the drop down menu again and select 'Test', to ensure that the devices properly react to power on/off commands.
 
+11. You can now close the main UI. The service will continue running in the background.
+
 ## Limitations
 - LG OLED displays can sometimes not be turned on via network when an automatic pixel refresh is being performed. You can on some models hear an internal relay click after the pixel refresh, when the display is actually powered down, at which point it can be turned on again at any time by this application.
 - The WebOS device can only be turned on/off when the PC and the device are both connected to a network. 
