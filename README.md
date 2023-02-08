@@ -86,7 +86,7 @@ HOT tip! Enable the built in logger and check the output, it can be very useful 
 
 The 'LGTV companion.exe" also accepts command line arguments for integration in scripts or similar.
 
-*LGTV Companion.exe -[poweron|poweroff|screenon|screenoff|autoenable|autodisable|sethdmi1|sethdmi2|sethdmi3|sethdmi4] [Device1|Name] [Device2|Name] ... [DeviceX|Name]*
+*LGTV Companion.exe -[poweron|poweroff|screenon|screenoff|autoenable|autodisable|sethdmi1|sethdmi2|sethdmi3|sethdmi4|idle|unidle] [Device1|Name] [Device2|Name] ... [DeviceX|Name]*
 - *-poweron* - power on a device.
 - *-poweroff* - power off a device
 - *-screenon* - power on and enable the emitters, i e disable internal power saving mode and do not blank screen.
@@ -97,6 +97,8 @@ The 'LGTV companion.exe" also accepts command line arguments for integration in 
 - *-sethdmi4* - set HDMI input 4
 - *-autoenable* - temporarily enable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. (I personally use this for my home automation system).
 - *-autodisable* - temporarily disable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. 
+- *-idle* - enable user idle mode. This is a global setting.
+- *-unidle* - disable user idle mode. This is a global setting.
 - *[DeviceX|Name]* - device identifier. Either use Device1, Device2, ..., DeviceX or the friendly device name as determined in the User Interface, for example OLED48CX.
 
 Example usage: LGTV Companion.exe -poweron Device1 Device2 "LG OLED48CX" -autodisable Device2
