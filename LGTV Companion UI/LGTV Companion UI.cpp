@@ -61,6 +61,11 @@ CHANGELOG
 						- Improved logic for the monitor topology feature
 						- More help texts
 
+	v 2.1.0				- new command line options for setting/unsetting user idle mode (-idle, -unidle)
+						- bugfix: sunshine remote host support
+						- refactored code for common modules
+						- minor bugfixes
+
 	TODO:
 
 						- [ ] Feature to power on only when PC input s selected on TV (if possible)
@@ -1576,7 +1581,8 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"media players, production software or your web browser, In short, and simplified, this option is a more aggressively configured screen and "
 					"power saver. \n\n"
 					"The option to support remote streaming hosts will power off managed devices while the system is acting as streaming host or being remoted into. Supported "
-					"hosts include Nvidia gamestream, Moonlight, Steam Link and RDP. Please note that the devices will remain powered off until the remote connection is disconnected. ", 
+					"hosts include Nvidia gamestream, Moonlight, Steam Link and RDP. \n\nPlease note that the devices will remain powered off until the remote connection is disconnected. \n\n"
+					"Also note that the Sunshine streaming host support require Sunshine logging level be at minimum on level \"Info\" (default)",
 					L"Andvanced power options", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the pmulti-monitor conf
