@@ -4,24 +4,24 @@
 #include <powrprof.h>
 
 using namespace std;
-using json = nlohmann::json;
+using namespace jpersson77;
 
 //globals
-SERVICE_STATUS          gSvcStatus;
-SERVICE_STATUS_HANDLE   gSvcStatusHandle;
-HANDLE                  ghSvcStopEvent = NULL;
-DEV_BROADCAST_DEVICEINTERFACE filter;
-HDEVNOTIFY              gDevEvents;
-HPOWERNOTIFY            gPs1;
-json                    jsonPrefs;                          //contains the user preferences in json
-PREFS                   Prefs;                              //App preferences
-vector <CSession>       DeviceCtrlSessions;                 //CSession objects manage network connections with Display
-DWORD                   EventCallbackStatus = NULL;
-WSADATA                 WSAData;
-mutex                   log_mutex;
-wstring                 DataPath;
-vector<string>          HostIPs;
-bool					bIdleLog = true;
+SERVICE_STATUS					gSvcStatus;
+SERVICE_STATUS_HANDLE			gSvcStatusHandle;
+HANDLE							ghSvcStopEvent = NULL;
+DEV_BROADCAST_DEVICEINTERFACE	filter;
+HDEVNOTIFY						gDevEvents;
+HPOWERNOTIFY					gPs1;
+DWORD							EventCallbackStatus = NULL;
+WSADATA							WSAData;
+mutex							log_mutex;
+vector<string>					HostIPs;
+bool							bIdleLog = true;
+
+settings::Preferences			Prefs;
+vector <CSession>				DeviceCtrlSessions;                 //CSession objects manage network connections with Display
+
 
 wchar_t sddl[] = L"D:"
 L"(A;;CCLCSWRPWPDTLOCRRC;;;SY)"           // default permissions for local system
@@ -260,21 +260,22 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 		return;
 	}
 
-	//load the config file into json::Prefs and initiate the device control sessions
+	//load the config file and initiate the device control sessions
 	try {
-		if (ReadConfigFile())
-			InitDeviceSessions();
+		Prefs.Initialize();
 	}
 	catch (std::exception const& e)
 	{
 		wstring s = L"ERROR! Failed to read the configuration file. LGTV service is terminating. Error: ";
-		s += widen(e.what());
+		s += common::widen(e.what());
 		SvcReportEvent(EVENTLOG_ERROR_TYPE, s);
 		ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
 		//       UnregisterPowerSettingNotification(gPs1);
 		WSACleanup();
 		return;
 	}
+	//Initialise CSession objects
+	InitSessions();
 
 	//get local host IPs, if possible at this time
 	HostIPs = GetOwnIP();
@@ -615,16 +616,23 @@ bool SetSessionKey(string Key, string deviceid)
 {
 	if (Key.size() > 0 && deviceid.size() > 0)
 	{
-		wstring path = DataPath;
-		path += L"config.json";
+		wstring path = Prefs.DataPath;
+		path += CONFIG_FILE;
+		nlohmann::json jsonPrefs;
 
-		ofstream i(path.c_str());
+		ifstream i(path.c_str());
 		if (i.is_open())
 		{
-			jsonPrefs[deviceid]["SessionKey"] = Key;
-			i << setw(4) << jsonPrefs << endl;
+			i >> jsonPrefs;
 			i.close();
-			//          return true;
+			jsonPrefs[deviceid][JSON_DEVICE_SESSIONKEY] = Key;
+		}
+
+		ofstream o(path.c_str());
+		if (o.is_open())
+		{
+			o << setw(4) << jsonPrefs << endl;
+			o.close();
 		}
 	}
 	string s = deviceid;
@@ -633,193 +641,7 @@ bool SetSessionKey(string Key, string deviceid)
 	Log(s);
 	return true;
 }
-//   Read the configuration file into a json object and populate the preferences struct
-bool ReadConfigFile()
-{
-	WCHAR szPath[MAX_PATH];
-	if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, NULL, 0, szPath)))
-	{
-		string st = "LGTV Companion Service started (v ";
-		st += narrow(APPVERSION);
-		st += ") ---------------------------";
-		string ty = "Data path: ";
-		wstring path = szPath;
-		path += L"\\";
-		path += APPNAME;
-		path += L"\\";
-		CreateDirectory(path.c_str(), NULL);
-		ty += narrow(path);
-		Log(ty);
 
-		DataPath = path;
-
-		path += L"config.json";
-
-		ifstream i(path.c_str());
-		if (i.is_open())
-		{
-			json j;
-			i >> jsonPrefs;
-			i.close();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS];
-			if (!j.empty() && j.size() > 0)
-			{
-				Prefs.EventLogRestartString.clear();
-				for (auto& elem : j.items())
-					Prefs.EventLogRestartString.push_back(elem.value().get<string>());
-			}
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS];
-			if (!j.empty() && j.size() > 0)
-			{
-				Prefs.EventLogShutdownString.clear();
-				for (auto& elem : j.items())
-					Prefs.EventLogShutdownString.push_back(elem.value().get<string>());
-			}
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_VERSION];
-			if (!j.empty() && j.is_number())
-				Prefs.version = j.get<int>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT];
-			if (!j.empty() && j.is_number())
-				Prefs.PowerOnTimeout = j.get<int>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_LOGGING];
-			if (!j.empty() && j.is_boolean())
-				Prefs.Logging = j.get<bool>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANK];
-			if (!j.empty() && j.is_boolean())
-				Prefs.BlankWhenIdle = j.get<bool>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY];
-			if (!j.empty() && j.is_number())
-				Prefs.BlankScreenWhenIdleDelay = j.get<int>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE];
-			if (!j.empty() && j.is_boolean())
-				Prefs.TopologyPreferPowerEfficiency = j.get<bool>();
-
-			Log(st);
-			Log("Configuration file successfully read");
-			Log(ty);
-			return true;
-		}
-	}
-	return false;
-}
-//   Create and init device objects
-void InitDeviceSessions()
-{
-	if (jsonPrefs.empty())
-		return;
-
-	//Clear current sessions.
-	DeviceCtrlSessions.clear();
-
-	//Iterate nodes
-	for (const auto& item : jsonPrefs.items())
-	{
-		json j;
-		if (item.key() == JSON_PREFS_NODE)
-			break;
-		stringstream s;
-
-		SESSIONPARAMETERS params;
-
-		//DEVICEID
-		params.DeviceId = item.key();
-		s << params.DeviceId << ", ";
-		//NAME
-		if (item.value()["Name"].is_string())
-			params.Name = item.value()["Name"].get<string>();
-		s << params.Name;
-		//IP
-		s << ", with IP ";
-		if (item.value()["IP"].is_string())
-			params.IP = item.value()["IP"].get<string>();
-		s << params.IP << " initiated (";
-		//ENABLED
-		if (item.value()["Enabled"].is_boolean())
-			params.Enabled = item.value()["Enabled"].get<bool>();
-		s << "Enabled:" << (params.Enabled ? "yes" : "no") << ", ";
-		//NewConnectionMethod
-		if (item.value()["NewSockConnect"].is_boolean())
-			params.SSL = item.value()["NewSockConnect"].get<bool>();
-		s << "NewConn:" << (params.SSL ? "yes" : "no") << ", ";
-		//SUBNET AND WOL TYPE
-		if (item.value()["Subnet"].is_string())
-			params.Subnet = item.value()["Subnet"].get<string>();
-		if (item.value()["WOL"].is_number())
-			params.WOLtype = item.value()["WOL"].get<int>();
-		s << "WOL:" << params.WOLtype << ", ";
-		if (params.WOLtype == WOL_SUBNETBROADCAST && params.Subnet != "")
-			s << "SubnetMask:" << params.Subnet << ", ";
-		//PAIRING KEY
-		if (item.value()["SessionKey"].is_string())
-			params.SessionKey = item.value()["SessionKey"].get<string>();
-		s << "PairingKey:" << (params.SessionKey == "" ? "n/a" : params.SessionKey);
-		//MAC
-		s << ", MAC: ";
-		j = item.value()["MAC"];
-		if (!j.empty() && j.size() > 0)
-		{
-			for (auto& m : j.items())
-			{
-				params.MAC.push_back(m.value().get<string>());
-				s << m.value().get<string>() << " ";
-			}
-		}
-		else
-			s << "n/a";
-		//POWER OFF HDMI INPUT VERIFICATION
-		s << ", VerifyHdmiInput:";
-		if (item.value()["HDMIinputcontrol"].is_boolean())
-			params.HDMIinputcontrol = item.value()["HDMIinputcontrol"].get<bool>();
-		if (item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].is_number())
-			params.OnlyTurnOffIfCurrentHDMIInputNumberIs = item.value()["OnlyTurnOffIfCurrentHDMIInputNumberIs"].get<int>();
-		if (params.HDMIinputcontrol) {
-			s << params.OnlyTurnOffIfCurrentHDMIInputNumberIs;
-		}
-		else
-			s << "off";
-		//SET HDMI INPUT ON BOOT/RESUME
-		s << ", SetHdmiInput:";
-		if (item.value()["SetHDMIInputOnResume"].is_boolean())
-			params.SetHDMIInputOnResume = item.value()["SetHDMIInputOnResume"].get<bool>();
-		if (item.value()["SetHDMIInputOnResumeToNumber"].is_number())
-			params.SetHDMIInputOnResumeToNumber = item.value()["SetHDMIInputOnResumeToNumber"].get<int>();
-		if (params.SetHDMIInputOnResume)
-		{
-			s << params.SetHDMIInputOnResumeToNumber;
-		}
-		else
-			s << "off";
-		//SCREEN BLANKING ON USER IDLE
-		s << ", BlankOnIdle:";
-		params.BlankWhenIdle = Prefs.BlankWhenIdle;
-		params.BlankScreenWhenIdleDelay = Prefs.BlankScreenWhenIdleDelay;
-		if (params.BlankWhenIdle) {
-			s << "on(";
-			s << params.BlankScreenWhenIdleDelay;
-			s << "m)";
-		}
-		else
-			s << "off";
-
-		s << ")";
-
-		params.PowerOnTimeout = Prefs.PowerOnTimeout;
-
-		CSession S(&params);
-		S.DeviceID = params.DeviceId;
-		DeviceCtrlSessions.push_back(S);
-		Log(s.str());
-	}
-	return;
-}
 //   Broadcast power events (display on/off, resuming, rebooting etc) to the device objects
 bool DispatchSystemPowerEvent(DWORD dwMsg)
 {
@@ -867,7 +689,7 @@ void Log(string ss)
 	time_t rawtime;
 	struct tm timeinfo;
 	char buffer[80];
-	wstring path = DataPath;
+	wstring path = Prefs.DataPath;
 
 	time(&rawtime);
 	localtime_s(&timeinfo, &rawtime);
@@ -879,7 +701,7 @@ void Log(string ss)
 	s += ss;
 	s += "\n";
 
-	path += L"Log.txt";
+	path += LOG_FILE;
 	m.open(path.c_str(), ios::out | ios::app);
 	if (m.is_open())
 	{
@@ -925,7 +747,7 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 	for (auto& str : Prefs.EventLogShutdownString)
 	{
 		wstring w = L">";
-		w += widen(str);
+		w += common::widen(str);
 		w += L"<";
 
 		if (s.find(w) != wstring::npos)
@@ -937,7 +759,7 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 	for (auto& str : Prefs.EventLogRestartString)
 	{
 		wstring w = L">";
-		w += widen(str);
+		w += common::widen(str);
 		w += L"<";
 
 		if (s.find(w) != wstring::npos)
@@ -954,38 +776,7 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 
 	return 0;
 }
-//   Convert UTF-8 to wide
-wstring widen(string sInput) {
-	if (sInput == "")
-		return L"";
 
-	// Calculate target buffer size
-	long len = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, sInput.c_str(), (int)sInput.size(), NULL, 0);
-	if (len == 0)
-		return L"";
-
-	// Convert character sequence
-	wstring out(len, 0);
-	if (len != MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, sInput.c_str(), (int)sInput.size(), &out[0], (int)out.size()))
-		return L"";
-
-	return out;
-}
-//   Convert wide to UTF-8
-string narrow(wstring sInput) {
-	// Calculate target buffer size
-	long len = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, sInput.c_str(), (int)sInput.size(),
-		NULL, 0, NULL, NULL);
-	if (len == 0)
-		return "";
-
-	// Convert character sequence
-	string out(len, 0);
-	if (len != WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, sInput.c_str(), (int)sInput.size(), &out[0], (int)out.size(), NULL, NULL))
-		return "";
-
-	return out;
-}
 //   THREAD: The intra process communications (named pipe) thread. Runs for the duration of the service
 void IPCThread(void)
 {
@@ -1020,7 +811,7 @@ void IPCThread(void)
 				string t = buffer;
 				transform(t.begin(), t.end(), t.begin(), ::tolower);
 
-				vector <string> cmd = stringsplit(t, " ");
+				vector <string> cmd = common::stringsplit(t, " ");
 				if (cmd.size() > 0)
 				{
 					int param1 = 0;
@@ -1029,7 +820,7 @@ void IPCThread(void)
 					{
 						if (param == "-daemon")
 							param1 = APP_IPC_DAEMON;
-						if (param == "-poweron")
+						else if (param == "-poweron")
 							param1 = APP_CMDLINE_ON;
 						else if (param == "-poweroff")
 							param1 = APP_CMDLINE_OFF;
@@ -1052,13 +843,26 @@ void IPCThread(void)
 						else if (param == "-clearlog")
 						{
 							string w = "IPC, clear log  ";
-							wstring log = DataPath;
-							log += L"Log.txt";
-							w += narrow(log);
+							wstring log = Prefs.DataPath;
+							log += LOG_FILE;
+							w += common::narrow(log);
 							Log(w);
 							DeleteFile(log.c_str());
 						}
-
+						else if (param == "-idle")
+						{
+							if(Prefs.BlankScreenWhenIdle)
+								Log("IPC, Forcing user idle mode!");
+							else
+								Log("IPC, Can not force user idle mode, as the feature is not enabled in the global options!");
+						}
+						else if (param == "-unidle")
+						{
+							if(Prefs.BlankScreenWhenIdle)
+								Log("IPC, Unsetting user idle mode!");
+							else
+								Log("IPC, Can not unset user idle mode, as the feature is not enabled in the global options!");
+						}
 						else if (param1 > 0)
 						{
 							if (param1 == APP_IPC_DAEMON)
@@ -1071,7 +875,7 @@ void IPCThread(void)
 								{
 									wstring s = L"IPC, Daemon, a new version of this app is available for download here: ";
 									s += NEWRELEASELINK;
-									Log(narrow(s));
+									Log(common::narrow(s));
 								}
 								else if (param == "userbusy")
 								{
@@ -1181,7 +985,7 @@ void IPCThread(void)
 							{
 								for (auto& device : DeviceCtrlSessions)
 								{
-									SESSIONPARAMETERS s = device.GetParams();
+									settings::DEVICE s = device.GetParams();
 									string id = s.DeviceId;
 									string name = s.Name;
 									transform(id.begin(), id.end(), id.begin(), ::tolower);
@@ -1269,56 +1073,7 @@ void IPCThread(void)
 	}
 	return;
 }
-//   Split a string into a vector of strings, modified to accept quotation marks
-vector<string> stringsplit(string str, string token) {
-	vector<string>res;
-	while (str.size() > 0)
-	{
-		size_t index;
-		if (str[0] == '\"') // quotation marks
-		{
-			index = str.find("\"", 1);
-			if (index != string::npos)
-			{
-				if (index - 2 > 0)
-				{
-					string temp = str.substr(1, index - 1);
-					res.push_back(temp);
-				}
-				size_t next = str.find_first_not_of(token, index + token.size());
-				if (next != string::npos)
-					str = str.substr(next); //  str.substr(index + token.size());
-				else
-					str = "";
-			}
-			else
-			{
-				res.push_back(str);
-				str = "";
-			}
-		}
-		else // not quotation marks
-		{
-			index = str.find(token);
-			if (index != string::npos)
-			{
-				res.push_back(str.substr(0, index));
 
-				size_t next = str.find_first_not_of(token, index + token.size());
-				if (next != string::npos)
-					str = str.substr(next); //  str.substr(index + token.size());
-				else
-					str = "";
-			}
-			else {
-				res.push_back(str);
-				str = "";
-			}
-		}
-	}
-
-	return res;
-}
 // Get the local host ip, e.g 192.168.1.x
 vector <string> GetOwnIP(void)
 {
@@ -1341,4 +1096,67 @@ vector <string> GetOwnIP(void)
 		}
 	}
 	return IPs;
+}
+
+void InitSessions(void)
+{
+	string str = "LGTV Companion Service started (v ";
+	str += common::narrow(APP_VERSION);
+	str += ") ---------------------------";
+	Log(str);
+	str = "Data path: ";
+	str += common::narrow(Prefs.DataPath);
+	Log(str);
+
+	
+	for (auto& dev : Prefs.Devices)
+	{
+		stringstream s;
+		s << dev.DeviceId << ", ";
+		s << dev.Name;
+		s << ", with IP ";
+		s << dev.IP << " initiated (";
+		s << "Enabled:" << (dev.Enabled ? "yes" : "no") << ", ";
+		s << "NewConn:" << (dev.SSL ? "yes" : "no") << ", ";
+		s << "WOL:" << dev.WOLtype << ", ";
+		s << "SubnetMask:" << dev.Subnet << ", ";
+		s << "PairingKey:" << (dev.SessionKey == "" ? "n/a" : dev.SessionKey);
+		s << ", MAC: ";
+		if (!dev.MAC.empty() && dev.MAC.size() > 0)
+		{
+			for (auto& m : dev.MAC)
+			{
+				s << m << " ";
+			}
+		}
+		else
+			s << "n/a";
+		s << ", VerifyHdmiInput:";
+		if (dev.HDMIinputcontrol) 
+			s << dev.OnlyTurnOffIfCurrentHDMIInputNumberIs;
+		else
+			s << "off";
+		s << ", SetHdmiInput:";
+		if (dev.SetHDMIInputOnResume)
+			s << dev.SetHDMIInputOnResumeToNumber;
+		else
+			s << "off";
+
+		dev.BlankWhenIdle = Prefs.BlankScreenWhenIdle;
+		dev.BlankScreenWhenIdleDelay = Prefs.BlankScreenWhenIdleDelay;
+		s << ", BlankOnIdle:";
+		if (dev.BlankWhenIdle) {
+			s << "on(";
+			s << dev.BlankScreenWhenIdleDelay;
+			s << "m)";
+		}
+		else
+			s << "off";
+		s << ")";
+
+		CSession S(&dev);
+		S.DeviceID = dev.DeviceId;
+		DeviceCtrlSessions.push_back(S);
+		Log(s.str());
+	}
 }

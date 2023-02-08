@@ -1,17 +1,14 @@
 // See LGTV Companion UI.cpp for additional details
 #include "Service.h"
-//#include <boost/beast/websocket/ssl.hpp>
-//#include <boost/asio/ssl/stream.hpp>
-
 #include <boost/beast/core.hpp>
 #include <boost/beast/ssl.hpp>
-//#include <boost/beast/websocket.hpp>
 #include <boost/beast/websocket/ssl.hpp>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl/stream.hpp>
 
 using namespace std;
+using namespace jpersson77;
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace websocket = beast::websocket; // from <boost/beast/websocket.hpp>
@@ -20,9 +17,7 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 namespace ssl = boost::asio::ssl;       // from <boost/asio/ssl.hpp>
 using json = nlohmann::json;
 
-
-
-mutex mMutex;
+mutex			mMutex;
 
 namespace {
 	class NetEntryDeleter final {
@@ -65,14 +60,14 @@ namespace {
 			Log(log.str());
 			return boost::none;
 		}
-
 		Log(log.str());
 		return row.InterfaceLuid;
 	}
 
 	std::unique_ptr<NetEntryDeleter> CreateTransientLocalNetEntry(SOCKADDR_INET destination, unsigned char macAddress[6], string sDev) {
 		const auto luid = GetLocalInterface(destination, sDev);
-		if (!luid.has_value()) return nullptr;
+		if (!luid.has_value()) 
+			return nullptr;
 
 		MIB_IPNET_ROW2 row;
 		row.Address = destination;
@@ -80,17 +75,13 @@ namespace {
 		memcpy(row.PhysicalAddress, macAddress, sizeof(macAddress));
 		row.PhysicalAddressLength = sizeof(macAddress);
 		const auto result = CreateIpNetEntry2(&row);
-
-//		std::stringstream log;
-//		log << "CreateIpNetEntry2() = " << result;
-//		Log(log.str());
-
-		if (result != NO_ERROR) return nullptr;
+		if (result != NO_ERROR) 
+			return nullptr;
 		return std::make_unique<NetEntryDeleter>(*luid, destination);
 	}
 }
 
-CSession::CSession(SESSIONPARAMETERS* Params)
+CSession::CSession(settings::DEVICE* Params)
 {
 	Parameters = *Params;
 }
@@ -129,9 +120,9 @@ void CSession::Stop()
 	Parameters.Enabled = false;
 	mMutex.unlock();
 }
-SESSIONPARAMETERS CSession::GetParams(void)
+settings::DEVICE CSession::GetParams(void)
 {
-	SESSIONPARAMETERS copy;
+	settings::DEVICE copy;
 	//thread safe section
 	while (!mMutex.try_lock())
 		Sleep(MUTEX_WAIT);
@@ -416,7 +407,7 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 	}
 }
 //   THREAD: Spawned when the device should power ON. This thread manages the pairing key from the display and verifies that the display has been powered on
-void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, int Timeout, bool SendWOL)
+void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* CallingSessionThreadRunning, int Timeout, bool SendWOL)
 {
 	string screenonmess = R"({"id":"2","type" : "request","uri" : "ssap://com.webos.service.tvpower/power/turnOnScreen"})";
 	string getpowerstatemess = R"({"id": "1", "type": "request", "uri": "ssap://com.webos.service.tvpower/power/getPowerState"})";
@@ -441,10 +432,10 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 
 	// build the appropriate WebOS handshake
 	if (key == "")
-		handshake = narrow(HANDSHAKE_NOTPAIRED);
+		handshake = common::narrow(HANDSHAKE_NOTPAIRED);
 	else
 	{
-		handshake = narrow(HANDSHAKE_PAIRED);
+		handshake = common::narrow(HANDSHAKE_PAIRED);
 		size_t ckf = handshake.find(ck);
 		handshake.replace(ckf, ck.length(), key);
 	}
@@ -464,21 +455,20 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 			ssl::context ctx{ ssl::context::tlsv12_client };
 			//load_root_certificates(ctx); 
 
-		
-			//SSL
 			websocket::stream<beast::ssl_stream<tcp::socket>> wss{ ioc, ctx };	
 			websocket::stream<tcp::socket> ws{ ioc };
 
-
 			string host = hostip;
 
-			// try communicating with the display
 			auto const results = resolver.resolve(host, SSL?SERVICE_PORT_SSL:SERVICE_PORT);
+
 			auto ep = net::connect(SSL? get_lowest_layer(wss):ws.next_layer(), results);
 
 			//SSL set SNI Hostname
-			if(SSL)
+			if (SSL)
+			{
 				SSL_set_tlsext_host_name(wss.next_layer().native_handle(), host.c_str());
+			}
 
 			//build the host string for the decorator
 			host += ':' + std::to_string(ep.port());
@@ -537,7 +527,7 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 					logmsg += ", WARNING! Pairing key is invalid. Re-pairing forced!";
 					Log(logmsg);
 
-					handshake = narrow(HANDSHAKE_NOTPAIRED);
+					handshake = common::narrow(HANDSHAKE_NOTPAIRED);
 					if (SSL)
 					{
 						wss.write(net::buffer(std::string(handshake)));
@@ -675,7 +665,7 @@ void DisplayPowerOnThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Cal
 	return;
 }
 //   THREAD: Spawned to broadcast WOL (this is what actually wakes the display up)
-void WOLthread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, int Timeout)
+void WOLthread(settings::DEVICE* CallingSessionParameters, bool* CallingSessionThreadRunning, int Timeout)
 {
 	if (!CallingSessionParameters)
 		return;
@@ -702,8 +692,8 @@ void WOLthread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSession
 
 		if (WOLtype == WOL_SUBNETBROADCAST && subnet != "")
 		{
-			vector<string> vIP = stringsplit(IP, ".");
-			vector<string> vSubnet = stringsplit(subnet, ".");
+			vector<string> vIP = common::stringsplit(IP, ".");
+			vector<string> vSubnet = common::stringsplit(subnet, ".");
 			stringstream broadcastaddress;
 
 			if (vIP.size() == 4 && vSubnet.size() == 4)
@@ -733,8 +723,6 @@ void WOLthread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSession
 				Log(ss.str());
 				return;
 			}
-
-			//            LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
 		}
 		else if (WOLtype == WOL_IPSEND)
 		{
@@ -881,7 +869,7 @@ void WOLthread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSession
 	return;
 }
 //   THREAD: Spawned when the device should power OFF.
-void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, bool UserForced, bool BlankScreen)
+void DisplayPowerOffThread(settings::DEVICE* CallingSessionParameters, bool* CallingSessionThreadRunning, bool UserForced, bool BlankScreen)
 {
 	time_t origtim = time(0);
 
@@ -901,7 +889,7 @@ void DisplayPowerOffThread(SESSIONPARAMETERS* CallingSessionParameters, bool* Ca
 		string getactiveinputmess = R"({"id": "2", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})";
 		string poweroffmess = R"({"id": "3", "type" : "request", "uri" : "ssap://system/turnOff" })";
 		string screenoffmess = R"({"id": "4", "type" : "request", "uri" : "ssap://com.webos.service.tvpower/power/turnOffScreen"})";
-		string handshake = narrow(HANDSHAKE_PAIRED);
+		string handshake = common::narrow(HANDSHAKE_PAIRED);
 		string ck = "CLIENTKEYx0x0x0";
 		json j;
 		boost::string_view type;
@@ -1193,7 +1181,7 @@ threadoffend:
 }
 
 //   THREAD: Spawned when the device should select an HDMI input.
-void SetDisplayHdmiInputThread(SESSIONPARAMETERS* CallingSessionParameters, bool* CallingSessionThreadRunning, int Timeout, int HdmiInput)
+void SetDisplayHdmiInputThread(settings::DEVICE* CallingSessionParameters, bool* CallingSessionThreadRunning, int Timeout, int HdmiInput)
 {
 	string setinputmess = R"({"id": "3", "type" : "request", "uri" : "ssap://system.launcher/launch", "payload" :{"id":"com.webos.app.hdmiHDMIINPUT"}})";
 
@@ -1216,7 +1204,7 @@ void SetDisplayHdmiInputThread(SESSIONPARAMETERS* CallingSessionParameters, bool
 	size_t ckf = NULL;
 
 	//build handshake
-	handshake = narrow(HANDSHAKE_PAIRED);
+	handshake = common::narrow(HANDSHAKE_PAIRED);
 	ckf = handshake.find(ck);
 	handshake.replace(ckf, ck.length(), key);
 

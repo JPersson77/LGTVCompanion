@@ -24,9 +24,15 @@
     <ClInclude Include="LGTV Companion UI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Common\Common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="LGTV Companion UI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\Common.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -4,7 +4,6 @@
 #include <SDKDDKVer.h>
 #include <boost/beast.hpp>
 #include <boost/asio.hpp>
-//#include <boost/beast/websocket/ssl.hpp>
 #include <Windows.h>
 #include <system_error>
 #include <memory>
@@ -26,10 +25,7 @@
 #include <boost/optional.hpp>
 #include <boost/utility/string_view.hpp>
 #include <Iphlpapi.h>
-//#include <powrprof.h>
-
-
-#include "nlohmann/json.hpp"
+#include "../Common/Common.h"
 #include "Handshake.h"
 
 #pragma comment(lib, "Powrprof.lib")
@@ -38,27 +34,10 @@
 #pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "Iphlpapi.lib")
 
-#define APPNAME						    L"LGTV Companion"
-#define APPVERSION					    L"2.0.0"
 #define SVCNAME						    L"LGTVsvc"
 #define SVCDISPLAYNAME				    L"LGTV Companion Service"
 #define SERVICE_PORT                    "3000"
 #define SERVICE_PORT_SSL                "3001"
-
-#define JSON_PREFS_NODE                 "LGTV Companion"
-#define JSON_EVENT_RESTART_STRINGS      "LocalEventLogRestartString"
-#define JSON_EVENT_SHUTDOWN_STRINGS     "LocalEventLogShutdownString"
-#define JSON_VERSION                    "Version"
-#define JSON_LOGGING                    "ExtendedLog"
-#define JSON_PWRONTIMEOUT               "PowerOnTimeOut"
-#define DEFAULT_RESTART                 {"restart"}
-#define DEFAULT_SHUTDOWN                {"shutdown","power off"}
-#define JSON_IDLEBLANK                  "BlankWhenIdle"
-#define JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
-#define JSON_RDP_POWEROFF               "PowerOffDuringRDP"
-#define JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
-#define JSON_TOPOLOGYMODE				"TopologyPreferPowerEfficient"
-
 #define SERVICE_DEPENDENCIES		    L"Dhcp\0Dnscache\0LanmanServer\0\0"
 #define SERVICE_ACCOUNT				    NULL //L"NT AUTHORITY\\LocalService"
 #define MUTEX_WAIT          		    10   // thread wait in ms
@@ -82,80 +61,18 @@
 #define SYSTEM_EVENT_FORCESETHDMI       15
 #define SYSTEM_EVENT_BOOT               16
 #define SYSTEM_EVENT_TOPOLOGY           17
-
-#define APP_CMDLINE_ON                  1
-#define APP_CMDLINE_OFF                 2
-#define APP_CMDLINE_AUTOENABLE          3
-#define APP_CMDLINE_AUTODISABLE         4
-#define APP_CMDLINE_SCREENON            5
-#define APP_CMDLINE_SCREENOFF           6
-#define APP_IPC_DAEMON                  7
-#define APP_CMDLINE_SETHDMI1            8
-#define APP_CMDLINE_SETHDMI2            9
-#define APP_CMDLINE_SETHDMI3            10
-#define APP_CMDLINE_SETHDMI4            11
 #define APP_IPC_DAEMON_TOPOLOGY         12
-
-
-
-#define         WOL_NETWORKBROADCAST            1
-#define         WOL_IPSEND                      2
-#define         WOL_SUBNETBROADCAST             3
-
-#define         WOL_DEFAULTSUBNET               L"255.255.255.0"
-
-#define         PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
-
-#define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
-
-#ifndef SERVICE_CONTROL_USERMODEREBOOT	//not defined. Unclear diz
-#define SERVICE_CONTROL_USERMODEREBOOT	0x00000040
-#endif
-#ifndef SERVICE_ACCEPT_USERMODEREBOOT
-#define SERVICE_ACCEPT_USERMODEREBOOT	0x00000800
-#endif
-
-struct PREFS {
-	std::vector<std::string> EventLogRestartString = DEFAULT_RESTART;
-	std::vector<std::string> EventLogShutdownString = DEFAULT_SHUTDOWN;
-	bool Logging = false;
-	int version = 2;
-	int PowerOnTimeout = 40;
-	bool BlankWhenIdle = false;
-	int BlankScreenWhenIdleDelay = 10;
-	bool DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
-	bool TopologyPreferPowerEfficiency = true;
-};
-
-struct SESSIONPARAMETERS {
-	std::string DeviceId;
-	std::string IP;
-	std::vector<std::string> MAC;
-	std::string SessionKey;
-	int PowerOnTimeout = 40;
-	std::string Name;
-	bool Enabled = true;
-	std::string Subnet;
-	int WOLtype = 1;
-	bool HDMIinputcontrol = false;
-	int OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
-	bool BlankWhenIdle = false;
-	int BlankScreenWhenIdleDelay = 10;
-	bool SetHDMIInputOnResume = false;
-	int SetHDMIInputOnResumeToNumber = 1;
-	bool SSL = true;
-};
 
 class CSession {
 public:
-	CSession(SESSIONPARAMETERS*);
+	CSession(jpersson77::settings::DEVICE*);
 	~CSession();
 	void Run();
 	void RemoteHostConnected();
 	void RemoteHostDisconnected();
 	void Stop();
 	void SystemEvent(DWORD, int param = 0);
-	SESSIONPARAMETERS GetParams();
+	jpersson77::settings::DEVICE GetParams();
 	bool IsBusy();
 	void SetTopology(bool);
 	bool GetTopology();
@@ -173,31 +90,24 @@ private:
 	void TurnOffDisplay(bool forced, bool dimmed, bool blankscreen);
 	void SetDisplayHdmiInput(int HdmiInput);
 	bool bRemoteHostConnected = false;
-	SESSIONPARAMETERS   Parameters;
+	jpersson77::settings::DEVICE   Parameters;
 };
 
-VOID SvcInstall(void);
-VOID SvcUninstall(void);
-DWORD SvcCtrlHandler(DWORD, DWORD, LPVOID, LPVOID);
-
-VOID WINAPI SvcMain(DWORD, LPTSTR*);
-
-VOID ReportSvcStatus(DWORD, DWORD, DWORD);
-VOID SvcReportEvent(WORD, std::wstring);
-std::wstring GetErrorMessage(DWORD dwErrorCode);
-bool SetSessionKey(std::string Key, std::string deviceid);
-bool ReadConfigFile();
-void InitDeviceSessions();
-bool  DispatchSystemPowerEvent(DWORD);
-void Log(std::string);
-DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, EVT_HANDLE Event);
-std::wstring widen(std::string);
-std::string narrow(std::wstring);
-void DisplayPowerOnThread(SESSIONPARAMETERS*, bool*, int, bool);
-void DisplayPowerOffThread(SESSIONPARAMETERS*, bool*, bool, bool);
-void SetDisplayHdmiInputThread(SESSIONPARAMETERS*, bool*, int, int);
-
-void IPCThread(void);
-void WOLthread(SESSIONPARAMETERS*, bool*, int);
-std::vector<std::string> stringsplit(std::string str, std::string token);
+VOID			SvcInstall(void);
+VOID			SvcUninstall(void);
+DWORD			SvcCtrlHandler(DWORD, DWORD, LPVOID, LPVOID);
+VOID WINAPI		SvcMain(DWORD, LPTSTR*);
+VOID			ReportSvcStatus(DWORD, DWORD, DWORD);
+VOID			SvcReportEvent(WORD, std::wstring);
+std::wstring	GetErrorMessage(DWORD dwErrorCode);
+bool			SetSessionKey(std::string Key, std::string deviceid);
+bool			DispatchSystemPowerEvent(DWORD);
+void			Log(std::string);
+DWORD WINAPI	SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, EVT_HANDLE Event);
+void			DisplayPowerOnThread(jpersson77::settings::DEVICE*, bool*, int, bool);
+void			DisplayPowerOffThread(jpersson77::settings::DEVICE*, bool*, bool, bool);
+void			SetDisplayHdmiInputThread(jpersson77::settings::DEVICE*, bool*, int, int);
+void			IPCThread(void);
+void			WOLthread(jpersson77::settings::DEVICE*, bool*, int);
 std::vector<std::string> GetOwnIP(void);
+void			InitSessions(void);

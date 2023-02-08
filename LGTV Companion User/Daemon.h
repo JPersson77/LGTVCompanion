@@ -13,13 +13,10 @@
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #endif
 
-//#include "targetver.h"
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
-// Windows Header Files
 #include <windows.h>
-// C RunTime Header Files
 #include <stdlib.h>
 #include <string>
 #include <Shlobj_core.h>
@@ -36,103 +33,54 @@
 #include <initguid.h>
 #include <usbiodef.h>
 #include <Dbt.h>
+#include <algorithm>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <filesystem>
 #include "resource.h"
-#include "nlohmann/json.hpp"
 #include "WinToast-1.2.0/wintoastlib.h"
+#include "../Common/Common.h"
 
-#define			APPNAME_SHORT					L"LGTVdaemon"
-#define			APP_PATH					    L"LGTV Companion"
-#define			APPNAME_FULL					L"LGTV Companion Daemon"
-#define         APP_VERSION                     L"2.0.0"
-#define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
-#define			NOTIFY_NEW_PROCESS			    1
-
-#define         TIMER_MAIN                      18
-#define         TIMER_IDLE                      19
-#define         TIMER_TOPOLOGY                  20
-#define         TIMER_CHECK_PROCESSES			21
-
-#define         TIMER_MAIN_DELAY_WHEN_BUSY      5000
-#define         TIMER_MAIN_DELAY_WHEN_IDLE      100
-#define         TIMER_REMOTE_DELAY              10000
-#define         TIMER_TOPOLOGY_DELAY            8000
-#define         TIMER_CHECK_PROCESSES_DELAY     5000
-
-#define         APP_NEW_VERSION                 WM_USER+9
-#define         USER_DISPLAYCHANGE              WM_USER+10
-
-#define         JSON_PREFS_NODE                 "LGTV Companion"
-#define         JSON_VERSION                    "Version"
-#define         JSON_LOGGING                    "ExtendedLog"
-#define         JSON_AUTOUPDATE                 "AutoUpdate"
-#define         JSON_IDLEBLANK                  "BlankWhenIdle"
-#define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
-#define         JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
-#define         JSON_IDLEWHITELIST				"IdleWhiteListEnabled"
-#define         JSON_IDLEFULLSCREEN				"IdleFullscreen"
-#define         JSON_WHITELIST					"IdleWhiteList"
-#define         JSON_REMOTESTREAM				"RemoteStream"
-
-#define         TOPOLOGY_OK						1
-#define         TOPOLOGY_ERROR					2
-#define         TOPOLOGY_UNDETERMINED			3
-#define         TOPOLOGY_OK_DISABLE				4
-
-#define         PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
-#define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
-#define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases"
-#define         DONATELINK                      L"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=jorgen.persson@gmail.com&lc=US&item_name=Friendly+gift+for+the+development+of+LGTV+Companion&no_note=0&cn=&currency_code=EUR&bn=PP-DonationsBF:btn_donateCC_LG.gif:NonHosted"
-
+#define			APPNAME_SHORT							L"LGTVdaemon"
+#define			APPNAME_FULL							L"LGTV Companion Daemon"
+#define			NOTIFY_NEW_PROCESS						1
+#define         TIMER_MAIN								18
+#define         TIMER_IDLE								19
+#define         TIMER_TOPOLOGY							20
+#define         TIMER_CHECK_PROCESSES					21
+#define         TIMER_MAIN_DELAY_WHEN_BUSY				5000
+#define         TIMER_MAIN_DELAY_WHEN_IDLE				100
+#define         TIMER_REMOTE_DELAY						10000
+#define         TIMER_TOPOLOGY_DELAY					8000
+#define         TIMER_CHECK_PROCESSES_DELAY				5000
+#define         APP_NEW_VERSION							WM_USER+9
+#define         USER_DISPLAYCHANGE						WM_USER+10
+#define         APP_USER_IDLE_ON						WM_USER+20
+#define         APP_USER_IDLE_OFF						WM_USER+21
+#define         TOPOLOGY_OK								1
+#define         TOPOLOGY_ERROR							2
+#define         TOPOLOGY_UNDETERMINED					3
+#define         TOPOLOGY_OK_DISABLE						4
 #define			HSHELL_UNDOCUMENTED_FULLSCREEN_EXIT		0x36
+#define			REMOTE_CONNECT							1
+#define			REMOTE_DISCONNECT						0
+#define			REMOTE_STEAM_CONNECTED					0x0001
+#define			REMOTE_STEAM_NOT_CONNECTED				0x0002
+#define			REMOTE_NVIDIA_CONNECTED					0x0004
+#define			REMOTE_NVIDIA_NOT_CONNECTED				0x0008
+#define			REMOTE_RDP_CONNECTED					0x0010
+#define			REMOTE_RDP_NOT_CONNECTED				0x0020
+#define			REMOTE_SUNSHINE_CONNECTED				0x0040
+#define			REMOTE_SUNSHINE_NOT_CONNECTED			0x0080
+#define			SUNSHINE_REG							"SOFTWARE\\LizardByte\\Sunshine"
+#define			SUNSHINE_FILE_CONF						"sunshine.conf"
+#define			SUNSHINE_FILE_LOG						"sunshine.log"
+#define			SUNSHINE_FILE_SVC						L"sunshine.exe"
 
-#define			REMOTE_STEAM_CONNECTED					100
-#define			REMOTE_STEAM_NOT_CONNECTED				101
-#define			REMOTE_NVIDIA_CONNECTED					102
-#define			REMOTE_NVIDIA_NOT_CONNECTED				103
-#define			REMOTE_RDP_CONNECTED					104
-#define			REMOTE_RDP_NOT_CONNECTED				105
-
-struct REMOTE_STREAM {
-	bool bRemoteCurrentStatusNvidia = false;
-	bool bRemoteCurrentStatusSteam = false;
-	bool bRemoteCurrentStatusRDP = false;
-
-	const std::vector<std::wstring> stream_proc_list{
-	L"steam_monitor.exe" //steam server
-	//	L"streaming_client.exe",  //steam client
-	};
-	const std::vector<std::wstring> stream_usb_list{
-	L"usb#vid_0955&pid_b4f0" //nvidia
-	};
-};
-
-struct WHITELIST {
-	std::wstring Name;
-	std::wstring Application;
-};
-
-struct PREFS {
-	bool AutoUpdate = false;
-	bool BlankScreenWhenIdle = false;
-	int BlankScreenWhenIdleDelay = 10;
-	bool Logging = false;
-	int version = 2;
-	bool ToastInitialised = false;
-	bool AdhereTopology = false;
-	bool bIdleWhitelistEnabled = false;
-	bool bFullscreenCheckEnabled = false;
-	std::vector<WHITELIST> WhiteList;
-	bool RemoteStreamingCheck = false;
-	REMOTE_STREAM Remote;
-};
 
 class WinToastHandler : public WinToastLib::IWinToastHandler
 {
 public:
-	//    WinToastHandler() {}
-		// Public interfaces
 	void toastActivated() const override {
-		//       ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
 	}
 	void toastActivated(int actionIndex) const override {
 		ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
@@ -141,38 +89,23 @@ public:
 	void toastFailed() const override {}
 private:
 };
-struct SESSIONPARAMETERS {
-	std::string DeviceId;
-	std::string Name;
-	std::string UniqueDeviceKey;
-	bool Enabled = true;
-};
-struct DISPLAY_INFO {
-	DISPLAYCONFIG_TARGET_DEVICE_NAME target;
-	HMONITOR hMonitor;
-	HDC hdcMonitor;
-	RECT rcMonitor2;
-	MONITORINFOEX monitorinfo;
-};
 
 // Forward declarations of functions included in this code module:
 LRESULT CALLBACK		WndProc(HWND, UINT, WPARAM, LPARAM);
+
 bool					MessageExistingProcess(void);
-bool					ReadConfigFile();
-std::wstring			widen(std::string);
-std::string				narrow(std::wstring);
-std::vector<std::string> stringsplit(std::string, std::string);
 void					CommunicateWithService(std::string);
 void					VersionCheckThread(HWND);
 void					Log(std::wstring input);
-void					ReadDeviceConfig();
-std::vector<DISPLAY_INFO> QueryDisplays();
+std::vector<jpersson77::settings::DISPLAY_INFO> QueryDisplays();
 static BOOL	CALLBACK	meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);
 bool					CheckDisplayTopology(void);
 int						VerifyTopology();
-bool					CheckRunningProcesses(void);
+DWORD					CheckRemoteStreamingProcesses(void);
 bool					FullscreenApplicationRunning(void);
-void					RemoteStreamingEvent(int iEvent);
+void					RemoteStreamingEvent(DWORD dwType);
 void					WorkaroundFalseFullscreenWindows(void);
 static BOOL	CALLBACK	EnumWindowsProc(HWND hWnd, LPARAM lParam);
-std::wstring			GetWndText(HWND);
+DWORD					Sunshine_CheckLog(void);
+std::string				Sunshine_GetConfVal(std::string, std::string);
+std::string				Sunshine_GetLogFile();

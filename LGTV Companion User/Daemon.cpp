@@ -1,8 +1,8 @@
 #include "Daemon.h"
 
 using namespace std;
+using namespace jpersson77;
 using namespace WinToastLib;
-using json = nlohmann::json;
 
 // Globals:
 HINSTANCE                       hInstance;  // current instance
@@ -13,17 +13,14 @@ bool                            bDaemonVisible = true;
 bool                            bFirstRun = false;
 DWORD                           dwLastInputTick = 0;
 WinToastHandler                 m_WinToastHandler;
-wstring                         CommandLineParameters;
-wstring                         DataPath;
-json                            jsonPrefs;                          //contains the user preferences in json
-PREFS                           Prefs;
 HANDLE                          hPipe = INVALID_HANDLE_VALUE;
 INT64                           idToastFirstrun = NULL;
-INT64                           idToastNewversion = NULL;
-vector <SESSIONPARAMETERS>      Devices;     
-string							sCurrentlyRunningWhitelistedProcess = "";
+INT64                           idToastNewversion = NULL;     
 UINT							shellhookMessage;
 DWORD							daemon_startup_user_input_time = 0;
+UINT							ManualUserIdleMode = 0;
+
+settings::Preferences			Prefs;
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -40,6 +37,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	WindowTitle = APPNAME_FULL;
 	WindowTitle += L" v";
 	WindowTitle += APP_VERSION;
+	wstring CommandLineParameters;
 
 	//commandline processing
 	if (lpCmdLine)
@@ -61,17 +59,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			return 0;
 		}
 	}
-
-
 	shellhookMessage = RegisterWindowMessageW(L"SHELLHOOK");
-
 	//Initialize toast notifications
 	WinToast::WinToastError error;
 	WinToast::instance()->setAppName(L"LGTV Companion (Daemon)");
 	const auto aumi = WinToast::configureAUMI
 	(L"LGTV Companion (Daemon)", L"", L"", L"");
 	WinToast::instance()->setAppUserModelId(aumi);
-
 	if (!WinToast::instance()->initialize(&error)) {
 		wchar_t buf[250];
 		swprintf_s(buf, L"Failed to initialize Toast Notifications :%d", error);
@@ -85,15 +79,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 
 	// read the configuration file and init prefs
 	try {
-		ReadConfigFile();
-		ReadDeviceConfig();
+		Prefs.Initialize();
 	}
 	catch (...) {
 		CommunicateWithService("-daemon errorconfig");
 		return false;
 	}
-
-
 
 	// create main window (dialog)
 	hMainWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndProc);
@@ -122,6 +113,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	wstring startupmess = WindowTitle;
 	startupmess += L" is running.";
 	Log(startupmess);
+	CommunicateWithService("-daemon started");
 
 	HPOWERNOTIFY rsrn = RegisterSuspendResumeNotification(hMainWnd, DEVICE_NOTIFY_WINDOW_HANDLE);
 	HPOWERNOTIFY rpsn = RegisterPowerSettingNotification(hMainWnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
@@ -135,11 +127,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		NotificationFilter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
 		memcpy(&(NotificationFilter.dbcc_classguid), &(GUID_DEVINTERFACE_USB_DEVICE), sizeof(struct _GUID));
 		dev_notify = RegisterDeviceNotification(hMainWnd, &NotificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
-	}
-	if(Prefs.RemoteStreamingCheck)
+
 		WTSRegisterSessionNotification(hMainWnd, NOTIFY_FOR_ALL_SESSIONS);
 
-	CommunicateWithService("-daemon started");
+		Prefs.Remote.Sunshine_Log_File = Sunshine_GetLogFile();
+		if (Prefs.Remote.Sunshine_Log_File != "")
+		{
+			std::filesystem::path p(Prefs.Remote.Sunshine_Log_File);
+			Prefs.Remote.Sunshine_Log_Size = std::filesystem::file_size(p);
+		}
+	}
 
 	// message loop:
 	while (GetMessage(&msg, NULL, 0, 0))
@@ -150,6 +147,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			DispatchMessage(&msg);
 		}
 	}
+
 	if (Prefs.ToastInitialised)
 	{
 		if (idToastNewversion || idToastFirstrun)
@@ -252,10 +250,65 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WM_COMMAND:
 	{
+		switch (HIWORD(wParam))
+		{
+		case BN_CLICKED:
+		{
+			switch (LOWORD(wParam))
+			{
+
+			case IDC_BUTTON1:
+			{
+				std::filesystem::path p(Prefs.Remote.Sunshine_Log_File);
+				uintmax_t len = std::filesystem::file_size(p);
+			}break;
+			default:break;
+			}
+		}break;
+		default:break;
+		}
 	}break;
 
 	case WM_NOTIFY:
 	{
+	}break;
+	case APP_USER_IDLE_ON: //message sent from lgtv companion.exe
+	{
+		if (Prefs.BlankScreenWhenIdle)
+		{
+			ManualUserIdleMode = APP_USER_IDLE_ON;
+
+			bIdle = true;
+			bIdlePreventEarlyWakeup = false;
+			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
+			SetTimer(hWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
+			Log(L"User forced user idle mode!");
+			CommunicateWithService("-daemon useridle");
+		}
+		else
+			Log(L"Can not force user idle mode, as the feature is not enabled in the global options!");
+	}break;
+	case APP_USER_IDLE_OFF: //message sent from lgtv companion.exe
+	{
+		if (Prefs.BlankScreenWhenIdle)
+		{
+			LASTINPUTINFO lii;
+			lii.cbSize = sizeof(LASTINPUTINFO);
+			if (GetLastInputInfo(&lii))
+			{
+				ManualUserIdleMode = 0;
+
+				bIdle = false;
+				bIdlePreventEarlyWakeup = false;
+				SetTimer(hWnd, TIMER_MAIN, bDaemonVisible ? 1000 : TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
+				SetTimer(hWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
+				dwLastInputTick = lii.dwTime;
+				Log(L"User forced unsetting user idle mode!");
+				CommunicateWithService("-daemon userbusy");
+			}
+		}
+		else
+			Log(L"Can not force unset user idle mode, as the feature is not enabled in the global options!");
 	}break;
 	case WM_TIMER:
 	{
@@ -277,9 +330,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				if (bDaemonVisible)
 				{
-					wstring tick = widen(to_string(lii.dwTime));
+					wstring tick = common::widen(to_string(lii.dwTime));
 					DWORD time = (GetTickCount() - lii.dwTime) / 1000;
-					wstring ago = widen(to_string(time));
+					wstring ago = common::widen(to_string(time));
 
 //					SendMessage(GetDlgItem(hMainWnd, IDC_EDIT2), WM_SETTEXT, 0, (WPARAM)tick.c_str());
 					SendMessage(GetDlgItem(hMainWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());
@@ -295,6 +348,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						}
 						else
 						{
+							ManualUserIdleMode = 0;
 							SetTimer(hWnd, TIMER_MAIN, bDaemonVisible?1000: TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 							SetTimer(hWnd, TIMER_IDLE, Prefs.BlankScreenWhenIdleDelay * 60 * 1000, (TIMERPROC)NULL);
 							dwLastInputTick = lii.dwTime;
@@ -321,21 +375,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case TIMER_IDLE:
 		{
-			if (Prefs.bFullscreenCheckEnabled && (daemon_startup_user_input_time == -1))
-				if (FullscreenApplicationRunning())
-				{
-					Log(L"Fullscreen application prohibiting idle");
-					return 0;
-				}
-			if (Prefs.bIdleWhitelistEnabled)
+			if (ManualUserIdleMode == 0)
 			{
-				if (sCurrentlyRunningWhitelistedProcess != "")
+				if (Prefs.bFullscreenCheckEnabled && (daemon_startup_user_input_time == -1))
+					if (FullscreenApplicationRunning())
+					{
+						Log(L"Fullscreen application prohibiting idle");
+						return 0;
+					}
+				if (Prefs.bIdleWhitelistEnabled)
 				{
-					wstring mess = L"Whitelisted application prohibiting idle (";
-					mess += widen(sCurrentlyRunningWhitelistedProcess);
-					mess += L")";
-					Log(mess);
-					return 0;
+					if (Prefs.Remote.sCurrentlyRunningWhitelistedProcess != L"")
+					{
+						wstring mess = L"Whitelisted application prohibiting idle (";
+						mess += Prefs.Remote.sCurrentlyRunningWhitelistedProcess;
+						mess += L")";
+						Log(mess);
+						return 0;
+					}
 				}
 			}
 
@@ -350,23 +407,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}break;
 		case TIMER_CHECK_PROCESSES:
 		{
-			RemoteStreamingEvent(CheckRunningProcesses() ? REMOTE_STEAM_CONNECTED : REMOTE_STEAM_NOT_CONNECTED);
+			DWORD dw = CheckRemoteStreamingProcesses();
+			if(dw)
+				RemoteStreamingEvent(dw);
 		}break;
-		case REMOTE_STEAM_CONNECTED:
-		case REMOTE_NVIDIA_CONNECTED:
-		case REMOTE_RDP_CONNECTED:
+		case REMOTE_CONNECT:
 		{
-			KillTimer(hWnd, (UINT_PTR)wParam);
+			KillTimer(hWnd, (UINT_PTR)REMOTE_CONNECT);
 			CommunicateWithService("-daemon remote_connect");
 		}break;
-		case REMOTE_STEAM_NOT_CONNECTED:
-		case REMOTE_NVIDIA_NOT_CONNECTED:
-		case REMOTE_RDP_NOT_CONNECTED:
+		case REMOTE_DISCONNECT:
 		{
-			KillTimer(hWnd, (UINT_PTR)wParam);
+			KillTimer(hWnd, (UINT_PTR)REMOTE_DISCONNECT);
 			CommunicateWithService("-daemon remote_disconnect");
 		}break;
-
 		case TIMER_TOPOLOGY:
 		{
 			KillTimer(hWnd, TIMER_TOPOLOGY);
@@ -412,8 +466,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					templ.setTextField(L"Invalidated monitor topology configuration!", WinToastTemplate::FirstLine);
 					templ.setTextField(L"A change to the system has invalidated the multi-monitor configuration. Please run the configuration guide in the global options.", WinToastTemplate::SecondLine);
 
-//					templ.addAction(L"Download");
-
 					// Read the additional options section in the article
 					templ.setDuration(WinToastTemplate::Duration::Long);
 					templ.setAudioOption(WinToastTemplate::AudioOption::Default);
@@ -444,7 +496,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			return true;
 		}break;
 		case PBT_APMRESUMEAUTOMATIC:
-			//            case PBT_APMRESUMESUSPEND:
 		{
 			bIdle = false;
 			dwLastInputTick = 0;
@@ -493,7 +544,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		default:break;
 		}
 	}break;
-
 	case USER_DISPLAYCHANGE:
 	{
 		CheckDisplayTopology();
@@ -523,7 +573,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				{
 				case DBT_DEVICEARRIVAL:
 				{
-					for (auto& dev : Prefs.Remote.stream_usb_list)
+					for (auto& dev : Prefs.Remote.stream_usb_list_gamestream)
 					{
 						if (path.find(dev, 0) != wstring::npos)
 						{
@@ -534,7 +584,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}break;
 				case DBT_DEVICEREMOVECOMPLETE:
 				{
-					for (auto& dev : Prefs.Remote.stream_usb_list)
+					for (auto& dev : Prefs.Remote.stream_usb_list_gamestream)
 					{
 						if (path.find(dev, 0) != wstring::npos)
 						{
@@ -571,6 +621,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		return true;
 	}break;
+
 	case WM_CLOSE:
 	{
 		DestroyWindow(hWnd);
@@ -622,120 +673,7 @@ bool MessageExistingProcess(void)
 	}
 	return false;
 }
-//   Read the configuration file into a json object and populate the preferences struct
-bool ReadConfigFile()
-{
-	WCHAR szPath[MAX_PATH];
-	if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, NULL, 0, szPath)))
-	{
-		wstring path = szPath;
-		path += L"\\";
-		path += APP_PATH;
-		path += L"\\";
-		CreateDirectory(path.c_str(), NULL);
-
-		DataPath = path;
-
-		path += L"config.json";
-
-		ifstream i(path.c_str());
-		if (i.is_open())
-		{
-			json j;
-			i >> jsonPrefs;
-			i.close();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_VERSION];
-			if (!j.empty() && j.is_number())
-				Prefs.version = j.get<int>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_LOGGING];
-			if (!j.empty() && j.is_boolean())
-				Prefs.Logging = j.get<bool>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_AUTOUPDATE];
-			if (!j.empty() && j.is_boolean())
-				Prefs.AutoUpdate = j.get<bool>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANK];
-			if (!j.empty() && j.is_boolean())
-				Prefs.BlankScreenWhenIdle = j.get<bool>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY];
-			if (!j.empty() && j.is_number())
-				Prefs.BlankScreenWhenIdleDelay = j.get<int>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY];
-			if (!j.empty() && j.is_boolean())
-				Prefs.AdhereTopology = j.get<bool>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST];
-			if (!j.empty() && j.is_boolean())
-				Prefs.bIdleWhitelistEnabled = j.get<bool>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN];
-			if (!j.empty() && j.is_boolean())
-				Prefs.bFullscreenCheckEnabled = j.get<bool>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM];
-			if (!j.empty() && j.is_boolean())
-				Prefs.RemoteStreamingCheck = j.get<bool>();
-
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
-			if (!j.empty() && j.size() > 0)
-			{
-				for (auto& item : j.items())
-				{
-					if (item.value().is_string())
-					{
-						WHITELIST w;
-						w.Name = widen(item.key());
-						w.Application = widen(item.value().get<string>());
-						Prefs.WhiteList.push_back(w);
-					}
-
-				}
-			}
-
-			return true;
-		}
-	}
-	return false;
-}
-//   Convert UTF-8 to wide
-wstring widen(string sInput) {
-	if (sInput == "")
-		return L"";
-
-	// Calculate target buffer size
-	long len = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, sInput.c_str(), (int)sInput.size(), NULL, 0);
-	if (len == 0)
-		return L"";
-
-	// Convert character sequence
-	wstring out(len, 0);
-	if (len != MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, sInput.c_str(), (int)sInput.size(), &out[0], (int)out.size()))
-		return L"";
-
-	return out;
-}
-//   Convert wide to UTF-8
-string narrow(wstring sInput) {
-	// Calculate target buffer size
-	long len = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, sInput.c_str(), (int)sInput.size(),
-		NULL, 0, NULL, NULL);
-	if (len == 0)
-		return "";
-
-	// Convert character sequence
-	string out(len, 0);
-	if (len != WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, sInput.c_str(), (int)sInput.size(), &out[0], (int)out.size(), NULL, NULL))
-		return "";
-
-	return out;
-}
-
-//   Send the commandline to the service
+//   communicate with service via IPC
 void CommunicateWithService(string input)
 {
 	DWORD dwWritten;
@@ -752,7 +690,7 @@ void CommunicateWithService(string input)
 			(DWORD)input.length() + 1,   // = length of string + terminating '\0' !!!
 			&dwWritten,
 			NULL);
-		Log(widen(input));
+		Log(common::widen(input));
 	}
 	else
 		Log(L"Failed to connect to named pipe. Service may be stopped.");
@@ -771,13 +709,13 @@ void Log(wstring input)
 	if (!bDaemonVisible)
 		return;
 
-	time(&rawtime);
+	std::time(&rawtime);
 	localtime_s(&timeinfo, &rawtime);
 
 	strftime(buffer, 80, "%a %H:%M:%S > ", &timeinfo);
 	puts(buffer);
 
-	wstring logmess = widen(buffer);
+	wstring logmess = common::widen(buffer);
 	logmess += input;
 	logmess += L"\r\n";
 
@@ -818,8 +756,8 @@ void VersionCheckThread(HWND hWnd)
 			size_t end = s.find("\"", begin);
 			string lastver = s.substr(begin, end - begin);
 
-			vector <string> local_ver = stringsplit(narrow(APP_VERSION), ".");
-			vector <string> remote_ver = stringsplit(lastver, ".");
+			vector <string> local_ver = common::stringsplit(common::narrow(APP_VERSION), ".");
+			vector <string> remote_ver = common::stringsplit(lastver, ".");
 
 			if (local_ver.size() < 3 || remote_ver.size() < 3)
 				return;
@@ -841,60 +779,11 @@ void VersionCheckThread(HWND hWnd)
 	}
 	return;
 }
-//   Split a string into a vecor of words
-vector<string> stringsplit(string str, string token) {
-	vector<string>res;
-	while (str.size()) {
-		int index = (int)str.find(token);
-		if (index != string::npos) {
-			res.push_back(str.substr(0, index));
-			str = str.substr(index + token.size());
-			if (str.size() == 0)res.push_back(str);
-		}
-		else {
-			res.push_back(str);
-			str = "";
-		}
-	}
-	return res;
-}
-void ReadDeviceConfig()
-{
-	if (jsonPrefs.empty())
-		return;
-
-	//Clear current sessions.
-	Devices.clear();
-
-	//Iterate nodes
-	for (const auto& item : jsonPrefs.items())
-	{
-		json j;
-		if (item.key() == JSON_PREFS_NODE)
-			break;
-
-		SESSIONPARAMETERS params;
-
-		params.DeviceId = item.key();
-
-		if (item.value()["Name"].is_string())
-			params.Name = item.value()["Name"].get<string>();
-
-		if (item.value()["UniqueDeviceKey"].is_string())
-			params.UniqueDeviceKey = item.value()["UniqueDeviceKey"].get<string>();
-
-		if (item.value()["Enabled"].is_boolean())
-			params.Enabled = item.value()["Enabled"].get<bool>();
-
-		Devices.push_back(params);
-	}
-	return;
-}
 
 // get a vector of all currently active LG displays
-vector<DISPLAY_INFO> QueryDisplays()
+vector<settings::DISPLAY_INFO> QueryDisplays()
 {
-	vector<DISPLAY_INFO> targets;
+	vector<settings::DISPLAY_INFO> targets;
 
 	//populate targets struct with information about attached displays
 	EnumDisplayMonitors(NULL, NULL, meproc, (LPARAM)&targets);
@@ -907,7 +796,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 {
 	if (!pData)
 		return false;
-	vector<DISPLAY_INFO>* targets = (vector<DISPLAY_INFO> *) pData;
+	vector<settings::DISPLAY_INFO>* targets = (vector<settings::DISPLAY_INFO> *) pData;
 	UINT32 requiredPaths, requiredModes;
 	vector<DISPLAYCONFIG_PATH_INFO> paths;
 	vector<DISPLAYCONFIG_MODE_INFO> modes;
@@ -957,7 +846,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 			transform(FriendlyName.begin(), FriendlyName.end(), FriendlyName.begin(), ::tolower);
 			if (FriendlyName.find(L"lg tv") != wstring::npos)
 			{
-				DISPLAY_INFO di;
+				settings::DISPLAY_INFO di;
 				di.monitorinfo = mi;
 				di.hMonitor = hMonitor;
 				di.hdcMonitor = hdc;
@@ -975,16 +864,16 @@ bool CheckDisplayTopology(void)
 {
 	stringstream s;
 	s << "-daemon topology ";
-	vector<DISPLAY_INFO> displays = QueryDisplays();
-	if (Devices.size() == 0)
+	vector<settings::DISPLAY_INFO> displays = QueryDisplays();
+	if (Prefs.Devices.size() == 0)
 		return false;
 	if (displays.size() > 0)
 	{
 		for (auto &disp : displays)
 		{
-			for (auto &dev : Devices)
+			for (auto &dev : Prefs.Devices)
 			{
-				string ActiveDisplay = narrow(disp.target.monitorDevicePath);
+				string ActiveDisplay = common::narrow(disp.target.monitorDevicePath);
 				string DeviceString = dev.UniqueDeviceKey;
 				transform(ActiveDisplay.begin(), ActiveDisplay.end(), ActiveDisplay.begin(), ::tolower);
 				transform(DeviceString.begin(), DeviceString.end(), DeviceString.begin(), ::tolower);
@@ -1006,10 +895,10 @@ int VerifyTopology(void)
 
 	if (!Prefs.AdhereTopology)
 		return TOPOLOGY_OK_DISABLE;
-	if (Devices.size() == 0)
+	if (Prefs.Devices.size() == 0)
 		return TOPOLOGY_OK_DISABLE;
 
-	vector<DISPLAY_INFO> displays = QueryDisplays();
+	vector<settings::DISPLAY_INFO> displays = QueryDisplays();
 	if (displays.size() == 0)
 		return TOPOLOGY_UNDETERMINED;
 
@@ -1017,9 +906,9 @@ int VerifyTopology(void)
 	{
 		match = false;
 
-		for (auto& dev : Devices)
+		for (auto& dev : Prefs.Devices)
 		{
-			string ActiveDisplay = narrow(disp.target.monitorDevicePath);
+			string ActiveDisplay = common::narrow(disp.target.monitorDevicePath);
 			string DeviceString = dev.UniqueDeviceKey;
 			transform(ActiveDisplay.begin(), ActiveDisplay.end(), ActiveDisplay.begin(), ::tolower);
 			transform(DeviceString.begin(), DeviceString.end(), DeviceString.begin(), ::tolower);
@@ -1032,60 +921,73 @@ int VerifyTopology(void)
 	return TOPOLOGY_OK;
 }
 
-bool CheckRunningProcesses(void)
+DWORD CheckRemoteStreamingProcesses(void)
 {
 	bool bWhiteListConfigured = Prefs.WhiteList.size() > 0 ? true : false;
-	string sWhitelistProcessFound = "";
-	bool bWhitelistProessFound = false;
+	bool bWhitelistProcessFound = false;
 	bool bStreamingProcessFound = false;
+	bool bSunshineSvcProcessFound = false;
+	wstring sWhitelistProcessFound = L"";
+	DWORD ReturnValue = 0;
+
+	// Iterate over currently running processes
 	PROCESSENTRY32 entry;
-
 	entry.dwSize = sizeof(PROCESSENTRY32);
-
 	const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
-
 	if (!Process32First(snapshot, &entry)) {
 		CloseHandle(snapshot);
 		Log(L"Failed to iterate running processes");
-		return "";
+		return NULL;
 	}
-
-	do {
-		if (Prefs.bIdleWhitelistEnabled && bWhiteListConfigured && !bWhitelistProessFound)
-		{
+	do 
+	{
+		// look for user idle mode whitelisted processes
+		if (Prefs.bIdleWhitelistEnabled && bWhiteListConfigured && !bWhitelistProcessFound)
 			for (auto& w : Prefs.WhiteList)
-			{
 				if (w.Application != L"")
-				{
 					if (!_tcsicmp(entry.szExeFile, w.Application.c_str()))
 					{
 						if(w.Name != L"")
-							sWhitelistProcessFound = narrow(w.Name);
+							sWhitelistProcessFound = w.Name;
 						else
-							sWhitelistProcessFound = "Generic";
-						bWhitelistProessFound = true;
+							sWhitelistProcessFound = L"<unnamed>";
+						bWhitelistProcessFound = true;
 					}
-				}
-			}
-		}
+		// look for currently running known streaming processes
 		if (Prefs.RemoteStreamingCheck && !bStreamingProcessFound)
-		{
 			for (auto& w : Prefs.Remote.stream_proc_list)
-			{
 				if (!_tcsicmp(entry.szExeFile, w.c_str()))
-				{
 					bStreamingProcessFound = true;
-				}
-			}
-		}
 
-	} while (Process32Next(snapshot, &entry) && !(bStreamingProcessFound && bWhitelistProessFound));
+		// look for currently running sushine service process
+		if (Prefs.RemoteStreamingCheck && !bSunshineSvcProcessFound)
+			if (!_tcsicmp(entry.szExeFile, SUNSHINE_FILE_SVC))
+				bSunshineSvcProcessFound = true;
+
+	} while (!(bStreamingProcessFound && bWhitelistProcessFound && bSunshineSvcProcessFound) && Process32Next(snapshot, &entry));
 
 	CloseHandle(snapshot);
 
-	sCurrentlyRunningWhitelistedProcess = sWhitelistProcessFound;
+	// was sunshine service found currently running?
+	if (bSunshineSvcProcessFound && (Prefs.Remote.Sunshine_Log_File != ""))
+	{
+		std::filesystem::path p(Prefs.Remote.Sunshine_Log_File);
+		uintmax_t Size = std::filesystem::file_size(p);
+		if (Size != Prefs.Remote.Sunshine_Log_Size)
+		{
+			ReturnValue ^= Sunshine_CheckLog();
+			Prefs.Remote.Sunshine_Log_Size = Size;
+		}
+	}
+	else
+		ReturnValue ^= REMOTE_SUNSHINE_NOT_CONNECTED;
 
-	return bStreamingProcessFound;
+	// was a remote streaming process currently running?
+	ReturnValue ^= bStreamingProcessFound ? REMOTE_STEAM_CONNECTED : REMOTE_STEAM_NOT_CONNECTED;
+
+	// was a user idle mode whitelisted process currently running?
+	Prefs.Remote.sCurrentlyRunningWhitelistedProcess = sWhitelistProcessFound;
+	return ReturnValue;
 }
 bool FullscreenApplicationRunning(void)
 {
@@ -1117,7 +1019,7 @@ static BOOL	CALLBACK	EnumWindowsProc(HWND hWnd, LPARAM lParam)
 
 	const wchar_t* const nonRude = L"NonRudeHWND";
 	{
-		wstring window_name = GetWndText(hWnd);
+		wstring window_name = common::GetWndText(hWnd);
 		transform(window_name.begin(), window_name.end(), window_name.begin(), ::tolower);
 		if (window_name.find(L"nvidia geforce overlay") != wstring::npos)
 		{
@@ -1143,79 +1045,199 @@ static BOOL	CALLBACK	EnumWindowsProc(HWND hWnd, LPARAM lParam)
 	}
 	return true;
 }
-void RemoteStreamingEvent(int iEvent)
+void RemoteStreamingEvent(DWORD dwType)
 {
 	if (Prefs.RemoteStreamingCheck)
 	{
-		bool bConnected = Prefs.Remote.bRemoteCurrentStatusSteam || Prefs.Remote.bRemoteCurrentStatusNvidia || Prefs.Remote.bRemoteCurrentStatusRDP;
-		switch (iEvent)
+		bool bCurrentlyConnected = Prefs.Remote.bRemoteCurrentStatusSteam || Prefs.Remote.bRemoteCurrentStatusNvidia || Prefs.Remote.bRemoteCurrentStatusRDP || Prefs.Remote.bRemoteCurrentStatusSunshine;
+
+		if (dwType & REMOTE_STEAM_CONNECTED)
 		{
-		case REMOTE_STEAM_CONNECTED:
-		{
-			if (!bConnected)
+			if (!Prefs.Remote.bRemoteCurrentStatusSteam)
 			{	
-				Log(L"Steam Stream connected.");
+				Log(L"Steam gamestream connected.");
 				Prefs.Remote.bRemoteCurrentStatusSteam = true;
-				SetTimer(hMainWnd, (UINT_PTR)iEvent, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
 			}
-		}break;
-		case REMOTE_STEAM_NOT_CONNECTED:
+		}
+		else if (dwType & REMOTE_STEAM_NOT_CONNECTED)
 		{
 			if (Prefs.Remote.bRemoteCurrentStatusSteam)
 			{
-				Log(L"Steam Stream disconnected.");
+				Log(L"Steam gamestream disconnected.");
 				Prefs.Remote.bRemoteCurrentStatusSteam = false;
-				SetTimer(hMainWnd, (UINT_PTR)iEvent, 1000, (TIMERPROC)NULL);
 			}
-		}break;
-		case REMOTE_NVIDIA_CONNECTED:
+		}
+		if (dwType & REMOTE_NVIDIA_CONNECTED)
 		{
-			if (!bConnected)
+			if (!Prefs.Remote.bRemoteCurrentStatusNvidia)
 			{
-				Log(L"Nvidia Gamestream connected.");
+				Log(L"nVidia gamestream connected.");
 				Prefs.Remote.bRemoteCurrentStatusNvidia = true;
-				SetTimer(hMainWnd, (UINT_PTR)iEvent, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
 			}
-		}break;
-		case REMOTE_NVIDIA_NOT_CONNECTED:
+		}
+		else if (dwType & REMOTE_NVIDIA_NOT_CONNECTED)
 		{
 			if (Prefs.Remote.bRemoteCurrentStatusNvidia)
 			{
-				Log(L"Nvidia Gamestream disconnected.");
+				Log(L"nVidia gamestream disconnected.");
 				Prefs.Remote.bRemoteCurrentStatusNvidia = false;
-				SetTimer(hMainWnd, (UINT_PTR)iEvent, 1000, (TIMERPROC)NULL);
 			}
-		}break;
-		case REMOTE_RDP_CONNECTED:
+		}
+		if (dwType & REMOTE_SUNSHINE_CONNECTED)
 		{
-			if (!bConnected)
+			if (!Prefs.Remote.bRemoteCurrentStatusSunshine)
+			{
+				Log(L"Sunshine gamestream connected.");
+				Prefs.Remote.bRemoteCurrentStatusSunshine = true;
+			}
+		}
+		else if (dwType & REMOTE_SUNSHINE_NOT_CONNECTED)
+		{
+			if (Prefs.Remote.bRemoteCurrentStatusSunshine)
+			{
+				Log(L"Sunshine gamestream disconnected.");
+				Prefs.Remote.bRemoteCurrentStatusSunshine = false;
+			}
+		}
+		if (dwType & REMOTE_RDP_CONNECTED)
+		{
+			if (!Prefs.Remote.bRemoteCurrentStatusRDP)
 			{
 				Log(L"RDP connected.");
 				Prefs.Remote.bRemoteCurrentStatusRDP = true;
-				SetTimer(hMainWnd, (UINT_PTR)iEvent, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
 			}
-		}break;
-		case REMOTE_RDP_NOT_CONNECTED:
+		}
+		else if (dwType & REMOTE_RDP_NOT_CONNECTED)
 		{
 			if (Prefs.Remote.bRemoteCurrentStatusRDP)
 			{
-				Log(L"RDP connected.");
+				Log(L"RDP disconnected.");
 				Prefs.Remote.bRemoteCurrentStatusRDP = false;
-				SetTimer(hMainWnd, (UINT_PTR)iEvent, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
 			}
-		}break;
-		default:break;
 		}
+		bool bConnect = Prefs.Remote.bRemoteCurrentStatusSteam || Prefs.Remote.bRemoteCurrentStatusNvidia || Prefs.Remote.bRemoteCurrentStatusRDP || Prefs.Remote.bRemoteCurrentStatusSunshine;
+
+		if(bCurrentlyConnected && !bConnect)
+			SetTimer(hMainWnd, (UINT_PTR)REMOTE_DISCONNECT, 1000, (TIMERPROC)NULL);
+		else if (!bCurrentlyConnected && bConnect)
+			SetTimer(hMainWnd, (UINT_PTR)REMOTE_CONNECT, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
 	}
 	return;
 }
-wstring GetWndText(HWND hWnd)
+
+DWORD Sunshine_CheckLog(void)
 {
-	int len = GetWindowTextLength(hWnd) + 1;
-	if (len == 1)
-		return L"";
-	vector<wchar_t> buf(len);
-	GetWindowText(hWnd, &buf[0], len);
-	wstring text = &buf[0];
-	return text;
+	string log;
+	ifstream t(Prefs.Remote.Sunshine_Log_File);
+	if (t.is_open())
+	{
+		stringstream buffer;
+		t.seekg(-5000, ios_base::end);
+		buffer << t.rdbuf();
+		string log = buffer.str();
+		t.close();
+
+		int type;
+		size_t pos_connect = log.rfind("CLIENT CONNECTED");
+		size_t pos_disconnect = log.rfind("CLIENT DISCONNECTED");
+		if (pos_connect == string::npos && pos_disconnect == string::npos)
+			return 0;
+		else if (pos_connect == string::npos)
+			type = REMOTE_SUNSHINE_NOT_CONNECTED;
+		else if (pos_disconnect == string::npos)
+			type = REMOTE_SUNSHINE_CONNECTED;
+		else
+			type = (pos_connect > pos_disconnect) ? REMOTE_SUNSHINE_CONNECTED : REMOTE_SUNSHINE_NOT_CONNECTED;
+
+		size_t begin = log.rfind("[", type == REMOTE_SUNSHINE_CONNECTED ? pos_connect : pos_disconnect);
+		string time = log.substr(begin + 1, 19); //2023:02:02:00:04:38
+		time[4] = '-';
+		time[7] = '-';
+		time[10] = ' ';
+		time += ".000"; //2023-02-02 00:04:38.000
+		std::tm tmTime = boost::posix_time::to_tm(boost::posix_time::time_from_string(time));
+
+		time_t entry_time = mktime(&tmTime);
+		time_t now_time = std::time(0);
+		double seconds = difftime(now_time, entry_time);
+		if (seconds < (DOUBLE)10)
+			return type;
+	}
+	return 0;
+}
+
+string Sunshine_GetLogFile()
+{
+	string Sunshine_Config;
+	string configuration_path;
+	string configuration_text;
+	string log_file;
+
+	HKEY hKey = NULL;
+	LPCSTR pszSubkey = SUNSHINE_REG;
+	LPCSTR pszValueName = "";
+	//Get sunshine install path from registry
+	if (RegOpenKeyA(HKEY_LOCAL_MACHINE, pszSubkey, &hKey) == ERROR_SUCCESS)
+	{
+		// Buffer to store string read from registry
+		CHAR szValue[MAX_PATH];
+		DWORD cbValueLength = sizeof(szValue);
+
+		// Query string value
+		if (RegQueryValueExA(hKey,pszValueName,NULL,NULL,reinterpret_cast<LPBYTE>(&szValue),&cbValueLength)== ERROR_SUCCESS)
+		{
+			configuration_path = szValue;
+			configuration_path += "\\config\\";
+			Sunshine_Config = configuration_path;
+			Sunshine_Config += SUNSHINE_FILE_CONF;
+
+			//open the configuration file
+			ifstream t(Sunshine_Config);
+			if (t.is_open())
+			{
+				stringstream buffer;
+				buffer << t.rdbuf();
+				configuration_text = buffer.str();
+				t.close();
+
+				string s = Sunshine_GetConfVal(configuration_text, "min_log_level");
+				if (s != "" && s != "2" && s != "1" && s != "0") 
+				{
+					Log(L"Logging need to be at minimum on level \"info\" in Sunshine.");
+					return "";
+				}
+
+				s = Sunshine_GetConfVal(configuration_text, "log_path");
+				if (s == "") //DEFAULT
+				{
+					log_file = configuration_path;
+					log_file += SUNSHINE_FILE_LOG;
+				}
+				else
+				{
+					filesystem::path log_p(s);
+					filesystem::current_path(configuration_path);
+					filesystem::path log_abs (filesystem::absolute(log_p));
+					log_file = log_abs.string();
+				}
+				return log_file;
+			}
+		}
+	}
+	return "";
+}
+
+string Sunshine_GetConfVal(string buf, string conf_item)
+{
+	conf_item += " = ";
+	size_t pos = buf.find(conf_item);
+	if (pos != string::npos)
+	{
+		size_t newl = buf.find("\n", pos);
+		if (newl == string::npos)
+			return buf.substr(pos + conf_item.length());
+		else
+			return buf.substr(pos + conf_item.length(), newl - (pos + conf_item.length()));
+	}
+	return "";
 }
