@@ -12,6 +12,7 @@ jobs:
       - run: Invoke-WebRequest https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.7z -OutFile boost.7z
         shell: powershell
       - run: 7z x boost.7z
+      - run: vcpkg install openssl:x64-windows-static-md
       - run: msbuild LGTVCompanion.sln
         env:
           Configuration: ${{ matrix.configuration }}
