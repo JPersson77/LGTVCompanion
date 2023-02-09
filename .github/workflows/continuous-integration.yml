@@ -16,7 +16,9 @@ jobs:
       - run: msbuild LGTVCompanion.sln
         env:
           Configuration: ${{ matrix.configuration }}
-          IncludePath: ${{ github.workspace }}\boost_1_78_0, ${{ github.workspace }}\OpenSSL-Win64
+          IncludePath: 
+            ${{ github.workspace }}\boost_1_78_0
+            ${{ github.workspace }}\OpenSSL-Win64
       - uses: actions/upload-artifact@v3
         with:
           name: LGTVCompanion-${{ matrix.configuration }}
