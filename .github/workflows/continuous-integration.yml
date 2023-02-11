@@ -16,6 +16,7 @@ jobs:
           manifest-dir: ${{ github.workspace }} # Set to directory containing vcpkg.json
           triplet: x64-windows-static
           token: ${{ github.token }}
+      - run: vcpkg integrate install
       - run: msbuild LGTVCompanion.sln
         env:
           Configuration: ${{ matrix.configuration }}
