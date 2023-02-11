@@ -1,0 +1,14 @@
+x64-windows-static/
+x64-windows-static/debug/
+x64-windows-static/debug/lib/
+x64-windows-static/debug/lib/wintoast.lib
+x64-windows-static/include/
+x64-windows-static/include/wintoast/
+x64-windows-static/include/wintoast/wintoastlib.h
+x64-windows-static/lib/
+x64-windows-static/lib/wintoast.lib
+x64-windows-static/share/
+x64-windows-static/share/wintoast/
+x64-windows-static/share/wintoast/copyright
+x64-windows-static/share/wintoast/vcpkg.spdx.json
+x64-windows-static/share/wintoast/vcpkg_abi_info.txt

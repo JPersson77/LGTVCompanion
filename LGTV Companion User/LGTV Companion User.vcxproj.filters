@@ -21,18 +21,12 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="WinToast-1.2.0\wintoastlib.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\Common\Common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Daemon.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="WinToast-1.2.0\wintoastlib.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Common\Common.cpp">

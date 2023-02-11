@@ -1,0 +1,115 @@
+{
+  "$schema": "https://raw.githubusercontent.com/spdx/spdx-spec/v2.2.1/schemas/spdx-schema.json",
+  "spdxVersion": "SPDX-2.2",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "documentNamespace": "https://spdx.org/spdxdocs/boost-type-index-x64-windows-static-1.81.0#1-bf0dc0d5-2833-4202-91be-cfac506d4687",
+  "name": "boost-type-index:x64-windows-static@1.81.0#1 f11e006d1f6e9e0674c06fa69bab8edca94cabcd8714ae8fb668b6d6105b9a7e",
+  "creationInfo": {
+    "creators": [
+      "Tool: vcpkg-8a88d63f241d391772fbde69af9cab96c3c64c75"
+    ],
+    "created": "2023-02-11T09:38:33Z"
+  },
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "GENERATES",
+      "relatedSpdxElement": "SPDXRef-binary"
+    },
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-file-0"
+    },
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-file-1"
+    },
+    {
+      "spdxElementId": "SPDXRef-binary",
+      "relationshipType": "GENERATED_FROM",
+      "relatedSpdxElement": "SPDXRef-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-file-0",
+      "relationshipType": "CONTAINED_BY",
+      "relatedSpdxElement": "SPDXRef-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-file-1",
+      "relationshipType": "CONTAINED_BY",
+      "relatedSpdxElement": "SPDXRef-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-file-1",
+      "relationshipType": "DEPENDENCY_MANIFEST_OF",
+      "relatedSpdxElement": "SPDXRef-port"
+    }
+  ],
+  "packages": [
+    {
+      "name": "boost-type-index",
+      "SPDXID": "SPDXRef-port",
+      "versionInfo": "1.81.0#1",
+      "downloadLocation": "git+https://github.com/Microsoft/vcpkg#ports/boost-type-index",
+      "homepage": "https://github.com/boostorg/type_index",
+      "licenseConcluded": "BSL-1.0",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "description": "Boost type_index module",
+      "comment": "This is the port (recipe) consumed by vcpkg."
+    },
+    {
+      "name": "boost-type-index:x64-windows-static",
+      "SPDXID": "SPDXRef-binary",
+      "versionInfo": "f11e006d1f6e9e0674c06fa69bab8edca94cabcd8714ae8fb668b6d6105b9a7e",
+      "downloadLocation": "NONE",
+      "licenseConcluded": "BSL-1.0",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "comment": "This is a binary package built by vcpkg."
+    },
+    {
+      "SPDXID": "SPDXRef-resource-1",
+      "name": "boostorg/type_index",
+      "downloadLocation": "git+https://github.com/boostorg/type_index@boost-1.81.0",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "c8affd17154ba2363546a9f40211af1fa5fa59445e7de44cb7ec655a22428825ef308aae62cdbe615e37ce165651300a9efdaecbf55beb20acc06ca899773b72"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "fileName": "./portfile.cmake",
+      "SPDXID": "SPDXRef-file-0",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "7a17cc9c4d8ebd4de02c72b2cdbbf7c0c3f92586c2f326653e97abb28d18fd01"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./vcpkg.json",
+      "SPDXID": "SPDXRef-file-1",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "b3cf16c76e0d3633926f511b0ba5144a6e3c70de01f81a15bcc36a9778c7a31f"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION"
+    }
+  ]
+}

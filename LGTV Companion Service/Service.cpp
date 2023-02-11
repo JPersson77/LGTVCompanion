@@ -22,7 +22,6 @@ bool							bIdleLog = true;
 settings::Preferences			Prefs;
 vector <CSession>				DeviceCtrlSessions;                 //CSession objects manage network connections with Display
 
-
 wchar_t sddl[] = L"D:"
 L"(A;;CCLCSWRPWPDTLOCRRC;;;SY)"           // default permissions for local system
 L"(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)"   // default permissions for administrators
@@ -790,7 +789,6 @@ void IPCThread(void)
 	InitializeSecurityDescriptor(psd, SECURITY_DESCRIPTOR_REVISION);
 	SetSecurityDescriptorDacl(psd, TRUE, (PACL)NULL, FALSE);
 	SECURITY_ATTRIBUTES sa = { sizeof(sa), psd, FALSE };
-	
 
 	hPipe = CreateNamedPipe(PIPENAME,
 		PIPE_ACCESS_DUPLEX,
@@ -851,14 +849,14 @@ void IPCThread(void)
 						}
 						else if (param == "-idle")
 						{
-							if(Prefs.BlankScreenWhenIdle)
+							if (Prefs.BlankScreenWhenIdle)
 								Log("IPC, Forcing user idle mode!");
 							else
 								Log("IPC, Can not force user idle mode, as the feature is not enabled in the global options!");
 						}
 						else if (param == "-unidle")
 						{
-							if(Prefs.BlankScreenWhenIdle)
+							if (Prefs.BlankScreenWhenIdle)
 								Log("IPC, Unsetting user idle mode!");
 							else
 								Log("IPC, Can not unset user idle mode, as the feature is not enabled in the global options!");
@@ -897,13 +895,13 @@ void IPCThread(void)
 								}
 								else if (param == "remote_connect")
 								{
-										Log("IPC, Remote streaming client connected. Managed devices will power off.");
-										DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
+									Log("IPC, Remote streaming client connected. Managed devices will power off.");
+									DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
 
-										for (auto& d : DeviceCtrlSessions)
-										{
-											d.RemoteHostConnected();
-										}
+									for (auto& d : DeviceCtrlSessions)
+									{
+										d.RemoteHostConnected();
+									}
 								}
 								else if (param == "remote_disconnect")
 								{
@@ -918,20 +916,17 @@ void IPCThread(void)
 									}
 									else
 										Log("IPC, Remote streaming client disconnected. Managed displays will remain powered off,");
-
 								}
 								else if (param == "topology")
 								{
-									
 									param1 = APP_IPC_DAEMON_TOPOLOGY;
-									for (auto &d : DeviceCtrlSessions)
+									for (auto& d : DeviceCtrlSessions)
 									{
 										d.SetTopology(false);
 									}
 								}
 								else if (param == "gfe")
 								{
-
 									Log("IPC, NVIDIA GFE overlay fullscreen compatibility set");
 								}
 							}
@@ -949,15 +944,15 @@ void IPCThread(void)
 								if (param == "*")
 								{
 									string s;
-									string TopologyDevices ;
+									string TopologyDevices;
 									for (auto& d : DeviceCtrlSessions)
 									{
 										TopologyDevices += d.DeviceID;
 										TopologyDevices += ":";
-										TopologyDevices += d.GetTopology() ? "ON ":"OFF ";
+										TopologyDevices += d.GetTopology() ? "ON " : "OFF ";
 									}
 
-									s  = "IPC, windows monitor topology was changed. ";
+									s = "IPC, windows monitor topology was changed. ";
 									if (TopologyDevices == "")
 										s += "No devices configured.";
 									else
@@ -967,17 +962,15 @@ void IPCThread(void)
 								}
 								else
 								{
-									for (auto &d : DeviceCtrlSessions)
+									for (auto& d : DeviceCtrlSessions)
 									{
 										string id = d.DeviceID;
 										transform(id.begin(), id.end(), id.begin(), ::tolower);
 										if (param == id)
 										{
-											d.SetTopology(true);								                                                   
+											d.SetTopology(true);
 										}
-
 									}
-
 								}
 							}
 
@@ -1108,7 +1101,6 @@ void InitSessions(void)
 	str += common::narrow(Prefs.DataPath);
 	Log(str);
 
-	
 	for (auto& dev : Prefs.Devices)
 	{
 		stringstream s;
@@ -1132,7 +1124,7 @@ void InitSessions(void)
 		else
 			s << "n/a";
 		s << ", VerifyHdmiInput:";
-		if (dev.HDMIinputcontrol) 
+		if (dev.HDMIinputcontrol)
 			s << dev.OnlyTurnOffIfCurrentHDMIInputNumberIs;
 		else
 			s << "off";

@@ -1,0 +1,13 @@
+x64-windows-static/
+x64-windows-static/include/
+x64-windows-static/include/boost/
+x64-windows-static/include/boost/static_string.hpp
+x64-windows-static/include/boost/static_string/
+x64-windows-static/include/boost/static_string/config.hpp
+x64-windows-static/include/boost/static_string/static_string.hpp
+x64-windows-static/share/
+x64-windows-static/share/boost-static-string/
+x64-windows-static/share/boost-static-string/copyright
+x64-windows-static/share/boost-static-string/usage
+x64-windows-static/share/boost-static-string/vcpkg.spdx.json
+x64-windows-static/share/boost-static-string/vcpkg_abi_info.txt

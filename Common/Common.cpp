@@ -17,7 +17,7 @@ std::wstring common::widen(std::string sInput) {
 	return out;
 }
 //   Convert wide to UTF-8
-std::string common::narrow(std::wstring sInput){
+std::string common::narrow(std::wstring sInput) {
 	// Calculate target buffer size
 	long len = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, sInput.c_str(), (int)sInput.size(),
 		NULL, 0, NULL, NULL);
@@ -83,7 +83,7 @@ std::vector<std::string> common::stringsplit(std::string str, std::string token)
 std::wstring common::GetWndText(HWND hWnd)
 {
 	int len = GetWindowTextLength(hWnd) + 1;
-	std:: vector<wchar_t> buf(len);
+	std::vector<wchar_t> buf(len);
 	GetWindowText(hWnd, &buf[0], len);
 	std::wstring text = &buf[0];
 	return text;
@@ -92,7 +92,7 @@ settings::Preferences::Preferences() {
 }
 settings::Preferences::~Preferences() {
 }
-bool settings::Preferences::Initialize(){
+bool settings::Preferences::Initialize() {
 	TCHAR szPath[MAX_PATH];
 	if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, NULL, 0, szPath)))
 	{
@@ -292,7 +292,6 @@ void settings::Preferences::WriteToDisk(void)
 							for (auto& l : k.MAC)
 								if (l == m.value().get<std::string>())
 									k.SessionKey = key;
-
 			}
 		}
 	}
@@ -323,7 +322,7 @@ void settings::Preferences::WriteToDisk(void)
 		dev << "Device";
 		dev << deviceid;
 		item.DeviceId = dev.str();
-//		prefs[dev.str()][JSON_DEVICE_NAME] = item.Name;
+		//		prefs[dev.str()][JSON_DEVICE_NAME] = item.Name;
 		if (item.Name != "")
 			prefs[dev.str()][JSON_DEVICE_NAME] = item.Name;
 		if (item.IP != "")

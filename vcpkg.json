@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "lgtv-companion",
+  "version": "0",
+  "dependencies": [
+    "nlohmann-json",
+	"boost-asio",
+	"boost-optional",
+	"boost-utility",
+	"boost-beast",
+	"openssl",
+	"boost-date-time",
+	"wintoast"
+  ]
+}

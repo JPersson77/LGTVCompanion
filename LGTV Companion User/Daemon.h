@@ -36,8 +36,8 @@
 #include <algorithm>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <filesystem>
+#include <wintoast/wintoastlib.h>
 #include "resource.h"
-#include "WinToast-1.2.0/wintoastlib.h"
 #include "../Common/Common.h"
 
 #define			APPNAME_SHORT							L"LGTVdaemon"
@@ -75,7 +75,6 @@
 #define			SUNSHINE_FILE_CONF						"sunshine.conf"
 #define			SUNSHINE_FILE_LOG						"sunshine.log"
 #define			SUNSHINE_FILE_SVC						L"sunshine.exe"
-
 
 class WinToastHandler : public WinToastLib::IWinToastHandler
 {

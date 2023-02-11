@@ -7,11 +7,11 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
-#include "../Common/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 // common general application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"2.1.0"
+#define         APP_VERSION                     L"2.1.1"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"Log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
@@ -73,14 +73,14 @@
 #define			WOL_SUBNETBROADCAST				3
 
 // common forward function declarations
-namespace jpersson77{
-	namespace common{
+namespace jpersson77 {
+	namespace common {
 		std::wstring widen(std::string sInput);
 		std::string narrow(std::wstring sInput);
 		std::vector<std::string> stringsplit(std::string, std::string);
 		std::wstring GetWndText(HWND);
 	}
-	namespace settings{
+	namespace settings {
 		struct DISPLAY_INFO {
 			DISPLAYCONFIG_TARGET_DEVICE_NAME target;
 			HMONITOR hMonitor;
@@ -104,11 +104,11 @@ namespace jpersson77{
 			L"usb#vid_0955&pid_b4f0" //nvidia
 			};
 		};
-		struct WHITELIST{ // whitelist info
+		struct WHITELIST { // whitelist info
 			std::wstring Name;
 			std::wstring Application;
 		};
-		struct DEVICE{ // WebOS device settings
+		struct DEVICE { // WebOS device settings
 			std::string DeviceId;
 			std::string IP;
 			std::vector<std::string> MAC;
@@ -130,7 +130,7 @@ namespace jpersson77{
 			int BlankScreenWhenIdleDelay = 10;
 			bool BlankWhenIdle = false;
 		};
-		class Preferences{
+		class Preferences {
 		public:
 			Preferences();
 			~Preferences();

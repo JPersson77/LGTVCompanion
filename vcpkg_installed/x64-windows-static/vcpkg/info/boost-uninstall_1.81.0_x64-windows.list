@@ -1,0 +1,7 @@
+x64-windows/
+x64-windows/share/
+x64-windows/share/boost-uninstall/
+x64-windows/share/boost-uninstall/vcpkg.spdx.json
+x64-windows/share/boost-uninstall/vcpkg_abi_info.txt
+x64-windows/share/boost/
+x64-windows/share/boost/vcpkg-cmake-wrapper.cmake

@@ -53,7 +53,7 @@ CHANGELOG
 	v 1.8.0             - Option to conform to windows monitor topology (active display outputs only)
 
 	v 1.9.0				- More granular user idle mode
-	
+
 	v 2.0.0				- Support for LG's newest firmware which changed the connection method (SSL)
 						- Option to revert to legacy connection method for (presumably) older models
 						- Optional support for NVIDIA Gamestream, Steam Link, Sunshine and RDP
@@ -72,9 +72,7 @@ CHANGELOG
 						- [ ] Device on/off indicator
 						- [ ] compatibility mode for topology
 						- [ ] Exclusion list from fullscreen detection, or detect which monitor fullscreen is happening on. https://github.com/JPersson77/LGTVCompanion/issues/96
-						- [ ] Bugfix sushine
-								HKEY_LOCAL_MACHINE\SOFTWARE\LizardByte\Sunshine
-								ps4 controllers
+
 LICENSE
 	Copyright (c) 2021-2023 Jörgen Persson
 
@@ -231,10 +229,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	// don't call DefWindowProc for modeless dialogs. Return true for handled messages or false otherwise
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
-
 		if (!IsDialogMessage(hMainWnd, &msg) &&
-			!IsDialogMessage(hDeviceWindow,&msg) &&
-			!IsDialogMessage(hOptionsWindow,&msg) &&
+			!IsDialogMessage(hDeviceWindow, &msg) &&
+			!IsDialogMessage(hOptionsWindow, &msg) &&
 			!IsDialogMessage(hTopologyWindow, &msg) &&
 			!IsDialogMessage(hUserIdleConfWindow, &msg) &&
 			!IsDialogMessage(hWhitelistConfWindow, &msg) &&
@@ -792,50 +789,50 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						if (ms == IDCANCEL)
 							break;
 
-                        SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)ms == IDYES ? 0 : 1, (LPARAM)lParam);
-                    }
-                    else
-                        SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)0, (LPARAM)lParam);
-                 }break;
-                case ID_M_TEST:
-                {
-                    if (Prefs.Devices.size() > 0)
-                    {
-                        if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-                            if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
-                                break;
-                        int ms = MessageBoxW(hWnd, L"You are about to test the ability to control this device?\n\nPlease click YES to power off the device. Then wait about 5 seconds, or until you hear an internal relay of the TV clicking, and press ENTER on your keyboard to power on the device again.", L"Test device", MB_YESNO | MB_ICONQUESTION);
-                        switch (ms)
-                        {
-                        case IDYES:
-                            SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
-                            MessageBoxW(hWnd, L"Please press ENTER on your keyboard to power on the device again.", L"Test device", MB_OK | MB_ICONEXCLAMATION);
-                            SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
-                            break;
-                        default:break;
-                        }
-                    }
-                }break;
-                case ID_M_TURNON:
-                {                     
-                    if (Prefs.Devices.size() > 0)
-                    {
-                        if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-                            if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
-                                break;
-                        SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
-                    }
-                }break;
-                case ID_M_TURNOFF:
-                {
-                    if (Prefs.Devices.size() > 0)
-                    {
-                        if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-                            if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
-                                break;
-                        SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
-                    }
-                }break;
+						SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)ms == IDYES ? 0 : 1, (LPARAM)lParam);
+					}
+					else
+						SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)0, (LPARAM)lParam);
+				}break;
+				case ID_M_TEST:
+				{
+					if (Prefs.Devices.size() > 0)
+					{
+						if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
+							if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+								break;
+						int ms = MessageBoxW(hWnd, L"You are about to test the ability to control this device?\n\nPlease click YES to power off the device. Then wait about 5 seconds, or until you hear an internal relay of the TV clicking, and press ENTER on your keyboard to power on the device again.", L"Test device", MB_YESNO | MB_ICONQUESTION);
+						switch (ms)
+						{
+						case IDYES:
+							SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
+							MessageBoxW(hWnd, L"Please press ENTER on your keyboard to power on the device again.", L"Test device", MB_OK | MB_ICONEXCLAMATION);
+							SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
+							break;
+						default:break;
+						}
+					}
+				}break;
+				case ID_M_TURNON:
+				{
+					if (Prefs.Devices.size() > 0)
+					{
+						if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
+							if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+								break;
+						SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
+					}
+				}break;
+				case ID_M_TURNOFF:
+				{
+					if (Prefs.Devices.size() > 0)
+					{
+						if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
+							if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+								break;
+						SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
+					}
+				}break;
 
 				default:break;
 				}
@@ -922,8 +919,6 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		SendDlgItemMessage(hWnd, IDC_SET_HDMI_INPUT_NUMBER, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SET_HDMI_INPUT_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(4, 1));
 		SendDlgItemMessage(hWnd, IDC_COMBO_SSL, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-
-
 	}break;
 	case WM_NOTIFY:
 	{
@@ -941,7 +936,6 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 					"of your  WebOS-device to determine the correct values.\n\n"
 					"Please note that both MAC address and IP are mandatory to set.",
 					L"Device information", MB_OK | MB_ICONINFORMATION);
-
 			}
 			// explain the WOL options
 			else if (wParam == IDC_SYSLINK4)
@@ -954,7 +948,7 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 					"Between the two broadcast options, the subnet approach is the most likely to work. The global network broadcast approach is prone to issues when multiple network interfaces are present (VPN, etc.), because the packet might be sent using the wrong interface.\n\n"
 					"The current subnet mask of the subnet(s) of your PC can be found by using the \"IPCONFIG /all\" command in the command prompt.",
 					L"Network options", MB_OK | MB_ICONINFORMATION);
-			} 
+			}
 			// explain the WOL options
 			else if (wParam == IDC_SYSLINK9)
 			{
@@ -962,7 +956,7 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 					L"The option to process power and screen off events only when the HDMI display input is set to a specific input should be used to prevent the "
 					"WebOS-device from powering off while you are not using it for your PC, i e when you are busy watching Netflix or gaming on your console.\n\n"
 					"The option to set an HDMI input on startup or resume can be used to force the device to automatically switch to the input "
-					" the PC is connected to when powering on.", 
+					" the PC is connected to when powering on.",
 					L"Information", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the firmware options
@@ -1197,8 +1191,8 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 	case WM_CTLCOLORSTATIC:
 	{
 		HDC hdcStatic = (HDC)wParam;
-		if ((HWND)lParam == GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) 
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) 
+		if ((HWND)lParam == GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_RADIO1)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_RADIO2)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_RADIO3))
@@ -1256,7 +1250,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(100, 1));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.PowerOnTimeout);
-		
+
 		for (auto& item : Prefs.EventLogRestartString)
 		{
 			if (std::find(str.begin(), str.end(), common::widen(item)) == str.end())
@@ -1361,9 +1355,9 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
 		s = L"Compatibility (display blanked)";
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.TopologyPreferPowerEfficiency ? 0 : 1, (LPARAM) 0);
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.TopologyPreferPowerEfficiency ? 0 : 1, (LPARAM)0);
 
-//		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), Prefs.AdhereTopology ? true :  false);
+		//		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), Prefs.AdhereTopology ? true :  false);
 		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), false); //REMOVE
 
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
@@ -1441,9 +1435,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 						}
 					}
 				}
-//				EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY));
-
-
+				//				EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY));
 			}break;
 
 			case IDC_LOGGING:
@@ -1560,7 +1552,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			{
 				MessageBox(hWnd, L"This application rely on events in the windows event log to determine whether a reboot or shutdown was initiated by the user."
 					"\n\nThese events are localised in the language of your operating system, and the user must therefore assist with manually indicating which "
-					"strings refers to the system restarting.\n\nPlease put a checkmark for every string which refers to 'restart'", 
+					"strings refers to the system restarting.\n\nPlease put a checkmark for every string which refers to 'restart'",
 					L"Restart words", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the power on timeout, logging etc
@@ -1618,11 +1610,10 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			}
 			else if (wParam == IDC_SYSLINK_CONF2)
 			{
-					hUserIdleConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_ADVANCEDIDLE), hWnd, (DLGPROC)UserIdleConfWndProc);
-					EnableWindow(hWnd, false);
-					ShowWindow(hUserIdleConfWindow, SW_SHOW);
+				hUserIdleConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_ADVANCEDIDLE), hWnd, (DLGPROC)UserIdleConfWndProc);
+				EnableWindow(hWnd, false);
+				ShowWindow(hUserIdleConfWindow, SW_SHOW);
 			}
-
 		}break;
 		case LVN_ITEMCHANGED:
 		{
@@ -1686,7 +1677,6 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	return true;
 }
 
-
 //   Process messages for the options window
 LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -1718,7 +1708,6 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 				SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"Waiting for input...");
 			}
 		}
-
 
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)-1, (LPARAM)0);
@@ -1797,7 +1786,6 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 				SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"All OK!");
 			}
 		}
-
 	}break;
 	case APP_TOP_NEXT_DISPLAY:
 	{
@@ -1825,10 +1813,8 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 		{
 			switch (LOWORD(wParam))
 			{
-
 			case IDOK:
 			{
-
 				switch (iTopConfPhase) // three phases - intro, match displays, finalise
 				{
 				case 1:
@@ -1871,7 +1857,6 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 					{
 						SendMessage(hWnd, APP_TOP_NEXT_DISPLAY, NULL, NULL);
 					}
-
 				}break;
 				case 3:
 				{
@@ -1979,7 +1964,6 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 	return true;
 }
 
-
 //   Process messages for the user idle conf window
 LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -2002,7 +1986,6 @@ LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), Prefs.bIdleWhitelistEnabled);
 		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), Prefs.bIdleWhitelistEnabled);
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
-
 	}break;
 	case APP_LISTBOX_EDIT:
 	{
@@ -2033,12 +2016,11 @@ LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	}break;
 	case APP_LISTBOX_DELETE:
 	{
-
 		int index = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETCURSEL, 0, 0);
 		if (index != LB_ERR)
 		{
-			TCHAR * text;
-			int len = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETTEXTLEN, index, 0); 
+			TCHAR* text;
+			int len = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETTEXTLEN, index, 0);
 			text = new TCHAR[len + 1];
 			if (SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETTEXT, (WPARAM)index, (LPARAM)text) != LB_ERR)
 			{
@@ -2050,9 +2032,9 @@ LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 					int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETITEMDATA, index, 0);
 					if (data != LB_ERR && data < WhitelistTemp.size())
 					{
-							WhitelistTemp.erase(WhitelistTemp.begin() + data);
-							SendMessage(hWnd, APP_LISTBOX_REDRAW, 0, 0);
-							EnableWindow(GetDlgItem(hWnd, IDOK), true);
+						WhitelistTemp.erase(WhitelistTemp.begin() + data);
+						SendMessage(hWnd, APP_LISTBOX_REDRAW, 0, 0);
+						EnableWindow(GetDlgItem(hWnd, IDOK), true);
 					}
 					else
 					{
@@ -2084,7 +2066,6 @@ LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_SETCURSEL, 0, 0);
 			ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), SW_SHOW);
 			ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), SW_SHOW);
-
 		}
 		else
 		{
@@ -2158,7 +2139,7 @@ LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			if (wParam == IDC_SYSLINK_INFO_1)
 			{
 				MessageBox(hWnd, L"Please configure the time, in minutes, without user input from keyboard, mouse or game controllers before "
-					"triggering the user idle mode.",L"User idle time configuration", MB_OK | MB_ICONINFORMATION);
+					"triggering the user idle mode.", L"User idle time configuration", MB_OK | MB_ICONINFORMATION);
 			}
 			else if (wParam == IDC_SYSLINK_INFO_2)
 			{
@@ -2237,7 +2218,6 @@ LRESULT CALLBACK WhitelistConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		SendDlgItemMessage(hWnd, IDC_EDIT_PROCESS, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
 	}break;
 
-
 	case WM_COMMAND:
 	{
 		switch (HIWORD(wParam))
@@ -2246,7 +2226,6 @@ LRESULT CALLBACK WhitelistConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		{
 			switch (LOWORD(wParam))
 			{
-
 			case IDOK:
 			{
 				wstring name = common::GetWndText(GetDlgItem(hWnd, IDC_EDIT_NAME));
@@ -2297,10 +2276,9 @@ LRESULT CALLBACK WhitelistConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LP
 				else
 				{
 					MessageBox(hWnd, L"Please ensure that both display name and process executable name are properly "
-						"configured before continuing. Please note that process executable name should not include the path.", 
+						"configured before continuing. Please note that process executable name should not include the path.",
 						L"Invalid configuration", MB_OK | MB_ICONERROR);
 				}
-
 			}break;
 			case IDCANCEL:
 			{
@@ -2352,7 +2330,6 @@ LRESULT CALLBACK WhitelistConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LP
 								if (SUCCEEDED(pfd->GetResult(&psi))) {
 									if (SUCCEEDED(psi->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, &Path)))
 									{
-
 										TCHAR buffer[MAX_PATH] = { 0 };
 										GetModuleFileName(NULL, buffer, MAX_PATH);
 
@@ -2372,9 +2349,8 @@ LRESULT CALLBACK WhitelistConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LP
 												SetWindowText(GetDlgItem(hWnd, IDC_EDIT_NAME), name.c_str());
 											SetWindowText(GetDlgItem(hWnd, IDC_EDIT_PROCESS), exe.c_str());
 										}
-										
-										CoTaskMemFree(Path);
 
+										CoTaskMemFree(Path);
 									}
 									psi->Release();
 								}
@@ -2383,7 +2359,7 @@ LRESULT CALLBACK WhitelistConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LP
 					}
 					CoUninitialize();
 				}
-			}		
+			}
 		}break;
 		default:break;
 		}
@@ -2422,7 +2398,6 @@ LRESULT CALLBACK WhitelistConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LP
 	}
 	return true;
 }
-
 
 //   If the application is already running, send the command line parameters to that other process
 bool MessageExistingProcess(wstring CmdLine)
@@ -2468,7 +2443,7 @@ void SvcReportEvent(WORD Type, wstring string)
 			s = string;
 			break;
 		}
-		
+
 		lpszStrings[0] = APPNAME;
 		lpszStrings[1] = s.c_str();
 
@@ -2587,19 +2562,18 @@ void VersionCheckThread(HWND hWnd)
 	return;
 }
 
-
 vector<settings::DISPLAY_INFO> QueryDisplays()
 {
 	vector<settings::DISPLAY_INFO> targets;
 	//populate targets struct with information about attached displays
-	EnumDisplayMonitors(NULL, NULL, meproc, (LPARAM) & targets);
+	EnumDisplayMonitors(NULL, NULL, meproc, (LPARAM)&targets);
 	return targets;
 }
 static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPARAM pData)
 {
 	if (!pData)
 		return false;
-	vector<settings::DISPLAY_INFO> * targets = (vector<settings::DISPLAY_INFO> *) pData;
+	vector<settings::DISPLAY_INFO>* targets = (vector<settings::DISPLAY_INFO> *) pData;
 	UINT32 requiredPaths, requiredModes;
 	vector<DISPLAYCONFIG_PATH_INFO> paths;
 	vector<DISPLAYCONFIG_MODE_INFO> modes;
@@ -2617,7 +2591,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 	}
 	paths.resize(requiredPaths);
 	modes.resize(requiredModes);
-		
+
 	isError = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &requiredPaths, paths.data(), &requiredModes, modes.data(), NULL);
 	if (isError)
 	{
@@ -2627,7 +2601,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 	paths.resize(requiredPaths);
 	modes.resize(requiredModes);
 
-	for (auto& p : paths) 
+	for (auto& p : paths)
 	{
 		DISPLAYCONFIG_SOURCE_DEVICE_NAME sourceName;
 		sourceName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
@@ -2636,7 +2610,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 		sourceName.header.id = p.sourceInfo.id;
 
 		DisplayConfigGetDeviceInfo(&sourceName.header);
-		if (wcscmp(mi.szDevice, sourceName.viewGdiDeviceName) == 0) 
+		if (wcscmp(mi.szDevice, sourceName.viewGdiDeviceName) == 0)
 		{
 			DISPLAYCONFIG_TARGET_DEVICE_NAME name;
 			name.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
@@ -2645,7 +2619,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 			name.header.id = p.targetInfo.id;
 			DisplayConfigGetDeviceInfo(&name.header);
 			wstring FriendlyName = name.monitorFriendlyDeviceName;
-			if (FriendlyName.find( L"LG TV") != wstring::npos)
+			if (FriendlyName.find(L"LG TV") != wstring::npos)
 			{
 				settings::DISPLAY_INFO di;
 				di.monitorinfo = mi;
@@ -2661,7 +2635,6 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 }
 bool MessageDaemon(wstring cmd)
 {
-	
 	bool bIdle = (cmd.find(L"-idle")) != wstring::npos;
 	bool bPresent = (cmd.find(L"-unidle")) != wstring::npos;
 
@@ -2678,7 +2651,7 @@ bool MessageDaemon(wstring cmd)
 	HWND Daemon_hWnd = FindWindow(NULL, sWinSearch.c_str());
 	if (Daemon_hWnd)
 	{
-		if(bIdle)
+		if (bIdle)
 			SendMessage(Daemon_hWnd, APP_USER_IDLE_ON, NULL, NULL);
 		else if (bPresent)
 			SendMessage(Daemon_hWnd, APP_USER_IDLE_OFF, NULL, NULL);

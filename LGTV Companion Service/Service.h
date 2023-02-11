@@ -2,8 +2,8 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include <SDKDDKVer.h>
-#include <boost/beast.hpp>
 #include <boost/asio.hpp>
+#include <boost/beast.hpp>
 #include <Windows.h>
 #include <system_error>
 #include <memory>
