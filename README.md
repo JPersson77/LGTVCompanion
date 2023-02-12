@@ -125,6 +125,7 @@ Please use the Github issue tracker for potential bug reports and/or feature req
 - @Maassoft for initial helpi with understanding the WebOS comms - https://github.com/Maassoft
 - @mohabouje - Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
 - OpenSSL - https://www.openssl.org/
+- Vcpkg - https://github.com/microsoft/vcpkg
 - Contributors
 - Donors and supporters
 
