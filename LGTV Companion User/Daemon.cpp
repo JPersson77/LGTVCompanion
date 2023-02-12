@@ -19,6 +19,7 @@ INT64                           idToastNewversion = NULL;
 UINT							shellhookMessage;
 DWORD							daemon_startup_user_input_time = 0;
 UINT							ManualUserIdleMode = 0;
+HBRUSH                          hBackbrush;
 
 settings::Preferences			Prefs;
 
@@ -85,6 +86,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		CommunicateWithService("-daemon errorconfig");
 		return false;
 	}
+	hBackbrush = CreateSolidBrush(0x00ffffff);
 
 	// create main window (dialog)
 	hMainWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndProc);
@@ -160,6 +162,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			WinToast::instance()->clear();
 		}
 	}
+	DeleteObject(hBackbrush);
 	UnregisterSuspendResumeNotification(rsrn);
 	UnregisterPowerSettingNotification(rpsn);
 	if (dev_notify)
@@ -620,7 +623,48 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		return true;
 	}break;
+	case WM_CTLCOLORSTATIC:
+	{
+		HDC hdcStatic = (HDC)wParam;
+//		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE))
+		{
+			SetBkMode(hdcStatic, TRANSPARENT);
+		}
+		return(INT_PTR)hBackbrush;
+	}break;
+	case WM_PAINT:
+	{
+		RECT rc = { 0 };
+		GetClientRect(hWnd, &rc);
+		PAINTSTRUCT ps;
+		//		PAINTSTRUCT psPaint;
+		InvalidateRect(hWnd, NULL, false);
 
+		//		GetClientRect(hWnd, &rc);
+		int width = rc.right;
+		int height = rc.bottom;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		HDC backbuffDC = CreateCompatibleDC(hdc);
+		HBITMAP backbuffer = CreateCompatibleBitmap(hdc, width, height);
+		int savedDC = SaveDC(backbuffDC);
+		SelectObject(backbuffDC, backbuffer);
+
+		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+
+		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
+		RestoreDC(backbuffDC, savedDC);
+
+		DeleteObject(backbuffer);
+		DeleteDC(backbuffDC);
+
+		ReleaseDC(hWnd, hdc);
+		EndPaint(hWnd, &ps);
+		return 0;
+	}break;
+	case WM_ERASEBKGND:
+	{
+		return true;
+	}break;
 	case WM_CLOSE:
 	{
 		DestroyWindow(hWnd);

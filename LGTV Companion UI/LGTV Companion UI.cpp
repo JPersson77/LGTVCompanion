@@ -15,6 +15,21 @@ BACKGROUND
 	response to power events in windows. With OLED monitors this is particularly important to
 	prevent "burn-in", or more accurately pixel-wear.
 
+BUILD INSTRUCTIONS AND DEPENDENCIES
+	Ensure that Vcpkg (https://github.com/microsoft/vcpkg) is installed. Vcpkg is a free ++ Library Manager 
+	for Windows. A Vcpkg manifest is included with the source code and the necessary dependencies
+	will be automatically downloaded, configured and installed. 
+	
+	If you want to manually install dependencies, use these commands:
+		vcpkg install nlohmann-json:x64-windows-static
+		vcpkg install boost-asio:x64-windows-static
+		vcpkg install boost-optional:x64-windows-static
+		vcpkg install boost-utility:x64-windows-static
+		vcpkg install boost-date-time:x64-windows-static
+		vcpkg install boost-beast:x64-windows-static
+		vcpkg install wintoast:x64-windows-static
+		vcpkg install openssl:x64-windows-static
+
 INSTALLATION, USAGE ETC
 
 https://github.com/JPersson77/LGTVCompanion
@@ -875,9 +890,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		RECT rc = { 0 };
 		GetClientRect(hWnd, &rc);
 		PAINTSTRUCT ps;
+		//		PAINTSTRUCT psPaint;
+		InvalidateRect(hWnd, NULL, false);
+
+		//		GetClientRect(hWnd, &rc);
+		int width = rc.right;
+		int height = rc.bottom;
 		HDC hdc = BeginPaint(hWnd, &ps);
-		FillRect(hdc, &rc, (HBRUSH)hBackbrush);
+		HDC backbuffDC = CreateCompatibleDC(hdc);
+		HBITMAP backbuffer = CreateCompatibleBitmap(hdc, width, height);
+		int savedDC = SaveDC(backbuffDC);
+		SelectObject(backbuffDC, backbuffer);
+
+		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+
+		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
+		RestoreDC(backbuffDC, savedDC);
+
+		DeleteObject(backbuffer);
+		DeleteDC(backbuffDC);
+
+		ReleaseDC(hWnd, hdc);
 		EndPaint(hWnd, &ps);
+		return 0;
+	}break;
+	case WM_ERASEBKGND:
+	{
+		return true;
 	}break;
 	case WM_CLOSE:
 	{
@@ -1205,14 +1244,35 @@ LRESULT CALLBACK DeviceWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 	case WM_PAINT:
 	{
 		RECT rc = { 0 };
-
 		GetClientRect(hWnd, &rc);
-
 		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(hWnd, &ps);
-		FillRect(hdc, &rc, (HBRUSH)hBackbrush);
+		//		PAINTSTRUCT psPaint;
+		InvalidateRect(hWnd, NULL, false);
 
+		//		GetClientRect(hWnd, &rc);
+		int width = rc.right;
+		int height = rc.bottom;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		HDC backbuffDC = CreateCompatibleDC(hdc);
+		HBITMAP backbuffer = CreateCompatibleBitmap(hdc, width, height);
+		int savedDC = SaveDC(backbuffDC);
+		SelectObject(backbuffDC, backbuffer);
+
+		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+
+		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
+		RestoreDC(backbuffDC, savedDC);
+
+		DeleteObject(backbuffer);
+		DeleteDC(backbuffDC);
+
+		ReleaseDC(hWnd, hdc);
 		EndPaint(hWnd, &ps);
+		return 0;
+	}break;
+	case WM_ERASEBKGND:
+	{
+		return true;
 	}break;
 
 	case WM_CLOSE:
@@ -1653,14 +1713,35 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	case WM_PAINT:
 	{
 		RECT rc = { 0 };
-
 		GetClientRect(hWnd, &rc);
-
 		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(hWnd, &ps);
-		FillRect(hdc, &rc, (HBRUSH)hBackbrush);
+		//		PAINTSTRUCT psPaint;
+		InvalidateRect(hWnd, NULL, false);
 
+		//		GetClientRect(hWnd, &rc);
+		int width = rc.right;
+		int height = rc.bottom;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		HDC backbuffDC = CreateCompatibleDC(hdc);
+		HBITMAP backbuffer = CreateCompatibleBitmap(hdc, width, height);
+		int savedDC = SaveDC(backbuffDC);
+		SelectObject(backbuffDC, backbuffer);
+
+		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+
+		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
+		RestoreDC(backbuffDC, savedDC);
+
+		DeleteObject(backbuffer);
+		DeleteDC(backbuffDC);
+
+		ReleaseDC(hWnd, hdc);
 		EndPaint(hWnd, &ps);
+		return 0;
+	}break;
+	case WM_ERASEBKGND:
+	{
+		return true;
 	}break;
 
 	case WM_CLOSE:
@@ -1939,14 +2020,35 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 	case WM_PAINT:
 	{
 		RECT rc = { 0 };
-
 		GetClientRect(hWnd, &rc);
-
 		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(hWnd, &ps);
-		FillRect(hdc, &rc, (HBRUSH)hBackbrush);
+		//		PAINTSTRUCT psPaint;
+		InvalidateRect(hWnd, NULL, false);
 
+		//		GetClientRect(hWnd, &rc);
+		int width = rc.right;
+		int height = rc.bottom;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		HDC backbuffDC = CreateCompatibleDC(hdc);
+		HBITMAP backbuffer = CreateCompatibleBitmap(hdc, width, height);
+		int savedDC = SaveDC(backbuffDC);
+		SelectObject(backbuffDC, backbuffer);
+
+		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+
+		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
+		RestoreDC(backbuffDC, savedDC);
+
+		DeleteObject(backbuffer);
+		DeleteDC(backbuffDC);
+
+		ReleaseDC(hWnd, hdc);
 		EndPaint(hWnd, &ps);
+		return 0;
+	}break;
+	case WM_ERASEBKGND:
+	{
+		return true;
 	}break;
 
 	case WM_CLOSE:
@@ -2182,14 +2284,35 @@ LRESULT CALLBACK UserIdleConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	case WM_PAINT:
 	{
 		RECT rc = { 0 };
-
 		GetClientRect(hWnd, &rc);
-
 		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(hWnd, &ps);
-		FillRect(hdc, &rc, (HBRUSH)hBackbrush);
+		//		PAINTSTRUCT psPaint;
+		InvalidateRect(hWnd, NULL, false);
 
+		//		GetClientRect(hWnd, &rc);
+		int width = rc.right;
+		int height = rc.bottom;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		HDC backbuffDC = CreateCompatibleDC(hdc);
+		HBITMAP backbuffer = CreateCompatibleBitmap(hdc, width, height);
+		int savedDC = SaveDC(backbuffDC);
+		SelectObject(backbuffDC, backbuffer);
+
+		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+
+		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
+		RestoreDC(backbuffDC, savedDC);
+
+		DeleteObject(backbuffer);
+		DeleteDC(backbuffDC);
+
+		ReleaseDC(hWnd, hdc);
 		EndPaint(hWnd, &ps);
+		return 0;
+	}break;
+	case WM_ERASEBKGND:
+	{
+		return true;
 	}break;
 
 	case WM_CLOSE:
@@ -2374,14 +2497,35 @@ LRESULT CALLBACK WhitelistConfWndProc(HWND hWnd, UINT message, WPARAM wParam, LP
 	case WM_PAINT:
 	{
 		RECT rc = { 0 };
-
 		GetClientRect(hWnd, &rc);
-
 		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(hWnd, &ps);
-		FillRect(hdc, &rc, (HBRUSH)hBackbrush);
+		//		PAINTSTRUCT psPaint;
+		InvalidateRect(hWnd, NULL, false);
 
+		//		GetClientRect(hWnd, &rc);
+		int width = rc.right;
+		int height = rc.bottom;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		HDC backbuffDC = CreateCompatibleDC(hdc);
+		HBITMAP backbuffer = CreateCompatibleBitmap(hdc, width, height);
+		int savedDC = SaveDC(backbuffDC);
+		SelectObject(backbuffDC, backbuffer);
+
+		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+
+		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
+		RestoreDC(backbuffDC, savedDC);
+
+		DeleteObject(backbuffer);
+		DeleteDC(backbuffDC);
+
+		ReleaseDC(hWnd, hdc);
 		EndPaint(hWnd, &ps);
+		return 0;
+	}break;
+	case WM_ERASEBKGND:
+	{
+		return true;
 	}break;
 
 	case WM_CLOSE:
