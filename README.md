@@ -76,7 +76,7 @@ If your display has trouble powering off it is most likely because:
 - The IP configuration might be erroneous. Verify the configuration and make sure the TV has a static DHCP lease in your routers admin pages.
 - The application has not yet received a pairing key. Try removing the device in the UI, click apply and then re-add the device to force re-pairing.
 
-If User Idle Mode is not working as expected with some controllers/joysticks it might be because of a long-standing microsoft issue that has now been resolved with [KB5022845]/https://support.microsoft.com/en-gb/topic/february-14-2023-kb5022845-os-build-22621-1265-90a807f4-d2e8-486e-8a43-d09e66319f38?ranMID=46128&ranEAID=kXQk6*ivFEQ&ranSiteID=kXQk6.ivFEQ-nadHOjetyl.PtD1pScwwNQ&epi=kXQk6.ivFEQ-nadHOjetyl.PtD1pScwwNQ&irgwc=1&OCID=AID2200057_aff_7794_1243925&tduid=%28ir__dqggofbswkkfbi3o6lyan1jopn2xc9bn1ymykruz00%29%287794%29%281243925%29%28kXQk6.ivFEQ-nadHOjetyl.PtD1pScwwNQ%29%28%29&irclickid=_dqggofbswkkfbi3o6lyan1jopn2xc9bn1ymykruz00)
+If User Idle Mode is not working as expected with some controllers/joysticks it might be because of a long-standing microsoft issue that has now been resolved with [KB5022845](https://support.microsoft.com/en-gb/topic/february-14-2023-kb5022845-os-build-22621-1265-90a807f4-d2e8-486e-8a43-d09e66319f38?ranMID=46128&ranEAID=kXQk6*ivFEQ&ranSiteID=kXQk6.ivFEQ-nadHOjetyl.PtD1pScwwNQ&epi=kXQk6.ivFEQ-nadHOjetyl.PtD1pScwwNQ&irgwc=1&OCID=AID2200057_aff_7794_1243925&tduid=%28ir__dqggofbswkkfbi3o6lyan1jopn2xc9bn1ymykruz00%29%287794%29%281243925%29%28kXQk6.ivFEQ-nadHOjetyl.PtD1pScwwNQ%29%28%29&irclickid=_dqggofbswkkfbi3o6lyan1jopn2xc9bn1ymykruz00)
 HOT tip! Enable the built in logger and check the output, it can be very useful for understanding where problems are.
 
 
