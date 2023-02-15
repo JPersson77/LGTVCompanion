@@ -23,8 +23,10 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 1. Important prerequisites:
    - Power ON all TVs and ensure they are connected to your local area network via Wi-Fi or cable.
    - Ensure that the TV can be woken via the network. For the CX line of displays this is accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->Mobile Connection Management->TV On with Mobile, and then enable 'Turn On via Wi-Fi'. For C1 and C2 it's All Settings->General->Devices->External Devices->TV On With Mobile->Turn on via Wi-Fi.
-   - HOT TIP! While in the settings of the TV, ensure that the device automatic power off is set long enough to not interfere with youur sessions with the PC, f e 8 hours. Note that for the C2 displays this setting can be found here: All settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off. The LGTV Companion app will manage the power state of the display and the less interference the better.
    - Open the administrative interface of your router, and set a static DHCP lease for your WebOS devices, i.e. to ensure that your devices always have the same IP-addresses on your LAN.
+
+HOT TIP! While in the settings of the TV, ensure that the device automatic power off is set long enough to not interfere with youur sessions with the PC, f e 8 hours. Note that for the C2 displays this setting can be found here: All settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off. The LGTV Companion app will manage the power state of the display and the less interference the better.
+
 2. Download the latest version of the setup package from the releases page ( [Click here](https://github.com/JPersson77/LGTVCompanion/releases) ) and install it. This will install and start the service (LGTVsvc.exe), install the user interface (LGTV Companion.exe) as well as the desktop user mode daemon (LGTVdaemon.exe).
 3. Open the user interface from the Windows start menu, it is called "LGTV Companion".
 
