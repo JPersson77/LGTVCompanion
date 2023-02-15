@@ -17,7 +17,7 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 namespace ssl = boost::asio::ssl;       // from <boost/asio/ssl.hpp>
 using json = nlohmann::json;
 
-mutex			mMutex;
+mutex					mMutex;
 
 namespace {
 	class NetEntryDeleter final {
@@ -39,33 +39,34 @@ namespace {
 		const SOCKADDR_INET address;
 	};
 
-	boost::optional<NET_LUID> GetLocalInterface(SOCKADDR_INET destination, string sDev) {
+	boost::optional<NET_LUID> GetLocalInterface(SOCKADDR_INET destination, string sDev, string * log_msg) {
 		MIB_IPFORWARD_ROW2 row;
 		SOCKADDR_INET bestSourceAddress;
 		const auto result = GetBestRoute2(NULL, 0, NULL, &destination, 0, &row, &bestSourceAddress);
 
 		std::stringstream log;
-		log << sDev << ", GetBestRoute2()";
+		log << sDev << ", Best route to IP -";
 
 		if (result != NO_ERROR) {
 			log << " failed with code " << result;
-			Log(log.str());
+			*log_msg = log.str();
 			return boost::none;
 		}
 
-		log << " selected interface index " << row.InterfaceIndex << " LUID " << row.InterfaceLuid.Value << " route protocol " << row.Protocol;
+		log << " interface index " << row.InterfaceIndex << " LUID " << row.InterfaceLuid.Value << " route protocol " << row.Protocol;
 
 		if (row.Protocol != MIB_IPPROTO_LOCAL) {
-			log << "; route is not local, aborting";
-			Log(log.str());
+			log << "; route is not local, aborting!";
+			*log_msg = log.str();
 			return boost::none;
 		}
-		Log(log.str());
+		*log_msg = log.str();
+
 		return row.InterfaceLuid;
 	}
 
-	std::unique_ptr<NetEntryDeleter> CreateTransientLocalNetEntry(SOCKADDR_INET destination, unsigned char macAddress[6], string sDev) {
-		const auto luid = GetLocalInterface(destination, sDev);
+	std::unique_ptr<NetEntryDeleter> CreateTransientLocalNetEntry(SOCKADDR_INET destination, unsigned char macAddress[6], string sDev, string * log_msg) {
+		const auto luid = GetLocalInterface(destination, sDev, log_msg);
 		if (!luid.has_value())
 			return nullptr;
 
@@ -428,6 +429,7 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 		thread wolthread(WOLthread, CallingSessionParameters, CallingSessionThreadRunning, Timeout);
 		wolthread.detach();
 	}
+	Sleep(500);
 
 	// build the appropriate WebOS handshake
 	if (key == "")
@@ -439,7 +441,7 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 		handshake.replace(ckf, ck.length(), key);
 	}
 
-	//try waking up the display ten times, but not longer than timeout user preference
+	//try waking up the display, but not longer than timeout user preference
 	while (time(0) - origtim < (Timeout + 1))
 	{
 		time_t looptim = time(0);
@@ -506,7 +508,7 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 			//debuggy
 			{
 				string tt = beast::buffers_to_string(buffer.data());
-				string st = SSL ? "[DEBUG] (SSL) ON response 1: " : "[DEBUG] ON Response 1: ";
+				string st = device; st += SSL ? ", [DEBUG] (SSL) ON response 1: " : ", [DEBUG] ON Response 1: ";
 				st += tt;
 				Log(st);
 			}
@@ -547,7 +549,7 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 				string t = beast::buffers_to_string(buffer.data());
 
 				//debuggy
-				string ss = SSL ? "[DEBUG] (SSL) ON response key: " : "[DEBUG] ON response key: ";
+				string ss = device; ss += SSL ? ", [DEBUG] (SSL) ON response key: " : ", [DEBUG] ON response key: ";
 				ss += t;
 				Log(ss);
 
@@ -591,7 +593,7 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 			//debuggy
 			{
 				string tt = beast::buffers_to_string(buffer.data());
-				string st = SSL ? "[DEBUG] (SSL) ON response 2: " : "[DEBUG] ON response 2: ";
+				string st = device; st += SSL ? ", [DEBUG] (SSL) ON response 2: " : ", [DEBUG] ON response 2: ";
 				st += tt;
 				Log(st);
 			}
@@ -611,7 +613,7 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 			//debuggy
 			{
 				string tt = beast::buffers_to_string(buffer.data());
-				string st = SSL ? "[DEBUG] (SSL) ON response 3: " : "[DEBUG] ON response 3: ";
+				string st = device; st += SSL ? ", [DEBUG] (SSL) ON response 3: " : ", [DEBUG] ON response 3: ";
 				st += tt;
 				Log(st);
 			}
@@ -651,8 +653,8 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 		}
 		time_t endtim = time(0);
 		time_t execution_time = endtim - looptim;
-		if (execution_time < 6)
-			Sleep((6 - (DWORD)execution_time) * 1000);
+		if (execution_time >= 0 && execution_time < 1)
+			Sleep((1 - (DWORD)execution_time) * 1000);
 	}
 
 	while (!mMutex.try_lock())
@@ -677,6 +679,7 @@ void WOLthread(settings::DEVICE* CallingSessionParameters, bool* CallingSessionT
 
 	SOCKET WOLsocket = INVALID_SOCKET;
 	string logmsg;
+	string IPentry_saved;
 
 	try
 	{
@@ -776,7 +779,7 @@ void WOLthread(settings::DEVICE* CallingSessionParameters, bool* CallingSessionT
 				MAC.erase(remove(MAC.begin(), MAC.end(), CharsToRemove[i]), MAC.end());
 		}
 
-		//send WOL packet every other second until timeout, or until the calling thread has ended
+		//send WOL packet every second until timeout, or until the calling thread has ended
 		while (time(0) - origtim < (Timeout + 1))
 		{
 			time_t looptim = time(0);
@@ -801,8 +804,16 @@ void WOLthread(settings::DEVICE* CallingSessionParameters, bool* CallingSessionT
 							memcpy(&Message[i * 6], &MACstr, 6 * sizeof(unsigned char));
 
 						std::unique_ptr<NetEntryDeleter> netEntryDeleter;
-						if (WOLtype == WOL_IPSEND) netEntryDeleter = CreateTransientLocalNetEntry(reinterpret_cast<const SOCKADDR_INET&>(LANDestination), MACstr, device);
-
+						if (WOLtype == WOL_IPSEND)
+						{
+							string log_msg;
+							netEntryDeleter = CreateTransientLocalNetEntry(reinterpret_cast<const SOCKADDR_INET&>(LANDestination), MACstr, device, &log_msg);
+							if (log_msg != IPentry_saved)
+							{
+								Log(log_msg);
+								IPentry_saved = log_msg;
+							}
+						}
 						// Send Wake On LAN packet
 						if (sendto(WOLsocket, (char*)&Message, 102, 0, reinterpret_cast<sockaddr*>(&LANDestination), sizeof(LANDestination)) == SOCKET_ERROR)
 						{
@@ -831,8 +842,8 @@ void WOLthread(settings::DEVICE* CallingSessionParameters, bool* CallingSessionT
 
 			time_t endtim = time(0);
 			time_t execution_time = endtim - looptim;
-			if (execution_time < 2)
-				Sleep((2 - (DWORD)execution_time) * 1000);
+			if (execution_time >= 0 && execution_time < 1)
+				Sleep((1 - (DWORD)execution_time) * 1000);
 
 			while (!mMutex.try_lock())
 				Sleep(MUTEX_WAIT);
@@ -971,7 +982,7 @@ void DisplayPowerOffThread(settings::DEVICE* CallingSessionParameters, bool* Cal
 			//debuggy
 			{
 				string tt = beast::buffers_to_string(buffer.data());
-				string st = SSL ? "[DEBUG] (SSL) OFF response 1: " : "[DEBUG] OFF response 1: ";
+				string st = device; st += SSL ? ", [DEBUG] (SSL) OFF response 1: " : ", [DEBUG] OFF response 1: ";
 				st += tt;
 				Log(st);
 			}
@@ -1006,7 +1017,7 @@ void DisplayPowerOffThread(settings::DEVICE* CallingSessionParameters, bool* Cal
 			//debuggy
 			{
 				string tt = beast::buffers_to_string(buffer.data());
-				string st = SSL ? "[DEBUG] (SSL) OFF response 2: " : "[DEBUG] OFF response 2: ";
+				string st = device; st += SSL ? ", [DEBUG] (SSL) OFF response 2: " : ", [DEBUG] OFF response 2: ";
 				st += tt;
 				Log(st);
 			}
@@ -1066,7 +1077,7 @@ void DisplayPowerOffThread(settings::DEVICE* CallingSessionParameters, bool* Cal
 				//debuggy
 				{
 					string tt = beast::buffers_to_string(buffer.data());
-					string st = SSL ? "[DEBUG] (SSL) OFF response 3: " : "[DEBUG] OFF response 3: ";
+					string st = device; st += SSL ? ", [DEBUG] (SSL) OFF response 3: " : ", [DEBUG] OFF response 3: ";
 					st += tt;
 					Log(st);
 				}
@@ -1125,7 +1136,7 @@ void DisplayPowerOffThread(settings::DEVICE* CallingSessionParameters, bool* Cal
 				//debuggy
 				{
 					string tt = beast::buffers_to_string(buffer.data());
-					string st = SSL ? "[DEBUG] (SSL) OFF response 4: " : "[DEBUG] OFF response 4: ";
+					string st = device; st += SSL ? ", [DEBUG] (SSL) OFF response 4: " : ", [DEBUG] OFF response 4: ";
 					st += tt;
 					Log(st);
 				}
@@ -1208,7 +1219,7 @@ void SetDisplayHdmiInputThread(settings::DEVICE* CallingSessionParameters, bool*
 	ckf = setinputmess.find(hdmino);
 	setinputmess.replace(ckf, hdmino.length(), inp);
 
-	//try ten times, but not longer than timeout user preference
+	//try, but not longer than timeout user preference
 	while (time(0) - origtim < (Timeout + 1))
 	{
 		time_t looptim = time(0);
@@ -1289,8 +1300,8 @@ void SetDisplayHdmiInputThread(settings::DEVICE* CallingSessionParameters, bool*
 		}
 		time_t endtim = time(0);
 		time_t execution_time = endtim - looptim;
-		if (execution_time < 6)
-			Sleep((6 - (DWORD)execution_time) * 1000);
+		if (execution_time >= 0 && execution_time < 2)
+			Sleep((2 - (DWORD)execution_time) * 1000);
 	}
 
 	while (!mMutex.try_lock())

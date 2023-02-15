@@ -20,6 +20,7 @@ UINT							shellhookMessage;
 DWORD							daemon_startup_user_input_time = 0;
 UINT							ManualUserIdleMode = 0;
 HBRUSH                          hBackbrush;
+time_t							TimeOfLastTopologyChange = 0;
 
 settings::Preferences			Prefs;
 
@@ -423,6 +424,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			KillTimer(hWnd, (UINT_PTR)REMOTE_DISCONNECT);
 			CommunicateWithService("-daemon remote_disconnect");
 		}break;
+		case TIMER_TOPOLOGY_COLLECTION:
+		{
+			KillTimer(hWnd, (UINT_PTR)TIMER_TOPOLOGY_COLLECTION);
+			PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+		}break;
 		case TIMER_TOPOLOGY:
 		{
 			KillTimer(hWnd, TIMER_TOPOLOGY);
@@ -432,7 +438,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			int result = VerifyTopology();
 
 			if (result == TOPOLOGY_OK)
+			{
 				PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+			}
 			else if (result == TOPOLOGY_UNDETERMINED)
 			{
 				Log(L"No active devices detected when verifying Windows Monitor Topology. Topology feature has been disabled");
@@ -548,6 +556,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}break;
 	case USER_DISPLAYCHANGE:
 	{
+		TimeOfLastTopologyChange = time(0);
 		CheckDisplayTopology();
 	}break;
 
@@ -555,7 +564,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		if (Prefs.AdhereTopology)
 		{
-			PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+			time_t now = time(0);
+			if (now - TimeOfLastTopologyChange > 10)
+			{
+				PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+			}
+			else
+			{
+				TimeOfLastTopologyChange = now;
+				SetTimer(hWnd, TIMER_TOPOLOGY_COLLECTION, TIMER_TOPOLOGY_COLLECTION_DELAY, (TIMERPROC)NULL);
+			}
 		}
 	}break;
 

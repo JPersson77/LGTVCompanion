@@ -47,11 +47,13 @@
 #define         TIMER_IDLE								19
 #define         TIMER_TOPOLOGY							20
 #define         TIMER_CHECK_PROCESSES					21
+#define         TIMER_TOPOLOGY_COLLECTION				22
 #define         TIMER_MAIN_DELAY_WHEN_BUSY				5000
 #define         TIMER_MAIN_DELAY_WHEN_IDLE				100
 #define         TIMER_REMOTE_DELAY						10000
 #define         TIMER_TOPOLOGY_DELAY					8000
 #define         TIMER_CHECK_PROCESSES_DELAY				5000
+#define         TIMER_TOPOLOGY_COLLECTION_DELAY			3000
 #define         APP_NEW_VERSION							WM_USER+9
 #define         USER_DISPLAYCHANGE						WM_USER+10
 #define         APP_USER_IDLE_ON						WM_USER+20
