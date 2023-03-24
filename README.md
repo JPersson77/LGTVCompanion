@@ -15,16 +15,18 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 
 ## What other people say
 
-- *"That is a really janky solution. But... it WORKS!"* - Linus Tech Tips at https://youtu.be/4mgePWWCAmA?t=21m14s
-- *"The best kind of programming is fueled by pure hate for an annoying situation."* - reddituser at https://www.reddit.com/r/OLED_Gaming/comments/okhv67/comment/h58alyu/?utm_source=share&utm_medium=web2x&context=3
+- *"That is a really janky solution. But... it WORKS!"* - Linus Tech Tips at [YouTube](https://youtu.be/4mgePWWCAmA?t=21m14s)
+- *"The best kind of programming is fueled by pure hate for an annoying situation."* - reddituser at [Reddit]( https://www.reddit.com/r/OLED_Gaming/comments/okhv67/comment/h58alyu/?utm_source=share&utm_medium=web2x&context=3)
 - *"Yeah, that's really nice!" - my wife
 
 ## Installation and usage
 1. Important prerequisites:
    - Power ON all TVs and ensure they are connected to your local area network via Wi-Fi or cable.
    - Ensure that the TV can be woken via the network. For the CX line of displays this is accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->Mobile Connection Management->TV On with Mobile, and then enable 'Turn On via Wi-Fi'. For C1 and C2 it's All Settings->General->Devices->External Devices->TV On With Mobile->Turn on via Wi-Fi.
-   - HOT TIP! While in the settings of the TV, ensure that the device automatic power off is set long enough to not interfere with youur sessions with the PC, f e 8 hours. Note that for the C2 displays this setting can be found here: All settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off. The LGTV Companion app will manage the power state of the display and the less interference the better.
    - Open the administrative interface of your router, and set a static DHCP lease for your WebOS devices, i.e. to ensure that your devices always have the same IP-addresses on your LAN.
+
+HOT TIP! While in the settings of the TV, ensure that the device automatic power off is set long enough to not interfere with youur sessions with the PC, f e 8 hours. Note that for the C2 displays this setting can be found here: All settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off. The LGTV Companion app will manage the power state of the display and the less interference the better.
+
 2. Download the latest version of the setup package from the releases page ( [Click here](https://github.com/JPersson77/LGTVCompanion/releases) ) and install it. This will install and start the service (LGTVsvc.exe), install the user interface (LGTV Companion.exe) as well as the desktop user mode daemon (LGTVdaemon.exe).
 3. Open the user interface from the Windows start menu, it is called "LGTV Companion".
 
@@ -62,7 +64,7 @@ HOT TIP! The "User idle mode" works seprately from all other windows power optio
 - The TV cannnot be on a different subnet/VLAN from your PC. This is because the TV is powerd on by means of broadcasting a magic packet, aka Wake-on-lan, which is restricted to layer 2, i.e. same subnet only. There are ways to bypass this limitation but it is outside the scope of this application, even though you can probably make it work. Let me know if you need help to make it work for you.
 
 ## Troubleshooting
-If your display has trouble powering on, these are the things to check first:
+*If your display has trouble powering on*, these are the things to check first:
 - When connecting the TV via Wi-Fi it seems some users must enable "Quickstart+" (up to 2021 models) or "Always ready" (2022 and forward models) and disable "HDD Eco mode" to avoid the NIC becoming inactive. (physical network cable does not seem to need this)
 - Confirm that the device is properly configured (i e IP and MAC) and try to use one of the other wake-on-lan network options, primarily use option two, send to IP-address.
 - Ensure the network is not dropping WOL-broadcasts.
@@ -72,9 +74,11 @@ If your display has trouble powering on, these are the things to check first:
 
 HOT TIP! Aim to configure the app to cover your use case and let the remote be, and also set a long enough timeout for the device built-in automatic power-off to never interfere with the length of your typical session with the PC.
 
-If your display has trouble powering off it is most likely because:
+*If your display has trouble powering off* it is most likely because:
 - The IP configuration might be erroneous. Verify the configuration and make sure the TV has a static DHCP lease in your routers admin pages.
 - The application has not yet received a pairing key. Try removing the device in the UI, click apply and then re-add the device to force re-pairing.
+
+*If User Idle Mode* is not working as expected with some controllers/joysticks it might be because of a long-standing microsoft issue that has now been resolved with [KB5022845](https://support.microsoft.com/en-gb/topic/february-14-2023-kb5022845-os-build-22621-1265-90a807f4-d2e8-486e-8a43-d09e66319f38?ranMID=46128&ranEAID=kXQk6*ivFEQ&ranSiteID=kXQk6.ivFEQ-nadHOjetyl.PtD1pScwwNQ&epi=kXQk6.ivFEQ-nadHOjetyl.PtD1pScwwNQ&irgwc=1&OCID=AID2200057_aff_7794_1243925&tduid=%28ir__dqggofbswkkfbi3o6lyan1jopn2xc9bn1ymykruz00%29%287794%29%281243925%29%28kXQk6.ivFEQ-nadHOjetyl.PtD1pScwwNQ%29%28%29&irclickid=_dqggofbswkkfbi3o6lyan1jopn2xc9bn1ymykruz00)
 
 HOT tip! Enable the built in logger and check the output, it can be very useful for understanding where problems are.
 
