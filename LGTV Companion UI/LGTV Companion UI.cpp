@@ -16,11 +16,19 @@ BACKGROUND
 	prevent "burn-in", or more accurately pixel-wear.
 
 BUILD INSTRUCTIONS AND DEPENDENCIES
-	Ensure that Vcpkg (https://github.com/microsoft/vcpkg) is installed. Vcpkg is a free ++ Library Manager 
-	for Windows. A Vcpkg manifest is included with the source code and the necessary dependencies
-	will be automatically downloaded, configured and installed. 
+	First, to be able to build the projects (UI, Service, Daemon) in Visual Studio 2022 please 
+	ensure that Vcpkg (https://github.com/microsoft/vcpkg) is installed. Vcpkg is a free 
+	Library Manager for Windows. You should use Vcpkg in one of two ways:
 	
-	If you want to manually install dependencies, use these commands:
+	1) A Vcpkg manifest is included with the source code and the necessary dependencies
+	will be automatically downloaded, configured and installed, if you choose to enable it.
+
+	To enable the manifest please open the properties for each project in the solution, then 
+	navigate to the vcpkg section and Select "Yes" for "Use Manifest". Do so for both the 
+	"Debug" and "Release" project configurations.
+
+	2) Alternatively, You can manually install the dependencies, with the following commands:
+
 		vcpkg install nlohmann-json:x64-windows-static
 		vcpkg install boost-asio:x64-windows-static
 		vcpkg install boost-optional:x64-windows-static
@@ -29,10 +37,14 @@ BUILD INSTRUCTIONS AND DEPENDENCIES
 		vcpkg install boost-beast:x64-windows-static
 		vcpkg install wintoast:x64-windows-static
 		vcpkg install openssl:x64-windows-static
+	
+	Secondly, to be able to build the setup package please ensure that the WiX Toolset is 
+	installed (https://wixtoolset.org/) and that the WiX Toolset Visual Studio Extension 
+	(WiX v3	Visual Studio 2022 Extension) is installed.
 
 INSTALLATION, USAGE ETC
 
-https://github.com/JPersson77/LGTVCompanion
+	https://github.com/JPersson77/LGTVCompanion
 
 CHANGELOG
 	v 1.0.0             - Initial release
