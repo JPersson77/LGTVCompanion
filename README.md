@@ -117,6 +117,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 ## Discussions
 
 Discord: https://discord.gg/7KkTPrP3fq
@@ -133,6 +134,11 @@ Please use the Github issue tracker for potential bug reports and/or feature req
 - Contributors
 - Donors and supporters
 
+## Donations
+
+This is free software, but your support is appreciated and there is a donation page set up over at PayPal. PayPal allows you to use a credit- or debit card or your PayPal balance to make a donation.
+
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.me/jpersson77)
 
 ## Copyright
 Copyright © 2021-2023 Jörgen Persson
