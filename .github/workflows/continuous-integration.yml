@@ -13,12 +13,12 @@ jobs:
         id: vcpkg
         uses: johnwason/vcpkg-action@v4
         with:
-#         manifest-dir: ${{ github.workspace }} # Set to directory containing vcpkg.json
-          pkgs: nlohmann-json boost-asio boost-optional boost-utility boost-date-time boost-beast wintoast openssl
+         manifest-dir: ${{ github.workspace }} # Set to directory containing vcpkg.json
+#          pkgs: nlohmann-json boost-asio boost-optional boost-utility boost-date-time boost-beast wintoast openssl
           triplet: x64-windows-static
           token: ${{ github.token }}
       - run: vcpkg integrate install
-      - run: msbuild LGTVCompanion.sln
+      - run: msbuild LGTVCompanion.sln /p:VcpkgEnableManifest=true 
         env:
           Configuration: ${{ matrix.configuration }}
       - uses: actions/upload-artifact@v3
