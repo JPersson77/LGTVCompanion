@@ -21,7 +21,7 @@ DWORD							daemon_startup_user_input_time = 0;
 UINT							ManualUserIdleMode = 0;
 HBRUSH                          hBackbrush;
 time_t							TimeOfLastTopologyChange = 0;
-
+ipc::PipeClient*				pPipeClient;
 settings::Preferences			Prefs;
 
 //Application entry point
@@ -61,6 +61,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			return 0;
 		}
 	}
+
 	shellhookMessage = RegisterWindowMessageW(L"SHELLHOOK");
 	//Initialize toast notifications
 	WinToast::WinToastError error;
@@ -75,6 +76,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	}
 	else
 		Prefs.ToastInitialised = true;
+
+	// Initiate PipeClient IPC
+	ipc::PipeClient PipeCl(PIPENAME, NamedPipeCallback);
+	pPipeClient = &PipeCl;
 
 	// if the app is already running as another process, tell the other process to exit
 	MessageExistingProcess();
@@ -380,21 +385,42 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			if (ManualUserIdleMode == 0)
 			{
-				if (Prefs.bFullscreenCheckEnabled && (daemon_startup_user_input_time == -1))
-					if (FullscreenApplicationRunning())
-					{
-						Log(L"Fullscreen application prohibiting idle");
-						return 0;
-					}
+				//Is a whitelisted process running
 				if (Prefs.bIdleWhitelistEnabled)
 				{
 					if (Prefs.Remote.sCurrentlyRunningWhitelistedProcess != L"")
 					{
-						wstring mess = L"Whitelisted application prohibiting idle (";
+						wstring mess = L"Whitelisted application is prohibiting user idle mode(";
 						mess += Prefs.Remote.sCurrentlyRunningWhitelistedProcess;
 						mess += L")";
 						Log(mess);
 						return 0;
+					}
+				}
+				// fullscreen fix for first boot
+				// fullsceen detection routine
+				if(daemon_startup_user_input_time == -1)
+				{
+					// UIM is disabled during fullsceen
+					if (Prefs.bFullscreenCheckEnabled)
+					{
+						if (FullscreenApplicationRunning())
+						{
+							Log(L"Fullscreen application is currently prohibiting user idle mode");
+							return 0;
+						}
+					}
+					else // UIM is enabled during fullscreen
+					{
+						//Is an excluded fullscreen process running?
+						if(Prefs.bIdleFsExclusionsEnabled && Prefs.Remote.sCurrentlyRunningFsExcludedProcess != L"")
+						{
+							wstring mess = L"Fullscreen excluded process is currently prohibiting idle (";
+							mess += Prefs.Remote.sCurrentlyRunningFsExcludedProcess;
+							mess += L")";
+							Log(mess);
+							return 0;
+						}					
 					}
 				}
 			}
@@ -443,15 +469,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			else if (result == TOPOLOGY_UNDETERMINED)
 			{
-				Log(L"No active devices detected when verifying Windows Monitor Topology. Topology feature has been disabled");
+				Log(L"Warning! No active devices detected when verifying Windows Monitor Topology.");
 				CommunicateWithService("-daemon topology undetermined");
-				Prefs.AdhereTopology = false;
+//				Prefs.AdhereTopology = false;
 			}
 			else if (result == TOPOLOGY_OK_DISABLE)
 			{
 				Prefs.AdhereTopology = false;
 			}
-			else if (result = TOPOLOGY_ERROR)
+			else if (result == TOPOLOGY_ERROR)
 			{
 				Prefs.AdhereTopology = false;
 				CommunicateWithService("-daemon topology invalid");
@@ -735,29 +761,13 @@ bool MessageExistingProcess(void)
 	return false;
 }
 //   communicate with service via IPC
-void CommunicateWithService(string input)
+void CommunicateWithService(string sData)
 {
-	DWORD dwWritten;
 
-	if (input == "")
-		return;
-
-	hPipe = CreateFile(PIPENAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-
-	if (hPipe != INVALID_HANDLE_VALUE)
-	{
-		WriteFile(hPipe,
-			input.c_str(),
-			(DWORD)input.length() + 1,   // = length of string + terminating '\0' !!!
-			&dwWritten,
-			NULL);
-		Log(common::widen(input));
-	}
-	else
+	if (!pPipeClient->Send(common::widen(sData)))
 		Log(L"Failed to connect to named pipe. Service may be stopped.");
-
-	if (hPipe != INVALID_HANDLE_VALUE)
-		CloseHandle(hPipe);
+	else
+		Log(common::widen(sData));
 }
 
 void Log(wstring input)
@@ -980,10 +990,13 @@ int VerifyTopology(void)
 DWORD CheckRemoteStreamingProcesses(void)
 {
 	bool bWhiteListConfigured = Prefs.WhiteList.size() > 0 ? true : false;
+	bool bFsExclusionListConfigured = Prefs.FsExclusions.size() > 0 ? true : false;
 	bool bWhitelistProcessFound = false;
+	bool bFsExclusionProcessFound = false;
 	bool bStreamingProcessFound = false;
 	bool bSunshineSvcProcessFound = false;
 	wstring sWhitelistProcessFound = L"";
+	wstring sFsExclusionProcessFound = L"";
 	DWORD ReturnValue = 0;
 
 	// Iterate over currently running processes
@@ -1009,6 +1022,19 @@ DWORD CheckRemoteStreamingProcesses(void)
 							sWhitelistProcessFound = L"<unnamed>";
 						bWhitelistProcessFound = true;
 					}
+		// look for user idle mode fullscreen excluded processes
+		if (Prefs.bIdleFsExclusionsEnabled && bFsExclusionListConfigured && !bFsExclusionProcessFound)
+			for (auto& w : Prefs.FsExclusions)
+				if (w.Application != L"")
+					if (!_tcsicmp(entry.szExeFile, w.Application.c_str()))
+					{
+						if (w.Name != L"")
+							sFsExclusionProcessFound = w.Name;
+						else
+							sFsExclusionProcessFound = L"<unnamed>";
+						bFsExclusionProcessFound = true;
+					}
+
 		// look for currently running known streaming processes
 		if (Prefs.RemoteStreamingCheck && !bStreamingProcessFound)
 			for (auto& w : Prefs.Remote.stream_proc_list)
@@ -1019,7 +1045,7 @@ DWORD CheckRemoteStreamingProcesses(void)
 		if (Prefs.RemoteStreamingCheck && !bSunshineSvcProcessFound)
 			if (!_tcsicmp(entry.szExeFile, SUNSHINE_FILE_SVC))
 				bSunshineSvcProcessFound = true;
-	} while (!(bStreamingProcessFound && bWhitelistProcessFound && bSunshineSvcProcessFound) && Process32Next(snapshot, &entry));
+	} while (!(bStreamingProcessFound && bWhitelistProcessFound && bSunshineSvcProcessFound && bFsExclusionProcessFound) && Process32Next(snapshot, &entry));
 
 	CloseHandle(snapshot);
 
@@ -1040,8 +1066,9 @@ DWORD CheckRemoteStreamingProcesses(void)
 	// was a remote streaming process currently running?
 	ReturnValue ^= bStreamingProcessFound ? REMOTE_STEAM_CONNECTED : REMOTE_STEAM_NOT_CONNECTED;
 
-	// was a user idle mode whitelisted process currently running?
+	// was a user idle mode whitelisted / FS excluded process currently running?
 	Prefs.Remote.sCurrentlyRunningWhitelistedProcess = sWhitelistProcessFound;
+	Prefs.Remote.sCurrentlyRunningFsExcludedProcess = sFsExclusionProcessFound;
 	return ReturnValue;
 }
 bool FullscreenApplicationRunning(void)
@@ -1293,4 +1320,9 @@ string Sunshine_GetConfVal(string buf, string conf_item)
 			return buf.substr(pos + conf_item.length(), newl - (pos + conf_item.length()));
 	}
 	return "";
+}
+
+void NamedPipeCallback(std::wstring message)
+{
+	return;
 }

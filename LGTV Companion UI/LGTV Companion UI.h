@@ -91,3 +91,5 @@ void						VersionCheckThread(HWND);
 static BOOL CALLBACK		meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);
 std::vector<jpersson77::settings::DISPLAY_INFO> QueryDisplays();
 bool						MessageDaemon(std::wstring);
+void						NamedPipeCallback(std::wstring message);
+

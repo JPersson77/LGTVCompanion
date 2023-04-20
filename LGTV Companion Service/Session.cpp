@@ -218,6 +218,48 @@ void CSession::TurnOnDisplay(bool SendWOL)
 	Log(s);
 	return;
 }
+void CSession::SendAnyMessage(string message, string payload)
+{
+	if (message.size() == 0)
+		return;
+
+	string s;
+
+	//thread safe section
+	while (!mMutex.try_lock())
+		Sleep(MUTEX_WAIT);
+
+	s = Parameters.DeviceId;
+	s += ", spawning SendRequest(";
+	s += message;
+	if (payload.size() > 0)
+	{
+		s += ", ";
+		s += payload;
+	}
+	s += ") thread.";
+
+	// declaring character array (+1 for null terminator)
+	char* sMess = NULL;
+	if (message.size() > 0)
+	{
+		sMess = new char[message.length() + 1];
+		strcpy_s(sMess, (rsize_t)message.length()+1, message.c_str());
+	}
+	char* sPayload = NULL;
+	if(payload.size() > 0)
+	{
+		sPayload = new char[payload.length() + 1];
+		strcpy_s(sPayload, (rsize_t)payload.length()+1, payload.c_str());
+	}
+
+	thread thread_obj(SendRequest, &Parameters, Parameters.PowerOnTimeout, sMess, sPayload);
+	thread_obj.detach();
+
+	mMutex.unlock();
+	Log(s);
+	return;
+}
 void CSession::TurnOffDisplay(bool forced, bool dimmed, bool blankscreen)
 {
 	string s;
@@ -269,6 +311,17 @@ void CSession::SystemEvent(DWORD dwMsg, int param)
 		TurnOffDisplay(true, false, true);
 	if (dwMsg == SYSTEM_EVENT_FORCESETHDMI)
 		SetDisplayHdmiInput(param);
+	if (dwMsg == SYSTEM_EVENT_FORCE_MUTE)
+	{
+		string message = "ssap://audio/setMute";
+		string payload = "\"mute\" : \"true\"";
+		SendAnyMessage(message, payload);
+	}
+	if (dwMsg == SYSTEM_EVENT_FORCE_UNMUTE)
+	{
+		string message = "ssap://audio/setMute";
+		SendAnyMessage(message);
+	}
 
 	//thread safe section
 	while (!mMutex.try_lock())
@@ -411,7 +464,8 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 {
 	string screenonmess = R"({"id":"2","type" : "request","uri" : "ssap://com.webos.service.tvpower/power/turnOnScreen"})";
 	string getpowerstatemess = R"({"id": "1", "type": "request", "uri": "ssap://com.webos.service.tvpower/power/getPowerState"})";
-
+//	string mute_off_mess = R"({"id": "3", "type" : "request", "uri" : "ssap://audio/setMute", "payload" :{"mute":"false"}})";
+	string mute_off_mess = R"({"id": "3", "type" : "request", "uri" : "ssap://audio/setMute"})";
 	if (!CallingSessionParameters)
 		return;
 
@@ -419,6 +473,8 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 	string key = CallingSessionParameters->SessionKey;
 	string device = CallingSessionParameters->DeviceId;
 	bool SSL = CallingSessionParameters->SSL;
+	bool mute = CallingSessionParameters->MuteSpeakers;
+	bool bScreenWasBlanked = false;
 	string logmsg;
 	string ck = "CLIENTKEYx0x0x0";
 	string handshake;
@@ -597,6 +653,18 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 				st += tt;
 				Log(st);
 			}
+
+			//Was the screen blanked
+			j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
+			boost::string_view type = j["type"];
+			boost::string_view state = j["payload"]["state"];
+			if (std::string(type) == "response")
+			{
+				if (std::string(state) == "Active")
+				{
+					bScreenWasBlanked = true;
+				}
+			}			
 			buffer.consume(buffer.size());
 
 			//retreive power state from device to determine if the device is powered on
@@ -620,8 +688,8 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 
 			j = json::parse(static_cast<const char*>(buffer.data().data()), static_cast<const char*>(buffer.data().data()) + buffer.size());
 
-			boost::string_view type = j["type"];
-			boost::string_view state = j["payload"]["state"];
+			type = j["type"];
+			state = j["payload"]["state"];
 			if (std::string(type) == "response")
 			{
 				if (std::string(state) == "Active")
@@ -630,6 +698,29 @@ void DisplayPowerOnThread(settings::DEVICE* CallingSessionParameters, bool* Call
 					logmsg += ", power state is: ON";
 					Log(logmsg);
 
+					buffer.consume(buffer.size());
+
+					// unmute speakers
+					if (mute) //&& bScreenWasBlanked)
+					{
+						if (SSL)
+						{
+							wss.write(net::buffer(mute_off_mess));
+							wss.read(buffer);
+						}
+						else
+						{
+							ws.write(net::buffer(mute_off_mess));
+							ws.read(buffer);
+						}
+						//debuggy
+						{
+							string tt = beast::buffers_to_string(buffer.data());
+							string st = device; st += SSL ? ", [DEBUG] (SSL) ON response 4: " : ", [DEBUG] ON response 4: ";
+							st += tt;
+							Log(st);
+						}
+					}
 					buffer.consume(buffer.size());
 					if (SSL)
 						wss.close(websocket::close_code::normal);
@@ -892,11 +983,14 @@ void DisplayPowerOffThread(settings::DEVICE* CallingSessionParameters, bool* Cal
 		string device = CallingSessionParameters->DeviceId;
 		int hdmi_number = CallingSessionParameters->OnlyTurnOffIfCurrentHDMIInputNumberIs;
 		bool SSL = CallingSessionParameters->SSL;
+		bool mute = CallingSessionParameters->MuteSpeakers;
 		string logmsg;
 		string getpowerstatemess = R"({"id": "1", "type": "request", "uri": "ssap://com.webos.service.tvpower/power/getPowerState"})";
 		string getactiveinputmess = R"({"id": "2", "type": "request", "uri": "ssap://com.webos.applicationManager/getForegroundAppInfo"})";
 		string poweroffmess = R"({"id": "3", "type" : "request", "uri" : "ssap://system/turnOff" })";
 		string screenoffmess = R"({"id": "4", "type" : "request", "uri" : "ssap://com.webos.service.tvpower/power/turnOffScreen"})";
+		string mute_on_mess = R"({"id": "3", "type" : "request", "uri" : "ssap://audio/setMute", "payload" :{"mute":"true"}})";
+
 		string handshake = common::narrow(HANDSHAKE_PAIRED);
 		string ck = "CLIENTKEYx0x0x0";
 		json j;
@@ -1029,7 +1123,8 @@ void DisplayPowerOffThread(settings::DEVICE* CallingSessionParameters, bool* Cal
 			state = j["payload"]["state"];
 			if (std::string(type) == "response")
 			{
-				if (std::string(state) != "Active")
+				if ((!BlankScreen && std::string(state) != "Active" && std::string(state) != "Screen Off") ||
+					(BlankScreen && std::string(state) != "Active"))
 				{
 					logmsg = device;
 					logmsg += ", power state is: ";
@@ -1147,6 +1242,29 @@ void DisplayPowerOffThread(settings::DEVICE* CallingSessionParameters, bool* Cal
 				else
 					logmsg += ", power state is: OFF.";
 				Log(logmsg);
+				buffer.consume(buffer.size());
+
+				// mute speakers
+				if (mute && BlankScreen)
+				{
+					if (SSL)
+					{
+						wss.write(net::buffer(mute_on_mess));
+						wss.read(buffer);
+					}
+					else
+					{
+						ws.write(net::buffer(mute_on_mess));
+						ws.read(buffer);
+					}
+					//debuggy
+					{
+						string tt = beast::buffers_to_string(buffer.data());
+						string st = device; st += SSL ? ", [DEBUG] (SSL) ON response 5: " : ", [DEBUG] ON response 5: ";
+						st += tt;
+						Log(st);
+					}
+				}
 				buffer.consume(buffer.size());
 			}
 			else
@@ -1308,5 +1426,132 @@ void SetDisplayHdmiInputThread(settings::DEVICE* CallingSessionParameters, bool*
 		Sleep(MUTEX_WAIT);
 	*CallingSessionThreadRunning = false;
 	mMutex.unlock();
+	return;
+}
+
+//   THREAD: Send any message
+void SendRequest(settings::DEVICE* CallingSessionParameters, int Timeout, char* Message, char* Payload)
+{
+	if (!CallingSessionParameters)
+		return;
+	if (CallingSessionParameters->SessionKey == "")
+		return;
+
+
+	string hostip = CallingSessionParameters->IP;
+	string key = CallingSessionParameters->SessionKey;
+	string device = CallingSessionParameters->DeviceId;
+	bool SSL = CallingSessionParameters->SSL;
+	string logmsg;
+	time_t origtim = time(0);
+	string ck = "CLIENTKEYx0x0x0";
+	string handshake;
+	size_t ckf = NULL;
+
+	string mess = R"({"id": "5", "type" : "request", "uri" : ")";
+	mess += Message;
+	if (Payload == NULL)
+	{
+		mess += "\"}";
+	}
+	else
+	{
+		mess += "\", \"payload\" :{";
+		mess += Payload;
+		mess += "}}";
+	}
+	if(Message)
+		delete[] Message;
+	if(Payload)
+		delete[] Payload;
+
+	//build handshake
+	handshake = common::narrow(HANDSHAKE_PAIRED);
+	ckf = handshake.find(ck);
+	handshake.replace(ckf, ck.length(), key);
+
+	//try, but not longer than timeout user preference
+	while (time(0) - origtim < (Timeout + 1))
+	{
+		time_t looptim = time(0);
+		try
+		{
+			//BOOST::BEAST
+			beast::flat_buffer buffer;
+			string host = hostip;
+			net::io_context ioc;
+			tcp::resolver resolver{ ioc };
+
+			//context holds certificates
+			ssl::context ctx{ ssl::context::tlsv12_client };
+			//load_root_certificates(ctx);
+
+			websocket::stream<beast::ssl_stream<tcp::socket>> wss{ ioc, ctx };
+			websocket::stream<tcp::socket> ws{ ioc };
+
+			// try communicating with the display
+			auto const results = resolver.resolve(host, SSL ? SERVICE_PORT_SSL : SERVICE_PORT);
+			auto ep = net::connect(SSL ? get_lowest_layer(wss) : ws.next_layer(), results);
+
+			//SSL set SNI Hostname
+			if (SSL)
+				SSL_set_tlsext_host_name(wss.next_layer().native_handle(), host.c_str());
+
+			//build the host string for the decorator
+			host += ':' + std::to_string(ep.port());
+
+			//SSL handshake
+			if (SSL)
+				wss.next_layer().handshake(ssl::stream_base::client);
+
+			if (SSL)
+			{
+				wss.set_option(websocket::stream_base::decorator(
+					[](websocket::request_type& req)
+					{
+						req.set(http::field::user_agent,
+						std::string(BOOST_BEAST_VERSION_STRING) +
+						" websocket-client-LGTVsvc");
+					}));
+				wss.handshake(host, "/");
+				wss.write(net::buffer(std::string(handshake)));
+				wss.read(buffer); // read the first response
+				wss.write(net::buffer(std::string(mess)));
+				wss.read(buffer);
+				wss.close(websocket::close_code::normal);
+			}
+			else
+			{
+				ws.set_option(websocket::stream_base::decorator(
+					[](websocket::request_type& req)
+					{
+						req.set(http::field::user_agent,
+						std::string(BOOST_BEAST_VERSION_STRING) +
+						" websocket-client-LGTVsvc");
+					}));
+				ws.handshake(host, "/");
+				ws.write(net::buffer(std::string(handshake)));
+				ws.read(buffer); // read the first response
+				ws.write(net::buffer(std::string(mess)));
+				ws.read(buffer);
+				ws.close(websocket::close_code::normal);
+			}
+			logmsg = device;
+			logmsg += ", Muting speaker";
+			Log(logmsg);
+			break;
+		}
+		catch (std::exception const& e)
+		{
+			logmsg = device;
+			logmsg += ", WARNING! SendRequest() failed: ";
+			logmsg += e.what();
+			Log(logmsg);
+		}
+		time_t endtim = time(0);
+		time_t execution_time = endtim - looptim;
+		if (execution_time >= 0 && execution_time < 2)
+			Sleep((2 - (DWORD)execution_time) * 1000);
+	}
 	return;
 }

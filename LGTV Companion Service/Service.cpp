@@ -18,6 +18,9 @@ WSADATA							WSAData;
 mutex							log_mutex;
 vector<string>					HostIPs;
 bool							bIdleLog = true;
+//HANDLE                          h_API_Pipe = INVALID_HANDLE_VALUE;
+ipc::PipeServer*				pPipe;
+
 
 settings::Preferences			Prefs;
 vector <CSession>				DeviceCtrlSessions;                 //CSession objects manage network connections with Display
@@ -234,7 +237,11 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 		SvcReportEvent(EVENTLOG_ERROR_TYPE, L"RegisterServiceCtrlHandler");
 		return;
 	}
-
+	
+	//spawn PipeServer for managing intra process communication
+	ipc::PipeServer Pipe(PIPENAME, NamedPipeCallback);
+	pPipe = &Pipe;
+	
 	// These SERVICE_STATUS members remain as set here
 	gSvcStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
 	gSvcStatus.dwServiceSpecificExitCode = 0;
@@ -305,10 +312,7 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 		NULL,                                           //Context
 		(EVT_SUBSCRIBE_CALLBACK)SubCallback,            //callback
 		EvtSubscribeToFutureEvents);
-
-	//spawn a thread for managing intra process communication
-	thread thread_obj(IPCThread);
-	thread_obj.detach();
+	
 
 	//make sure the process is shutdown as early as possible
 	if (SetProcessShutdownParameters(0x100, SHUTDOWN_NORETRY))
@@ -318,15 +322,17 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 
 	ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
 
-	//register to receive power notifications
-	gPs1 = RegisterPowerSettingNotification(gSvcStatusHandle, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_SERVICE_HANDLE);
-
 	SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has started.");
 
 	DispatchSystemPowerEvent(SYSTEM_EVENT_BOOT);
 
+	//register to receive power notifications
+	gPs1 = RegisterPowerSettingNotification(gSvcStatusHandle, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_SERVICE_HANDLE);
+
 	// Wait until service stops
 	WaitForSingleObject(ghSvcStopEvent, INFINITE);
+
+	Pipe.Terminate();
 
 	Sleep(1000);
 
@@ -388,6 +394,7 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 			if (bThreadNotFinished)
 				Sleep(100);
 		} while (bThreadNotFinished);
+
 
 		// Signal the service to stop.
 		SetEvent(ghSvcStopEvent);
@@ -512,6 +519,7 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 			Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
 		}
 
+//		Sleep(5000);
 		ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000);
 
 		do
@@ -644,6 +652,8 @@ bool SetSessionKey(string Key, string deviceid)
 //   Broadcast power events (display on/off, resuming, rebooting etc) to the device objects
 bool DispatchSystemPowerEvent(DWORD dwMsg)
 {
+	SendToNamedPipe(dwMsg);
+
 	if (DeviceCtrlSessions.size() == 0)
 	{
 		Log("WARNING! No Devices in DispatchSystemPowerEvent().");
@@ -772,299 +782,11 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 		EventCallbackStatus = SYSTEM_EVENT_UNSURE;
 		Log("WARNING! Event subscription callback: Could not detect whether system is shutting down or restarting. Please check 'additional settings' in the UI.");
 	}
-
+	
+	if(EventCallbackStatus)
+		SendToNamedPipe(EventCallbackStatus);
+	
 	return 0;
-}
-
-//   THREAD: The intra process communications (named pipe) thread. Runs for the duration of the service
-void IPCThread(void)
-{
-	HANDLE hPipe;
-	char buffer[1024];
-	DWORD dwRead;
-
-	PSECURITY_DESCRIPTOR psd = NULL;
-	BYTE  sd[SECURITY_DESCRIPTOR_MIN_LENGTH];
-	psd = (PSECURITY_DESCRIPTOR)sd;
-	InitializeSecurityDescriptor(psd, SECURITY_DESCRIPTOR_REVISION);
-	SetSecurityDescriptorDacl(psd, TRUE, (PACL)NULL, FALSE);
-	SECURITY_ATTRIBUTES sa = { sizeof(sa), psd, FALSE };
-
-	hPipe = CreateNamedPipe(PIPENAME,
-		PIPE_ACCESS_DUPLEX,
-		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,   // FILE_FLAG_FIRST_PIPE_INSTANCE is not needed but forces CreateNamedPipe(..) to fail if the pipe already exists...
-		1,
-		1024 * 16,
-		1024 * 16,
-		NMPWAIT_USE_DEFAULT_WAIT,
-		&sa);
-	while (hPipe != INVALID_HANDLE_VALUE)
-	{
-		if (ConnectNamedPipe(hPipe, NULL) != FALSE)   // wait for someone to connect to the pipe
-		{
-			while (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &dwRead, NULL) != FALSE)
-			{
-				/* add terminating zero */
-				buffer[dwRead] = '\0';
-				string t = buffer;
-				transform(t.begin(), t.end(), t.begin(), ::tolower);
-
-				vector <string> cmd = common::stringsplit(t, " ");
-				if (cmd.size() > 0)
-				{
-					int param1 = 0;
-
-					for (auto& param : cmd)
-					{
-						if (param == "-daemon")
-							param1 = APP_IPC_DAEMON;
-						else if (param == "-poweron")
-							param1 = APP_CMDLINE_ON;
-						else if (param == "-poweroff")
-							param1 = APP_CMDLINE_OFF;
-						else if (param == "-autoenable")
-							param1 = APP_CMDLINE_AUTOENABLE;
-						else if (param == "-autodisable")
-							param1 = APP_CMDLINE_AUTODISABLE;
-						else if (param == "-screenon")
-							param1 = APP_CMDLINE_SCREENON;
-						else if (param == "-screenoff")
-							param1 = APP_CMDLINE_SCREENOFF;
-						else if (param == "-sethdmi1")
-							param1 = APP_CMDLINE_SETHDMI1;
-						else if (param == "-sethdmi2")
-							param1 = APP_CMDLINE_SETHDMI2;
-						else if (param == "-sethdmi3")
-							param1 = APP_CMDLINE_SETHDMI3;
-						else if (param == "-sethdmi4")
-							param1 = APP_CMDLINE_SETHDMI4;
-						else if (param == "-clearlog")
-						{
-							string w = "IPC, clear log  ";
-							wstring log = Prefs.DataPath;
-							log += LOG_FILE;
-							w += common::narrow(log);
-							Log(w);
-							DeleteFile(log.c_str());
-						}
-						else if (param == "-idle")
-						{
-							if (Prefs.BlankScreenWhenIdle)
-								Log("IPC, Forcing user idle mode!");
-							else
-								Log("IPC, Can not force user idle mode, as the feature is not enabled in the global options!");
-						}
-						else if (param == "-unidle")
-						{
-							if (Prefs.BlankScreenWhenIdle)
-								Log("IPC, Unsetting user idle mode!");
-							else
-								Log("IPC, Can not unset user idle mode, as the feature is not enabled in the global options!");
-						}
-						else if (param1 > 0)
-						{
-							if (param1 == APP_IPC_DAEMON)
-							{
-								if (param == "errorconfig")
-									Log("IPC, Daemon, Could not read configuration file. Daemon exiting!");
-								else if (param == "started")
-									Log("IPC, Daemon has started.");
-								else if (param == "newversion")
-								{
-									wstring s = L"IPC, Daemon, a new version of this app is available for download here: ";
-									s += NEWRELEASELINK;
-									Log(common::narrow(s));
-								}
-								else if (param == "userbusy")
-								{
-									if (!bIdleLog)
-									{
-										Log("IPC, User is not idle.");
-										bIdleLog = true;
-									}
-									DispatchSystemPowerEvent(SYSTEM_EVENT_USERBUSY);
-								}
-								else if (param == "useridle")
-								{
-									if (bIdleLog)
-									{
-										Log("IPC, User is idle.");
-										bIdleLog = false;
-									}
-									DispatchSystemPowerEvent(SYSTEM_EVENT_USERIDLE);
-								}
-								else if (param == "remote_connect")
-								{
-									Log("IPC, Remote streaming client connected. Managed devices will power off.");
-									DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
-
-									for (auto& d : DeviceCtrlSessions)
-									{
-										d.RemoteHostConnected();
-									}
-								}
-								else if (param == "remote_disconnect")
-								{
-									for (auto& d : DeviceCtrlSessions)
-									{
-										d.RemoteHostDisconnected();
-									}
-									if (Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows)
-									{
-										Log("IPC, Remote streaming client disconnected. Powering on managed displays");
-										DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYON);
-									}
-									else
-										Log("IPC, Remote streaming client disconnected. Managed displays will remain powered off,");
-								}
-								else if (param == "topology")
-								{
-									param1 = APP_IPC_DAEMON_TOPOLOGY;
-									for (auto& d : DeviceCtrlSessions)
-									{
-										d.SetTopology(false);
-									}
-								}
-								else if (param == "gfe")
-								{
-									Log("IPC, NVIDIA GFE overlay fullscreen compatibility set");
-								}
-							}
-							else if (param1 == APP_IPC_DAEMON_TOPOLOGY)
-							{
-								if (param == "invalid")
-								{
-									Log("IPC, A recent change to the system have invalidated the monitor topology configuration. "
-										"Please run the configuration guide in the global options again to ensure correct operation.");
-								}
-								if (param == "undetermined")
-								{
-									Log("IPC, No active devices detected when verifying Windows Monitor Topology. Topology feature has been disabled");
-								}
-								if (param == "*")
-								{
-									string s;
-									string TopologyDevices;
-									for (auto& d : DeviceCtrlSessions)
-									{
-										TopologyDevices += d.DeviceID;
-										TopologyDevices += ":";
-										TopologyDevices += d.GetTopology() ? "ON " : "OFF ";
-									}
-
-									s = "IPC, windows monitor topology was changed. ";
-									if (TopologyDevices == "")
-										s += "No devices configured.";
-									else
-										s += TopologyDevices;
-									Log(s);
-									DispatchSystemPowerEvent(SYSTEM_EVENT_TOPOLOGY);
-								}
-								else
-								{
-									for (auto& d : DeviceCtrlSessions)
-									{
-										string id = d.DeviceID;
-										transform(id.begin(), id.end(), id.begin(), ::tolower);
-										if (param == id)
-										{
-											d.SetTopology(true);
-										}
-									}
-								}
-							}
-
-							else
-							{
-								for (auto& device : DeviceCtrlSessions)
-								{
-									settings::DEVICE s = device.GetParams();
-									string id = s.DeviceId;
-									string name = s.Name;
-									transform(id.begin(), id.end(), id.begin(), ::tolower);
-									transform(name.begin(), name.end(), name.begin(), ::tolower);
-
-									if (param1 == APP_CMDLINE_ON && (id == param || name == param))
-									{
-										string w = "IPC, force power ON: ";
-										w += param;
-										Log(w);
-										device.SystemEvent(SYSTEM_EVENT_FORCEON);
-									}
-									else if (param1 == APP_CMDLINE_OFF && (id == param || name == param))
-									{
-										string w = "IPC, force power OFF: ";
-										w += param;
-										Log(w);
-										device.SystemEvent(SYSTEM_EVENT_FORCEOFF);
-									}
-									else if (param1 == APP_CMDLINE_SCREENON && (id == param || name == param))
-									{
-										string w = "IPC, force screen ON: ";
-										w += param;
-										Log(w);
-										device.SystemEvent(SYSTEM_EVENT_FORCEON);
-									}
-									else if (param1 == APP_CMDLINE_SCREENOFF && (id == param || name == param))
-									{
-										string w = "IPC, force screen OFF: ";
-										w += param;
-										Log(w);
-										device.SystemEvent(SYSTEM_EVENT_FORCESCREENOFF);
-									}
-									else if (param1 == APP_CMDLINE_AUTOENABLE && (id == param || name == param))
-									{
-										string w = "IPC, automatic management is temporarily enabled (effective until restart of service): ";
-										w += param;
-										Log(w);
-
-										device.Run();
-									}
-									else if (param1 == APP_CMDLINE_AUTODISABLE && (id == param || name == param))
-									{
-										string w = "IPC, automatic management is temporarily disabled (effective until restart of service): ";
-										w += param;
-										Log(w);
-										device.Stop();
-									}
-									else if (param1 == APP_CMDLINE_SETHDMI1 && (id == param || name == param))
-									{
-										string w = "IPC, set HDMI input 1:";
-										w += param;
-										Log(w);
-										device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 1);
-									}
-									else if (param1 == APP_CMDLINE_SETHDMI2 && (id == param || name == param))
-									{
-										string w = "IPC, set HDMI input 2:";
-										w += param;
-										Log(w);
-										device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 2);
-									}
-									else if (param1 == APP_CMDLINE_SETHDMI3 && (id == param || name == param))
-									{
-										string w = "IPC, set HDMI input 3:";
-										w += param;
-										Log(w);
-										device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 3);
-									}
-									else if (param1 == APP_CMDLINE_SETHDMI4 && (id == param || name == param))
-									{
-										string w = "IPC, set HDMI input 4:";
-										w += param;
-										Log(w);
-										device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 4);
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		DisconnectNamedPipe(hPipe);
-	}
-	return;
 }
 
 // Get the local host ip, e.g 192.168.1.x
@@ -1151,4 +873,324 @@ void InitSessions(void)
 		DeviceCtrlSessions.push_back(S);
 		Log(s.str());
 	}
+}
+void NamedPipeCallback(std::wstring message)
+{
+	string t = common::narrow(message); 
+	transform(t.begin(), t.end(), t.begin(), ::tolower);
+
+	vector <string> cmd = common::stringsplit(t, " ");
+	if (cmd.size() > 0)
+	{
+		int param1 = 0;
+
+		for (auto& param : cmd)
+		{
+			if (param == "-daemon")
+				param1 = APP_IPC_DAEMON;
+			else if (param == "-poweron")
+				param1 = APP_CMDLINE_ON;
+			else if (param == "-poweroff")
+				param1 = APP_CMDLINE_OFF;
+			else if (param == "-autoenable")
+				param1 = APP_CMDLINE_AUTOENABLE;
+			else if (param == "-autodisable")
+				param1 = APP_CMDLINE_AUTODISABLE;
+			else if (param == "-screenon")
+				param1 = APP_CMDLINE_SCREENON;
+			else if (param == "-screenoff")
+				param1 = APP_CMDLINE_SCREENOFF;
+			else if (param == "-sethdmi1")
+				param1 = APP_CMDLINE_SETHDMI1;
+			else if (param == "-sethdmi2")
+				param1 = APP_CMDLINE_SETHDMI2;
+			else if (param == "-sethdmi3")
+				param1 = APP_CMDLINE_SETHDMI3;
+			else if (param == "-sethdmi4")
+				param1 = APP_CMDLINE_SETHDMI4;
+			else if (param == "-mute")
+				param1 = APP_CMDLINE_MUTE;
+			else if (param == "-unmute")
+				param1 = APP_CMDLINE_UNMUTE;
+			else if (param == "-clearlog")
+			{
+				string w = "[IPC] Clear log ";
+				wstring log = Prefs.DataPath;
+				log += LOG_FILE;
+				w += common::narrow(log);
+				Log(w);
+				DeleteFile(log.c_str());
+			}
+			else if (param == "-idle")
+			{
+				if (Prefs.BlankScreenWhenIdle)
+				{
+					Log("[IPC] Force user idle mode!");
+				}
+				else
+					Log("[IPC] Can not force user idle mode, as the feature is not enabled in the global options!");
+			}
+			else if (param == "-unidle")
+			{
+				if (Prefs.BlankScreenWhenIdle)
+				{
+					Log("[IPC] Release user idle mode!");
+				}
+				else
+					Log("[IPC] Can not unset user idle mode, as the feature is not enabled in the global options!");
+			}
+			else if (param1 > 0)
+			{
+				if (param1 == APP_IPC_DAEMON)
+				{
+					if (param == "errorconfig")
+						Log("[IPC] Daemon could not read configuration file. Daemon exiting!");
+					else if (param == "started")
+						Log("[IPC] Daemon has started.");
+					else if (param == "newversion")
+					{
+						wstring s = L"[IPC] A new version of this app is available for download here: ";
+						s += NEWRELEASELINK;
+						Log(common::narrow(s));
+					}
+					else if (param == "userbusy")
+					{
+						if (!bIdleLog)
+						{
+							Log("[IPC] PC is not idle.");
+							bIdleLog = true;
+						}
+						DispatchSystemPowerEvent(SYSTEM_EVENT_USERBUSY);
+					}
+					else if (param == "useridle")
+					{
+						if (bIdleLog)
+						{
+							Log("[IPC] PC is idle.");
+							bIdleLog = false;
+						}
+						DispatchSystemPowerEvent(SYSTEM_EVENT_USERIDLE);
+					}
+					else if (param == "remote_connect")
+					{
+						Log("[IPC] Remote streaming client connected. Managed devices will power off.");
+						DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYOFF);
+
+						for (auto& d : DeviceCtrlSessions)
+						{
+							d.RemoteHostConnected();
+						}
+					}
+					else if (param == "remote_disconnect")
+					{
+						for (auto& d : DeviceCtrlSessions)
+						{
+							d.RemoteHostDisconnected();
+						}
+						if (Prefs.DisplayIsCurrentlyRequestedPoweredOnByWindows)
+						{
+							Log("[IPC] Remote streaming client disconnected. Powering on managed devices.");
+							DispatchSystemPowerEvent(SYSTEM_EVENT_DISPLAYON);
+						}
+						else
+							Log("[IPC] Remote streaming client disconnected. Managed devices will remain powered off.");
+					}
+					else if (param == "topology")
+					{
+						param1 = APP_IPC_DAEMON_TOPOLOGY;
+						for (auto& d : DeviceCtrlSessions)
+						{
+							d.SetTopology(false);
+						}
+					}
+					else if (param == "gfe")
+					{
+						Log("[IPC] NVIDIA GFE overlay fullscreen compatibility set.");
+					}
+				}
+				else if (param1 == APP_IPC_DAEMON_TOPOLOGY)
+				{
+					if (param == "invalid")
+					{
+						Log("[IPC] A recent change to the system has invalidated the monitor topology configuration. "
+							"Please run the configuration guide in the global options again to ensure correct operation.");
+					}
+					if (param == "undetermined")
+					{
+						Log("[IPC] Warning! No active devices detected when verifying Windows Monitor Topology.");
+					}
+					if (param == "*")
+					{
+						string s;
+						string TopologyDevices;
+						for (auto& d : DeviceCtrlSessions)
+						{
+							TopologyDevices += d.DeviceID;
+							TopologyDevices += ":";
+							TopologyDevices += d.GetTopology() ? "ON " : "OFF ";
+						}
+
+						s = "[IPC] Windows monitor topology was changed. ";
+						if (TopologyDevices == "")
+							s += "No devices configured.";
+						else
+							s += TopologyDevices;
+						Log(s);
+						DispatchSystemPowerEvent(SYSTEM_EVENT_TOPOLOGY);
+					}
+					else
+					{
+						for (auto& d : DeviceCtrlSessions)
+						{
+							string id = d.DeviceID;
+							transform(id.begin(), id.end(), id.begin(), ::tolower);
+							if (param == id)
+							{
+								d.SetTopology(true);
+							}
+						}
+					}
+				}
+
+				else
+				{
+					for (auto& device : DeviceCtrlSessions)
+					{
+						settings::DEVICE s = device.GetParams();
+						string id = s.DeviceId;
+						string name = s.Name;
+						transform(id.begin(), id.end(), id.begin(), ::tolower);
+						transform(name.begin(), name.end(), name.begin(), ::tolower);
+
+						if (param1 == APP_CMDLINE_ON && (id == param || name == param))
+						{
+							string w = "[IPC] Force power ON: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCEON);
+						}
+						else if (param1 == APP_CMDLINE_OFF && (id == param || name == param))
+						{
+							string w = "[IPC] Force power OFF: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCEOFF);
+						}
+						else if (param1 == APP_CMDLINE_SCREENON && (id == param || name == param))
+						{
+							string w = "[IPC] Force screen ON: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCEON);
+						}
+						else if (param1 == APP_CMDLINE_SCREENOFF && (id == param || name == param))
+						{
+							string w = "[IPC] Force screen OFF: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCESCREENOFF);
+						}
+						else if (param1 == APP_CMDLINE_AUTOENABLE && (id == param || name == param))
+						{
+							string w = "[IPC] Automatic management is temporarily enabled (effective until restart of service): ";
+							w += param;
+							Log(w);
+
+							device.Run();
+						}
+						else if (param1 == APP_CMDLINE_AUTODISABLE && (id == param || name == param))
+						{
+							string w = "[IPC] Automatic management is temporarily disabled (effective until restart of service): ";
+							w += param;
+							Log(w);
+							device.Stop();
+						}
+						else if (param1 == APP_CMDLINE_SETHDMI1 && (id == param || name == param))
+						{
+							string w = "[IPC] Set HDMI input 1: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 1);
+						}
+						else if (param1 == APP_CMDLINE_SETHDMI2 && (id == param || name == param))
+						{
+							string w = "[IPC] Set HDMI input 2: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 2);
+						}
+						else if (param1 == APP_CMDLINE_SETHDMI3 && (id == param || name == param))
+						{
+							string w = "[IPC] Set HDMI input 3: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 3);
+						}
+						else if (param1 == APP_CMDLINE_SETHDMI4 && (id == param || name == param))
+						{
+							string w = "[IPC] Set HDMI input 4: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCESETHDMI, 4);
+						}
+						else if (param1 == APP_CMDLINE_MUTE && (id == param || name == param))
+						{
+							string w = "[IPC] Mute: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCE_MUTE);
+						}
+						else if (param1 == APP_CMDLINE_UNMUTE && (id == param || name == param))
+						{
+							string w = "[IPC] Unmute: ";
+							w += param;
+							Log(w);
+							device.SystemEvent(SYSTEM_EVENT_FORCE_UNMUTE);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+void SendToNamedPipe(DWORD dwEvent)
+{
+	if (!Prefs.ExternalAPI)
+		return;
+
+	wstring sData = L"";
+	switch (dwEvent)
+	{
+	case SYSTEM_EVENT_DISPLAYOFF:
+		sData = L"SYSTEM_DISPLAYS_OFF";
+		break;
+	case SYSTEM_EVENT_DISPLAYDIMMED:
+		sData = L"SYSTEM_DISPLAYS_OFF_DIMMED";
+		break;
+	case SYSTEM_EVENT_DISPLAYON:
+		sData = L"SYSTEM_DISPLAYS_ON";
+		break;
+	case SYSTEM_EVENT_USERBUSY:
+		sData = L"SYSTEM_USER_BUSY";
+		break;
+	case SYSTEM_EVENT_USERIDLE:
+		sData = L"SYSTEM_USER_IDLE";
+		break;
+	case SYSTEM_EVENT_REBOOT:
+		sData = L"SYSTEM_REBOOT";
+		break;
+	case SYSTEM_EVENT_UNSURE:
+	case SYSTEM_EVENT_SHUTDOWN:
+		sData = L"SYSTEM_SHUTDOWN";
+		break;
+	case SYSTEM_EVENT_RESUMEAUTO:
+		sData = L"SYSTEM_RESUME";
+		break;
+	case SYSTEM_EVENT_SUSPEND:
+		sData = L"SYSTEM_SUSPEND";
+		break;
+	default:break;
+	}
+	if(sData.size() > 0)
+		pPipe->Send(sData);
 }

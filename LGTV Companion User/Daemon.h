@@ -110,3 +110,4 @@ static BOOL	CALLBACK	EnumWindowsProc(HWND hWnd, LPARAM lParam);
 DWORD					Sunshine_CheckLog(void);
 std::string				Sunshine_GetConfVal(std::string, std::string);
 std::string				Sunshine_GetLogFile();
+void					NamedPipeCallback(std::wstring);

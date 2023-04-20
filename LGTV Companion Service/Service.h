@@ -28,6 +28,7 @@
 #include "../Common/Common.h"
 #include "Handshake.h"
 
+
 #pragma comment(lib, "Powrprof.lib")
 #pragma comment(lib, "Wevtapi.lib")
 #pragma comment(lib, "Ws2_32.lib")
@@ -40,7 +41,6 @@
 #define SERVICE_PORT_SSL                "3001"
 #define SERVICE_DEPENDENCIES		    L"Dhcp\0Dnscache\0LanmanServer\0\0"
 #define SERVICE_ACCOUNT				    NULL //L"NT AUTHORITY\\LocalService"
-#define MUTEX_WAIT          		    10   // thread wait in ms
 #define THREAD_WAIT          		    1    // wait to spawn new thread (seconds)
 #define DIMMED_OFF_DELAY_WAIT           20    // delay after a screen dim request
 #define MAX_RECORD_BUFFER_SIZE          0x10000  // 64K
@@ -61,7 +61,9 @@
 #define SYSTEM_EVENT_FORCESETHDMI       15
 #define SYSTEM_EVENT_BOOT               16
 #define SYSTEM_EVENT_TOPOLOGY           17
-#define APP_IPC_DAEMON_TOPOLOGY         12
+#define SYSTEM_EVENT_FORCE_MUTE		    18
+#define SYSTEM_EVENT_FORCE_UNMUTE		19
+#define APP_IPC_DAEMON_TOPOLOGY         100
 
 class CSession {
 public:
@@ -89,6 +91,7 @@ private:
 	void TurnOnDisplay(bool SendWOL);
 	void TurnOffDisplay(bool forced, bool dimmed, bool blankscreen);
 	void SetDisplayHdmiInput(int HdmiInput);
+	void SendAnyMessage(std::string, std::string payload = "");
 	bool bRemoteHostConnected = false;
 	jpersson77::settings::DEVICE   Parameters;
 };
@@ -107,7 +110,10 @@ DWORD WINAPI	SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 void			DisplayPowerOnThread(jpersson77::settings::DEVICE*, bool*, int, bool);
 void			DisplayPowerOffThread(jpersson77::settings::DEVICE*, bool*, bool, bool);
 void			SetDisplayHdmiInputThread(jpersson77::settings::DEVICE*, bool*, int, int);
+void			SendRequest(jpersson77::settings::DEVICE*, int, char*, char*);
 void			IPCThread(void);
 void			WOLthread(jpersson77::settings::DEVICE*, bool*, int);
 std::vector<std::string> GetOwnIP(void);
 void			InitSessions(void);
+void			NamedPipeCallback(std::wstring message);
+void			SendToNamedPipe(DWORD);

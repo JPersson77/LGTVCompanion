@@ -7,11 +7,15 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+#include <thread>
+//#include <mutex>
+#include <fstream>
+#include <sstream>
 #include <nlohmann/json.hpp>
 
 // common general application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"2.1.6"
+#define         APP_VERSION                     L"2.2.0"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"Log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
@@ -19,6 +23,8 @@
 #define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
 #define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases"
 #define         DONATELINK                      L"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=jorgen.persson@gmail.com&lc=US&item_name=Friendly+gift+for+the+development+of+LGTV+Companion&no_note=0&cn=&currency_code=EUR&bn=PP-DonationsBF:btn_donateCC_LG.gif:NonHosted"
+#define         DISCORDLINK                     L"https://discord.gg/7KkTPrP3fq"
+#define			MUTEX_WAIT          		    10   // thread wait in ms
 
 // common preferences definitions
 #define         JSON_PREFS_NODE                 "LGTV Companion"
@@ -34,8 +40,12 @@
 #define         JSON_IDLEWHITELIST				"IdleWhiteListEnabled"
 #define         JSON_IDLEFULLSCREEN				"IdleFullscreen"
 #define         JSON_WHITELIST					"IdleWhiteList"
+#define         JSON_IDLE_FS_EXCLUSIONS_ENABLE	"IdleFsExclusionsEnabled"
+#define         JSON_IDLE_FS_EXCLUSIONS			"IdleFsExclusions"
 #define         JSON_REMOTESTREAM				"RemoteStream"
 #define         JSON_TOPOLOGYMODE				"TopologyPreferPowerEfficient"
+#define         JSON_EXTERNAL_API				"ExternalAPI"
+#define			JSON_MUTE_SPEAKERS				"MuteSpeakers"
 #define			JSON_DEVICE_NAME				"Name"
 #define			JSON_DEVICE_IP					"IP"
 #define			JSON_DEVICE_UNIQUEKEY			"UniqueDeviceKey"
@@ -56,6 +66,7 @@
 #define         WOL_SUBNETBROADCAST             3
 #define         WOL_DEFAULTSUBNET               L"255.255.255.0"
 
+// commandline events
 #define			APP_CMDLINE_ON					1
 #define			APP_CMDLINE_OFF					2
 #define			APP_CMDLINE_AUTOENABLE			3
@@ -67,10 +78,24 @@
 #define			APP_CMDLINE_SETHDMI2			9
 #define			APP_CMDLINE_SETHDMI3			10
 #define			APP_CMDLINE_SETHDMI4			11
+#define			APP_CMDLINE_MUTE				12
+#define			APP_CMDLINE_UNMUTE				13
 
+// WOL types
 #define			WOL_NETWORKBROADCAST			1
 #define			WOL_IPSEND						2
 #define			WOL_SUBNETBROADCAST				3
+
+//IPC
+#define PIPE_BUF_SIZE							1024
+#define PIPE_INSTANCES							5
+#define PIPE_NOT_RUNNING						99
+#define PIPE_EVENT_ERROR						100
+#define PIPE_EVENT_READ							101 // Data was read 
+#define PIPE_EVENT_SEND							102 // Write data
+#define PIPE_RUNNING							103 // Server is running
+#define PIPE_EVENT_TERMINATE					120 // Terminate
+
 
 // common forward function declarations
 namespace jpersson77 {
@@ -94,6 +119,7 @@ namespace jpersson77 {
 			bool			bRemoteCurrentStatusRDP = false;
 			bool			bRemoteCurrentStatusSunshine = false;
 			std::wstring	sCurrentlyRunningWhitelistedProcess = L"";
+			std::wstring	sCurrentlyRunningFsExcludedProcess = L"";
 			std::string		Sunshine_Log_File = "";
 			uintmax_t		Sunshine_Log_Size = 0;
 
@@ -104,7 +130,7 @@ namespace jpersson77 {
 			L"usb#vid_0955&pid_b4f0" //nvidia
 			};
 		};
-		struct WHITELIST { // whitelist info
+		struct PROCESSLIST { // whitelist info
 			std::wstring Name;
 			std::wstring Application;
 		};
@@ -125,6 +151,7 @@ namespace jpersson77 {
 			bool SetHDMIInputOnResume = false;
 			int SetHDMIInputOnResumeToNumber = 1;
 			bool SSL = true;
+			bool MuteSpeakers = false;
 
 			//service.h
 			int BlankScreenWhenIdleDelay = 10;
@@ -148,9 +175,13 @@ namespace jpersson77 {
 			bool AdhereTopology = false;
 			bool bIdleWhitelistEnabled = false;
 			bool bFullscreenCheckEnabled = false;
-			std::vector<WHITELIST> WhiteList;
+			std::vector<PROCESSLIST> WhiteList;
+			bool bIdleFsExclusionsEnabled = false;
+			std::vector<PROCESSLIST> FsExclusions;
 			bool RemoteStreamingCheck = false;
 			bool TopologyPreferPowerEfficiency = true;
+			bool ExternalAPI = false;
+			bool MuteSpeakers = false;
 			std::wstring DataPath;
 			std::vector <DEVICE> Devices;
 
@@ -160,6 +191,74 @@ namespace jpersson77 {
 			//Daemon.h
 			bool ToastInitialised = false;
 			REMOTE_STREAM Remote;
+		};
+	}
+	namespace ipc
+	{
+		class PipeServer
+		{
+		public:
+							PipeServer(std::wstring, void (*fcnPtr)(std::wstring));
+							~PipeServer(void);
+			bool			Send(std::wstring sData, int iPipe = -1);
+			bool			Terminate();
+			bool			isRunning();
+			
+			//DEBUG
+			void			Log(std::wstring);
+			std::atomic_int	bLock2 = false;;
+
+		private:
+			void			OnEvent(int, std::wstring sData = L"", int iPipe = -1);
+			void			WorkerThread();
+			bool			DisconnectAndReconnect(int);
+			bool			Write(std::wstring&, int);
+
+			HANDLE				hPipeHandles[PIPE_INSTANCES] = {};
+			DWORD				dwBytesTransferred;
+			TCHAR				Buffer[PIPE_INSTANCES][PIPE_BUF_SIZE+1];
+			OVERLAPPED			Ovlap[PIPE_INSTANCES];
+			HANDLE				hEvents[PIPE_INSTANCES + 2] = {}; // include termination and termination confirm events
+			std::atomic_bool	bWriteData[PIPE_INSTANCES] = {};
+			void				(*FunctionPtr)(std::wstring);
+			std::wstring		sPipeName;
+			std::atomic_int		iState = PIPE_NOT_RUNNING;
+
+		};
+		
+		class PipeClient
+		{
+		public:
+			PipeClient(std::wstring, void (*fcnPtr)(std::wstring));
+			~PipeClient(void);
+			bool			Init();
+			bool			Send(std::wstring);
+			bool			Terminate();
+			bool			isRunning();
+
+
+			//DEBUG
+			void			Log(std::wstring);
+			std::atomic_int	bLock = false;
+
+		private:
+			void			OnEvent(int, std::wstring sData = L"");
+			void			WorkerThread();
+			bool			DisconnectAndReconnect();
+			bool			Write(std::wstring&);
+
+			HANDLE				hFile = NULL;
+
+			HANDLE				hPipeHandle = {};
+			DWORD				dwBytesTransferred;
+			TCHAR				Buffer[PIPE_BUF_SIZE+1];
+			OVERLAPPED			Ovlap;
+			HANDLE				hEvents[3] = {}; // overlapped event, terminate event, terminate accept event
+			void				(*FunctionPtr)(std::wstring);
+			std::wstring		sPipeName;
+			std::atomic_int		iState = PIPE_NOT_RUNNING;
+			std::atomic_bool	bWriteData = {};
+
 		};
 	}
 }
