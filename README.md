@@ -22,7 +22,7 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 ## Installation and usage
 1. Important prerequisites:
    - Power ON all TVs and ensure they are connected to your local area network via Wi-Fi or cable.
-   - Ensure that the TV can be woken via the network. For the CX line of displays this is accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->Mobile Connection Management->TV On with Mobile, and then enable 'Turn On via Wi-Fi'. For C1 and C2 it's All Settings->General->Devices->External Devices->TV On With Mobile->Turn on via Wi-Fi.
+   - Ensure that the TV can be woken via the network. For the CX line of displays this is accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->Mobile Connection Management->TV On with Mobile, and then enable 'Turn On via Wi-Fi'. For C1 and C2 it's All Settings->General->Devices->External Devices->TV On With Mobile->Turn on via Wi-Fi. NOTE! This step is needed regardless of using WiFi or a cable.
    - Open the administrative interface of your router, and set a static DHCP lease for your WebOS devices, i.e. to ensure that your devices always have the same IP-addresses on your LAN.
 
 HOT TIP! While in the settings of the TV, ensure that the device automatic power off is set long enough to not interfere with youur sessions with the PC, f e 8 hours. Note that for the C2 displays this setting can be found here: All settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off. The LGTV Companion app will manage the power state of the display and the less interference the better.
@@ -65,10 +65,11 @@ HOT TIP! The "User idle mode" works seprately from all other windows power optio
 
 ## Troubleshooting
 *If your display has trouble powering on*, these are the things to check first:
+- "Turn on via WiFi" must be enabled in the TV configuration, regardless of using WiFI or Ethernet. Read more under "1. Important prerequisites" above.
 - When connecting the TV via Wi-Fi it seems some users must enable "Quickstart+" (up to 2021 models) or "Always ready" (2022 and forward models) and disable "HDD Eco mode" to avoid the NIC becoming inactive. (physical network cable does not seem to need this)
 - Confirm that the device is properly configured (i e IP and MAC) and try to use one of the other wake-on-lan network options, primarily use option two, send to IP-address.
 - Ensure the network is not dropping WOL-broadcasts.
-- In the case of Wi-Fi, if the connection between the TV and the Wi-Fi access point is lost for any reason (e.g. router reboot, power outage, firmware update, etc.) while the TV is off, the TV will not automatically reconnect and therefore won't react to attempts to turn it on via Wi-Fi. You will need to turn the TV on manually at least once so that it can reconnect to your Wi-Fi network.
+- If the connection between the TV and the Router and/or access point is lost for any reason (e.g. router reboot, power outage, firmware update, etc.) while the TV is off, the TV might not automatically reconnect and therefore won't react to attempts to turn it on via Wi-Fi or Ethernet. You may therefore need to turn the TV on manually at least once so that it can reconnect to your network.
 - In case of issues with devices not turning on in response to changes in the windows monitor topology configuration ensure that "Always ready" (2022 and forward models) is enabled.
 - Also note that a manual power off via remote and/or automatic display power off (Settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off) can sometimes cause a situation where you also need to power on the display with the remote. 
 
@@ -117,6 +118,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 ## Discussions
 
 Discord: https://discord.gg/7KkTPrP3fq
@@ -133,6 +135,11 @@ Please use the Github issue tracker for potential bug reports and/or feature req
 - Contributors
 - Donors and supporters
 
+## Donations
+
+This is free software, but your support is appreciated and there is a donation page set up over at PayPal. PayPal allows you to use a credit- or debit card or your PayPal balance to make a donation.
+
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.me/jpersson77)
 
 ## Copyright
 Copyright © 2021-2023 Jörgen Persson
