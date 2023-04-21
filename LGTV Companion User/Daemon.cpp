@@ -77,12 +77,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	else
 		Prefs.ToastInitialised = true;
 
+	// if the app is already running as another process, tell the other process to exit
+	MessageExistingProcess();
+
 	// Initiate PipeClient IPC
 	ipc::PipeClient PipeCl(PIPENAME, NamedPipeCallback);
 	pPipeClient = &PipeCl;
-
-	// if the app is already running as another process, tell the other process to exit
-	MessageExistingProcess();
 
 	// read the configuration file and init prefs
 	try {
@@ -155,6 +155,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			DispatchMessage(&msg);
 		}
 	}
+
+	PipeCl.Terminate();
 
 	if (Prefs.ToastInitialised)
 	{
@@ -415,11 +417,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						//Is an excluded fullscreen process running?
 						if(Prefs.bIdleFsExclusionsEnabled && Prefs.Remote.sCurrentlyRunningFsExcludedProcess != L"")
 						{
-							wstring mess = L"Fullscreen excluded process is currently prohibiting idle (";
-							mess += Prefs.Remote.sCurrentlyRunningFsExcludedProcess;
-							mess += L")";
-							Log(mess);
-							return 0;
+							if (FullscreenApplicationRunning())
+							{
+								wstring mess = L"Fullscreen excluded process is currently prohibiting idle (";
+								mess += Prefs.Remote.sCurrentlyRunningFsExcludedProcess;
+								mess += L")";
+								Log(mess);
+								return 0;
+							}
 						}					
 					}
 				}
@@ -746,19 +751,22 @@ bool MessageExistingProcess(void)
 	WindowTitle = APPNAME_FULL;
 	WindowTitle += L" v";
 	WindowTitle += APP_VERSION;
+	bool return_value = false;
 
 	HWND Other_hWnd = FindWindow(NULL, WindowTitle.c_str());
 
-	if (Other_hWnd)
+	while (Other_hWnd)
 	{
 		COPYDATASTRUCT cds;
 		cds.cbData = sizeof(WCHAR);
 		cds.lpData = NULL;
 		cds.dwData = NOTIFY_NEW_PROCESS;
 		SendMessage(Other_hWnd, WM_COPYDATA, NULL, (LPARAM)&cds);
-		return true;
+		Sleep(100);
+		Other_hWnd = FindWindow(NULL, WindowTitle.c_str());
+		return_value =  true;
 	}
-	return false;
+	return return_value;
 }
 //   communicate with service via IPC
 void CommunicateWithService(string sData)

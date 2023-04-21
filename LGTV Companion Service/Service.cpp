@@ -1000,7 +1000,7 @@ void NamedPipeCallback(std::wstring message)
 						param1 = APP_IPC_DAEMON_TOPOLOGY;
 						for (auto& d : DeviceCtrlSessions)
 						{
-							d.SetTopology(false);
+							d.SetTopology(false); 
 						}
 					}
 					else if (param == "gfe")
