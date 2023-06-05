@@ -101,8 +101,6 @@ Please note that LGTV Companion also supports bidirectional communication and su
 - *-brightness [0 -> 100]* 	-set brightness
 - *-color [0 -> 100]* 			- set Color
 - *-sharpness [0 -> 50]*		-set sharpness
-- *-dynamicrange [value]*  	-set the dynamic range
->[value]: sdr, hdr, technicolorHdr, dolbyHdr, sdrALLM, hdrALLM, technicolorHdrALLM, dolbyHdrALLM
 - *-colorgamut [auto|extended|wide|srgb|native]*		-set the color gamut
 - *-dynamiccontrast [off|low|medium|high]* - set the dynamic contrast
 - *-gamma [low|medium|high1|high2]*		-set gamma
