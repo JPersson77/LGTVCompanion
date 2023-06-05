@@ -85,8 +85,7 @@ LRESULT CALLBACK			WhitelistConfWndProc(HWND, UINT, WPARAM, LPARAM);
 
 bool						MessageExistingProcess(std::wstring);
 void						SvcReportEvent(WORD, std::wstring);
-void						CommunicateWithService(std::string);
-std::vector<std::string>	GetOwnIP(void);
+void						CommunicateWithService(std::wstring);
 void						VersionCheckThread(HWND);
 static BOOL CALLBACK		meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);
 std::vector<jpersson77::settings::DISPLAY_INFO> QueryDisplays();

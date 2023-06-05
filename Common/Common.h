@@ -8,14 +8,14 @@
 #include <iostream>
 #include <iomanip>
 #include <thread>
-//#include <mutex>
+#include <atomic>
 #include <fstream>
 #include <sstream>
 #include <nlohmann/json.hpp>
 
 // common general application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"2.2.2"
+#define         APP_VERSION                     L"2.3.3"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"Log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
@@ -66,21 +66,6 @@
 #define         WOL_SUBNETBROADCAST             3
 #define         WOL_DEFAULTSUBNET               L"255.255.255.0"
 
-// commandline events
-#define			APP_CMDLINE_ON					1
-#define			APP_CMDLINE_OFF					2
-#define			APP_CMDLINE_AUTOENABLE			3
-#define			APP_CMDLINE_AUTODISABLE			4
-#define			APP_CMDLINE_SCREENON			5
-#define			APP_CMDLINE_SCREENOFF			6
-#define			APP_IPC_DAEMON					7
-#define			APP_CMDLINE_SETHDMI1			8
-#define			APP_CMDLINE_SETHDMI2			9
-#define			APP_CMDLINE_SETHDMI3			10
-#define			APP_CMDLINE_SETHDMI4			11
-#define			APP_CMDLINE_MUTE				12
-#define			APP_CMDLINE_UNMUTE				13
-
 // WOL types
 #define			WOL_NETWORKBROADCAST			1
 #define			WOL_IPSEND						2
@@ -97,100 +82,96 @@
 #define PIPE_EVENT_TERMINATE					120 // Terminate
 
 
-// common forward function declarations
 namespace jpersson77 {
-	namespace common {
-		std::wstring widen(std::string sInput);
-		std::string narrow(std::wstring sInput);
-		std::vector<std::string> stringsplit(std::string, std::string);
-		std::wstring GetWndText(HWND);
+	namespace common {							// Common functions used in all modules
+		std::wstring							widen(std::string sInput);
+		std::string								narrow(std::wstring sInput);
+		std::vector<std::string>				stringsplit(std::string, std::string);
+		std::wstring							GetWndText(HWND);
+		void									ReplaceAllInPlace(std::string& str, const std::string& from, const std::string& to);
+		std::vector <std::string>				GetOwnIP(void);
 	}
 	namespace settings {
-		struct DISPLAY_INFO {
-			DISPLAYCONFIG_TARGET_DEVICE_NAME target;
-			HMONITOR hMonitor;
-			HDC hdcMonitor;
-			RECT rcMonitor2;
-			MONITORINFOEX monitorinfo;
+		struct DISPLAY_INFO {					// Display info
+			DISPLAYCONFIG_TARGET_DEVICE_NAME	target;
+			HMONITOR							hMonitor;
+			HDC									hdcMonitor;
+			RECT								rcMonitor2;
+			MONITORINFOEX						monitorinfo;
 		};
-		struct REMOTE_STREAM {
-			bool			bRemoteCurrentStatusNvidia = false;
-			bool			bRemoteCurrentStatusSteam = false;
-			bool			bRemoteCurrentStatusRDP = false;
-			bool			bRemoteCurrentStatusSunshine = false;
-			std::wstring	sCurrentlyRunningWhitelistedProcess = L"";
-			std::wstring	sCurrentlyRunningFsExcludedProcess = L"";
-			std::string		Sunshine_Log_File = "";
-			uintmax_t		Sunshine_Log_Size = 0;
+		struct REMOTE_STREAM {					// Remote streaming info
+			bool								bRemoteCurrentStatusNvidia = false;
+			bool								bRemoteCurrentStatusSteam = false;
+			bool								bRemoteCurrentStatusRDP = false;
+			bool								bRemoteCurrentStatusSunshine = false;
+			std::wstring						sCurrentlyRunningWhitelistedProcess = L"";
+			std::wstring						sCurrentlyRunningFsExcludedProcess = L"";
+			std::string							Sunshine_Log_File = "";
+			uintmax_t							Sunshine_Log_Size = 0;
 
-			const std::vector<std::wstring> stream_proc_list{
-			L"steam_monitor.exe" //steam server
+			const std::vector<std::wstring>		stream_proc_list{
+			L"steam_monitor.exe"				//steam server
 			};
-			const std::vector<std::wstring> stream_usb_list_gamestream{
-			L"usb#vid_0955&pid_b4f0" //nvidia
+			const std::vector<std::wstring>		stream_usb_list_gamestream{
+			L"usb#vid_0955&pid_b4f0"			//nvidia
 			};
 		};
-		struct PROCESSLIST { // whitelist info
-			std::wstring Name;
-			std::wstring Application;
+		struct PROCESSLIST {					// whitelist info
+			std::wstring						Name;
+			std::wstring						Application;
 		};
-		struct DEVICE { // WebOS device settings
-			std::string DeviceId;
-			std::string IP;
-			std::vector<std::string> MAC;
-			std::string SessionKey;
-			std::string Name;
-			std::string UniqueDeviceKey;
-			std::string UniqueDeviceKey_Temp;
-			bool Enabled = true;
-			int PowerOnTimeout = 40;
-			int WOLtype = WOL_IPSEND;
-			std::string Subnet;
-			bool HDMIinputcontrol = false;
-			int OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
-			bool SetHDMIInputOnResume = false;
-			int SetHDMIInputOnResumeToNumber = 1;
-			bool SSL = true;
-			bool MuteSpeakers = false;
-
-			//service.h
-			int BlankScreenWhenIdleDelay = 10;
-			bool BlankWhenIdle = false;
+		struct DEVICE {							// WebOS device settings
+			std::string							DeviceId;
+			std::string							IP;
+			std::vector<std::string>			MAC;
+			std::string							SessionKey;
+			std::string							Name;
+			std::string							UniqueDeviceKey;
+			std::string							UniqueDeviceKey_Temp;
+			bool								Enabled = true;
+			int									PowerOnTimeout = 40;
+			int									WOLtype = WOL_IPSEND;
+			std::string							Subnet;
+			bool								HDMIinputcontrol = false;
+			int									OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
+			bool								SetHDMIInputOnResume = false;
+			int									SetHDMIInputOnResumeToNumber = 1;
+			bool								SSL = true;
+		};
+		struct PREFERENCES {					// Global preferences and settings
+			std::vector<std::string>			EventLogRestartString = DEFAULT_RESTART;
+			std::vector<std::string>			EventLogShutdownString = DEFAULT_SHUTDOWN;
+			bool								Logging = false;
+			int									version = 2;
+			int									PowerOnTimeout = 40;
+			bool								AutoUpdate = false;
+			bool								ResetAPIkeys = false;
+			bool								BlankScreenWhenIdle = false;
+			int									BlankScreenWhenIdleDelay = 10;
+			bool								AdhereTopology = false;
+			bool								bIdleWhitelistEnabled = false;
+			bool								bFullscreenCheckEnabled = false;
+			std::vector<PROCESSLIST>			WhiteList;
+			bool								bIdleFsExclusionsEnabled = false;
+			std::vector<PROCESSLIST>			FsExclusions;
+			bool								RemoteStreamingCheck = false;
+			bool								TopologyPreferPowerEfficiency = true;
+			bool								ExternalAPI = false;
+			bool								MuteSpeakers = false;
+			std::wstring						DataPath;
 		};
 		class Preferences {
 		public:
 			Preferences();
 			~Preferences();
-			bool Initialize(void);
-			void WriteToDisk(void);
-			std::vector<std::string> EventLogRestartString = DEFAULT_RESTART;
-			std::vector<std::string> EventLogShutdownString = DEFAULT_SHUTDOWN;
-			bool Logging = false;
-			int version = 2;
-			int PowerOnTimeout = 40;
-			bool AutoUpdate = false;
-			bool ResetAPIkeys = false;
-			bool BlankScreenWhenIdle = false;
-			int BlankScreenWhenIdleDelay = 10;
-			bool AdhereTopology = false;
-			bool bIdleWhitelistEnabled = false;
-			bool bFullscreenCheckEnabled = false;
-			std::vector<PROCESSLIST> WhiteList;
-			bool bIdleFsExclusionsEnabled = false;
-			std::vector<PROCESSLIST> FsExclusions;
-			bool RemoteStreamingCheck = false;
-			bool TopologyPreferPowerEfficiency = true;
-			bool ExternalAPI = false;
-			bool MuteSpeakers = false;
-			std::wstring DataPath;
-			std::vector <DEVICE> Devices;
-
-			// service.h
-			bool DisplayIsCurrentlyRequestedPoweredOnByWindows = false;
+			bool								Initialize(void);
+			void								WriteToDisk(void);
+			PREFERENCES							Prefs;
+			std::vector <DEVICE>				Devices;
 
 			//Daemon.h
-			bool ToastInitialised = false;
-			REMOTE_STREAM Remote;
+			bool								ToastInitialised = false;
+			REMOTE_STREAM						Remote;
 		};
 	}
 	namespace ipc
@@ -198,31 +179,29 @@ namespace jpersson77 {
 		class PipeServer
 		{
 		public:
-							PipeServer(std::wstring, void (*fcnPtr)(std::wstring));
-							~PipeServer(void);
-			bool			Send(std::wstring sData, int iPipe = -1);
-			bool			Terminate();
-			bool			isRunning();
-			
-			//DEBUG
-			void			Log(std::wstring);
-			std::atomic_int	bLock2 = false;;
+			PipeServer(std::wstring, void (*fcnPtr)(std::wstring));
+			~PipeServer(void);
+			bool								Send(std::wstring sData, int iPipe = -1);
+			bool								Terminate();
+			bool								isRunning();
+			void								Log(std::wstring);
+			std::atomic_int						bLock2 = false;;
 
 		private:
-			void			OnEvent(int, std::wstring sData = L"", int iPipe = -1);
-			void			WorkerThread();
-			bool			DisconnectAndReconnect(int);
-			bool			Write(std::wstring&, int);
+			void								OnEvent(int, std::wstring sData = L"", int iPipe = -1);
+			void								WorkerThread();
+			bool								DisconnectAndReconnect(int);
+			bool								Write(std::wstring&, int);
 
-			HANDLE				hPipeHandles[PIPE_INSTANCES] = {};
-			DWORD				dwBytesTransferred;
-			TCHAR				Buffer[PIPE_INSTANCES][PIPE_BUF_SIZE+1];
-			OVERLAPPED			Ovlap[PIPE_INSTANCES];
-			HANDLE				hEvents[PIPE_INSTANCES + 2] = {}; // include termination and termination confirm events
-			std::atomic_bool	bWriteData[PIPE_INSTANCES] = {};
-			void				(*FunctionPtr)(std::wstring);
-			std::wstring		sPipeName;
-			std::atomic_int		iState = PIPE_NOT_RUNNING;
+			HANDLE								hPipeHandles[PIPE_INSTANCES] = {};
+			DWORD								dwBytesTransferred = 0;
+			TCHAR								Buffer[PIPE_INSTANCES][PIPE_BUF_SIZE + 1] = {};
+			OVERLAPPED							Ovlap[PIPE_INSTANCES] = {};
+			HANDLE								hEvents[PIPE_INSTANCES + 2] = {}; // include termination and termination confirm events
+			std::atomic_bool					bWriteData[PIPE_INSTANCES] = {};
+			void								(*FunctionPtr)(std::wstring);
+			std::wstring						sPipeName;
+			std::atomic_int						iState = PIPE_NOT_RUNNING;
 
 		};
 		
@@ -231,33 +210,28 @@ namespace jpersson77 {
 		public:
 			PipeClient(std::wstring, void (*fcnPtr)(std::wstring));
 			~PipeClient(void);
-			bool			Init();
-			bool			Send(std::wstring);
-			bool			Terminate();
-			bool			isRunning();
-
-
-			//DEBUG
-			void			Log(std::wstring);
-			std::atomic_int	bLock = false;
+			bool								Init();
+			bool								Send(std::wstring);
+			bool								Terminate();
+			bool								isRunning();
+			void								Log(std::wstring);
+			std::atomic_int						bLock = false;
 
 		private:
-			void			OnEvent(int, std::wstring sData = L"");
-			void			WorkerThread();
-			bool			DisconnectAndReconnect();
-			bool			Write(std::wstring&);
-
-			HANDLE				hFile = NULL;
-
-			HANDLE				hPipeHandle = {};
-			DWORD				dwBytesTransferred;
-			TCHAR				Buffer[PIPE_BUF_SIZE+1];
-			OVERLAPPED			Ovlap;
-			HANDLE				hEvents[3] = {}; // overlapped event, terminate event, terminate accept event
-			void				(*FunctionPtr)(std::wstring);
-			std::wstring		sPipeName;
-			std::atomic_int		iState = PIPE_NOT_RUNNING;
-			std::atomic_bool	bWriteData = {};
+			void								OnEvent(int, std::wstring sData = L"");
+			void								WorkerThread();
+			bool								DisconnectAndReconnect();
+			bool								Write(std::wstring&);
+			HANDLE								hFile = NULL;
+			HANDLE								hPipeHandle = {};
+			DWORD								dwBytesTransferred = 0;
+			TCHAR								Buffer[PIPE_BUF_SIZE + 1] = {};
+			OVERLAPPED							Ovlap;
+			HANDLE								hEvents[3] = {}; // overlapped event, terminate event, terminate accept event
+			void								(*FunctionPtr)(std::wstring);
+			std::wstring						sPipeName;
+			std::atomic_int						iState = PIPE_NOT_RUNNING;
+			std::atomic_bool					bWriteData = {};
 
 		};
 	}

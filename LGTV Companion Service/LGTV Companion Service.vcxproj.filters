@@ -29,7 +29,7 @@
     <ClInclude Include="Service.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Handshake.h">
+    <ClInclude Include="LgApi.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
@@ -38,10 +38,18 @@
     <ClInclude Include="..\Common\Common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="lg_api_buttons.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="LGTV Companion Service.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="lg_api_commands.h">
+      <Filter>Header Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

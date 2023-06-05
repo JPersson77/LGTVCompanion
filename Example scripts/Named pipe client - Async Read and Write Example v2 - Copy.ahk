@@ -34,8 +34,9 @@ DllCall("kernel32.dll\SetProcessShutdownParameters", "UInt", 0x101, "UInt", 0)
 ; The name of the named pipe to connect to
 PipeName := "\\.\pipe\LGTVyolo"
 
-;; Create an event object for the overlapped structure
-event := DllCall("CreateEvent", "ptr", 0, "int", 1, "int", 0, "ptr", 0)
+;; Create event objects for the overlapped structure
+read_event := DllCall("CreateEvent", "ptr", 0, "int", 1, "int", 0, "ptr", 0)
+stop_event := DllCall("CreateEvent", "ptr", 0, "int", 1, "int", 0, "ptr", 0)
 
 ; Create a handle to the named pipe server with overlapped flag
 pipe := DllCall("CreateFile", "str", PipeName, "uint", 0xC0000000, "uint", 0x3, "ptr", 0, "uint", 0x3, "uint", 0x40000000, "ptr", 0)
@@ -43,48 +44,58 @@ pipe := DllCall("CreateFile", "str", PipeName, "uint", 0xC0000000, "uint", 0x3, 
 ; Check if the handle is valid
 if (pipe = -1)
 {
-    MsgBox("ERROR, Pipe handle is invalid. Script will Terminate!")
+    MsgBox("Pipe handle is invalid. Script will Terminate!")
     ExitApp
 }
 
 ; Initialize an OVERLAPPED structure with the event handle
-ol := BufferAlloc(A_PtrSize * 4 + 8)
-ol.hEvent := event
+overlap := Buffer(32,0)
+; NumPut("type", value, Buffer, offset)
+NumPut("Ptr",read_event, overlap, 24)
 
 ; Initialize variables
-VarSetStrCapacity(&buffer , 1024)
+VarSetStrCapacity(&buff , 1024)
 bytesread := 0
+WritePerformed := false
 
-; Create an array of handles to wait for
-handles := [event, pipe]
+; Create an array of event handles
+handles := [read_event, stop_event, pipe]
 
-; Loop until the pipe is closed or an error occurs
+
+; Read data from the pipe server asynchronously (overlapped)
+DllCall("ReadFile", "ptr", pipe, "str", buff, "uint", 1024, "uint*", 0, "Ptr", overlap)
+
+;Loop until the pipe is closed or an error occurs
 loop
 {
-    ; Read data from the pipe server asynchronously
-    DllCall("ReadFile", "ptr", pipe, "ptr", &buffer, "uint", 256, "uint*", bytesread, "ptr", &ol)
-
     ; Wait for the read operation or the pipe handle to be signaled
-    result := DllCall("WaitForMultipleObjects", "uint", handles.Length(), "ptr", &handles[1], "int", 0, "uint", 0xFFFFFFFF) ; wait infinitely
+    result := DllCall("WaitForMultipleObjects", "uint", 3, "ptr", handles[1], "int", 0, "uint", 0xFFFFFFFF) ; wait indefinitely
 
     ; Check the result of the wait
-    if (result = 0) ; WAIT_OBJECT_0
+    if (result = 0) ; READ or WRITE event
     {
         ; Get the number of bytes read
-        DllCall("GetOverlappedResult", "ptr", pipe, "ptr", &ol, "uint*", read, "int", 0)
-        
+        if(!DllCall("GetOverlappedResult", "ptr", pipe, "ptr", overlap, "uint*", bytesread, "int", 0))
+		{
+			Log("ERROR, GetOverlappedResult() failed. Script will Terminate!")
+			break
+		}
+		
+		overlap := Buffer(32,0)
+		; NumPut("type", value, Buffer, offset)
+		NumPut("Ptr",read_event, overlap, 24)
+
+		; Read data from the pipe server asynchronously (overlapped)
+		DllCall("ReadFile", "ptr", pipe, "ptr", &buff, "uint", 256, "uint*", 0, "ptr", overlap)
+		
         ; Display the data read
-        MsgBox(StrGet(&buffer, read))
+        MsgBox(buffer)
     }
-    else if (result = 1) ; WAIT_OBJECT_0 + 1
+    else if (result = 1) ; STOP event
     {
         ; The pipe handle was signaled, meaning it was closed by the server
         MsgBox("The pipe server has closed the connection.")
         break ; exit the loop
-    }
-    else if (result = 258) ; WAIT_TIMEOUT
-    {
-        MsgBox("Timed out waiting for data.")
     }
     else ; WAIT_FAILED
     {
@@ -95,11 +106,11 @@ loop
 
 ; Close the handle and the event object
 DllCall("CloseHandle", "ptr", pipe)
-DllCall("CloseHandle", "ptr", event)
+DllCall("CloseHandle", "ptr", read_event)
+DllCall("CloseHandle", "ptr", stop_event)
 
 
-
-
+/*
 
 ; The following DllCall() is optional: it tells the OS to shut down this script last (after all other applications).
 DllCall("kernel32.dll\SetProcessShutdownParameters", "UInt", 0x101, "UInt", 0)
@@ -183,7 +194,7 @@ while (Go = true)
 
 ; Close the handle
 DllCall("CloseHandle", "Ptr", Pipe)
-
+*/
 ExitApp
 
 ; This function will write 'message' to log.txt in the same directory as the script

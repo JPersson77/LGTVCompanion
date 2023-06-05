@@ -1,6 +1,8 @@
 #include "../Common/Common.h"
 
-using namespace jpersson77;
+namespace			common = jpersson77::common;
+namespace			settings = jpersson77::settings;
+namespace			ipc = jpersson77::ipc;
 
 //   Convert UTF-8 to wide
 std::wstring common::widen(std::string sInput) {
@@ -33,6 +35,11 @@ std::string common::narrow(std::wstring sInput) {
 //   Split a string into a vector of strings, accepts quotation marks
 std::vector<std::string> common::stringsplit(std::string str, std::string token) {
 	std::vector<std::string>res;
+	
+	size_t f1 = str.find_first_not_of(token, 0);
+	if (f1 != std::string::npos)
+		str = str.substr(f1);
+	
 	while (str.size() > 0)
 	{
 		size_t index;
@@ -88,6 +95,46 @@ std::wstring common::GetWndText(HWND hWnd)
 	std::wstring text = &buf[0];
 	return text;
 }
+void common::ReplaceAllInPlace(std::string& str, const std::string& from, const std::string& to) 
+{
+	if (from.empty())
+		return;
+	std::string wsRet;
+	wsRet.reserve(str.length());
+	size_t start_pos = 0, pos;
+	while ((pos = str.find(from, start_pos)) != std::string::npos) 
+	{
+		wsRet += str.substr(start_pos, pos - start_pos);
+		wsRet += to;
+		pos += from.length();
+		start_pos = pos;
+	}
+	wsRet += str.substr(start_pos);
+	str.swap(wsRet); 
+}
+// Get the local host ip, e.g 192.168.1.x
+std::vector <std::string> common::GetOwnIP(void)
+{
+	std::vector <std::string> IPs;
+	char host[256];
+	if (gethostname(host, sizeof(host)) != SOCKET_ERROR)
+	{
+		struct hostent* phent = gethostbyname(host);
+		if (phent != 0)
+		{
+			for (int i = 0; phent->h_addr_list[i] != 0; ++i)
+			{
+				std::string ip;
+				struct in_addr addr;
+				memcpy(&addr, phent->h_addr_list[i], sizeof(struct in_addr));
+				ip = inet_ntoa(addr);
+				if (ip != "127.0.0.1")
+					IPs.push_back(ip);
+			}
+		}
+	}
+	return IPs;
+}
 settings::Preferences::Preferences() {
 }
 settings::Preferences::~Preferences() {
@@ -101,7 +148,7 @@ bool settings::Preferences::Initialize() {
 		path += APPNAME;
 		path += L"\\";
 		CreateDirectory(path.c_str(), NULL);
-		DataPath = path;
+		Prefs.DataPath = path;
 		path += CONFIG_FILE;
 
 		std::ifstream i(path.c_str());
@@ -118,86 +165,86 @@ bool settings::Preferences::Initialize() {
 				for (auto& str : j.items())
 				{
 					std::string temp = str.value().get<std::string>();
-					if (std::find(EventLogRestartString.begin(), EventLogRestartString.end(), temp) == EventLogRestartString.end())
-						EventLogRestartString.push_back(temp);
+					if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
+						Prefs.EventLogRestartString.push_back(temp);
 				}
 			}
 			// The shutdown strings
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS];
 			if (!j.empty() && j.size() > 0)
 			{
-				//               Prefs.EventLogShutdownString.clear();
 				for (auto& str : j.items())
 				{
 					std::string temp = str.value().get<std::string>();
-					if (std::find(EventLogShutdownString.begin(), EventLogShutdownString.end(), temp) == EventLogShutdownString.end())
-						EventLogShutdownString.push_back(temp);
+					if (std::find(Prefs.EventLogShutdownString.begin(), Prefs.EventLogShutdownString.end(), temp) == Prefs.EventLogShutdownString.end())
+						if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
+							Prefs.EventLogShutdownString.push_back(temp);
 				}
 			}
 			// Version (of the preferences file)
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_VERSION];
 			if (!j.empty() && j.is_number())
-				version = j.get<int>();
+				Prefs.version = j.get<int>();
 			// Power On timeout
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT];
 			if (!j.empty() && j.is_number())
-				PowerOnTimeout = j.get<int>();
-			if (PowerOnTimeout < 1)
-				PowerOnTimeout = 1;
-			else if (PowerOnTimeout > 100)
-				PowerOnTimeout = 100;
+				Prefs.PowerOnTimeout = j.get<int>();
+			if (Prefs.PowerOnTimeout < 1)
+				Prefs.PowerOnTimeout = 1;
+			else if (Prefs.PowerOnTimeout > 100)
+				Prefs.PowerOnTimeout = 100;
 			// Logging
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_LOGGING];
 			if (!j.empty() && j.is_boolean())
-				Logging = j.get<bool>();
+				Prefs.Logging = j.get<bool>();
 			// Update notifications
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_AUTOUPDATE];
 			if (!j.empty() && j.is_boolean())
-				AutoUpdate = j.get<bool>();
+				Prefs.AutoUpdate = j.get<bool>();
 			// User idle mode
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANK];
 			if (!j.empty() && j.is_boolean())
-				BlankScreenWhenIdle = j.get<bool>();
+				Prefs.BlankScreenWhenIdle = j.get<bool>();
 			// User idle mode delay
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY];
 			if (!j.empty() && j.is_number())
-				BlankScreenWhenIdleDelay = j.get<int>();
-			if (BlankScreenWhenIdleDelay < 1)
-				BlankScreenWhenIdleDelay = 1;
-			else if (BlankScreenWhenIdleDelay > 240)
-				BlankScreenWhenIdleDelay = 240;
+				Prefs.BlankScreenWhenIdleDelay = j.get<int>();
+			if (Prefs.BlankScreenWhenIdleDelay < 1)
+				Prefs.BlankScreenWhenIdleDelay = 1;
+			else if (Prefs.BlankScreenWhenIdleDelay > 240)
+				Prefs.BlankScreenWhenIdleDelay = 240;
 			// Multi-monitor topology support
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY];
 			if (!j.empty() && j.is_boolean())
-				AdhereTopology = j.get<bool>();
+				Prefs.AdhereTopology = j.get<bool>();
 			// User idle mode whitelist enabled
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST];
 			if (!j.empty() && j.is_boolean())
-				bIdleWhitelistEnabled = j.get<bool>();
+				Prefs.bIdleWhitelistEnabled = j.get<bool>();
 			// User idle mode fullscreen exclusions enabled
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE];
 			if (!j.empty() && j.is_boolean())
-				bIdleFsExclusionsEnabled = j.get<bool>();
+				Prefs.bIdleFsExclusionsEnabled = j.get<bool>();
 			// User idle mode, prohibit fullscreen
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN];
 			if (!j.empty() && j.is_boolean())
-				bFullscreenCheckEnabled = j.get<bool>();
+				Prefs.bFullscreenCheckEnabled = j.get<bool>();
 			// Remote streaming host support
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM];
 			if (!j.empty() && j.is_boolean())
-				RemoteStreamingCheck = j.get<bool>();
+				Prefs.RemoteStreamingCheck = j.get<bool>();
 			// Multi-monitor topology mode
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE];
 			if (!j.empty() && j.is_boolean())
-				TopologyPreferPowerEfficiency = j.get<bool>();
+				Prefs.TopologyPreferPowerEfficiency = j.get<bool>();
 			// External API
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_EXTERNAL_API];
 			if (!j.empty() && j.is_boolean())
-				ExternalAPI = j.get<bool>();
+				Prefs.ExternalAPI = j.get<bool>();
 			// Mute Speakers
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS];
 			if (!j.empty() && j.is_boolean())
-				MuteSpeakers = j.get<bool>();
+				Prefs.MuteSpeakers = j.get<bool>();
 			// User idle mode whitelist
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
 			if (!j.empty() && j.size() > 0)
@@ -207,7 +254,7 @@ bool settings::Preferences::Initialize() {
 					PROCESSLIST w;
 					w.Application = common::widen(elem.value().get<std::string>());
 					w.Name = common::widen(elem.key());
-					WhiteList.push_back(w);
+					Prefs.WhiteList.push_back(w);
 				}
 			}
 			// User idle mode fullscreen exclusions
@@ -219,7 +266,7 @@ bool settings::Preferences::Initialize() {
 					PROCESSLIST w;
 					w.Application = common::widen(elem.value().get<std::string>());
 					w.Name = common::widen(elem.key());
-					FsExclusions.push_back(w);
+					Prefs.FsExclusions.push_back(w);
 				}
 			}
 
@@ -288,8 +335,6 @@ bool settings::Preferences::Initialize() {
 						params.MAC.push_back(m.value().get<std::string>());
 					}
 				}
-				params.PowerOnTimeout = PowerOnTimeout;
-				params.MuteSpeakers = MuteSpeakers;
 				Devices.push_back(params);
 			}
 			return true;
@@ -300,19 +345,19 @@ bool settings::Preferences::Initialize() {
 void settings::Preferences::WriteToDisk(void)
 {
 	nlohmann::json prefs, p;
-	std::wstring path = DataPath;
-	CreateDirectory(DataPath.c_str(), NULL);
+	std::wstring path = Prefs.DataPath;
+	CreateDirectory(Prefs.DataPath.c_str(), NULL);
 	path += CONFIG_FILE;
 
 	// do we need to upgrade the api key version
-	if (ResetAPIkeys)
+	if (Prefs.ResetAPIkeys)
 	{
 		for (auto& k : Devices)
 		{
 			k.SessionKey = "";
 		}
-		ResetAPIkeys = false;
-		version = 2;
+		Prefs.ResetAPIkeys = false;
+		Prefs.version = 2;
 	}
 	else //load sessionkeys from config.json and add it to the device list
 	{
@@ -340,29 +385,29 @@ void settings::Preferences::WriteToDisk(void)
 			}
 		}
 	}
-	prefs[JSON_PREFS_NODE][JSON_VERSION] = (int)version;
-	prefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT] = (int)PowerOnTimeout;
-	prefs[JSON_PREFS_NODE][JSON_LOGGING] = (bool)Logging;
-	prefs[JSON_PREFS_NODE][JSON_AUTOUPDATE] = (bool)AutoUpdate;
-	prefs[JSON_PREFS_NODE][JSON_IDLEBLANK] = (bool)BlankScreenWhenIdle;
-	prefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY] = (int)BlankScreenWhenIdleDelay;
-	prefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY] = (bool)AdhereTopology;
-	prefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST] = (bool)bIdleWhitelistEnabled;
-	prefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN] = (bool)bFullscreenCheckEnabled;
-	prefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE] = (bool)bIdleFsExclusionsEnabled;
-	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM] = (bool)RemoteStreamingCheck;
-	prefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE] = (bool)TopologyPreferPowerEfficiency;
-	prefs[JSON_PREFS_NODE][JSON_EXTERNAL_API] = (bool)ExternalAPI;
-	prefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS] = (bool)MuteSpeakers;
-	for (auto& item : EventLogRestartString)
+	prefs[JSON_PREFS_NODE][JSON_VERSION] = (int)Prefs.version;
+	prefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT] = (int)Prefs.PowerOnTimeout;
+	prefs[JSON_PREFS_NODE][JSON_LOGGING] = (bool)Prefs.Logging;
+	prefs[JSON_PREFS_NODE][JSON_AUTOUPDATE] = (bool)Prefs.AutoUpdate;
+	prefs[JSON_PREFS_NODE][JSON_IDLEBLANK] = (bool)Prefs.BlankScreenWhenIdle;
+	prefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY] = (int)Prefs.BlankScreenWhenIdleDelay;
+	prefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY] = (bool)Prefs.AdhereTopology;
+	prefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST] = (bool)Prefs.bIdleWhitelistEnabled;
+	prefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN] = (bool)Prefs.bFullscreenCheckEnabled;
+	prefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE] = (bool)Prefs.bIdleFsExclusionsEnabled;
+	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM] = (bool)Prefs.RemoteStreamingCheck;
+	prefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE] = (bool)Prefs.TopologyPreferPowerEfficiency;
+	prefs[JSON_PREFS_NODE][JSON_EXTERNAL_API] = (bool)Prefs.ExternalAPI;
+	prefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS] = (bool)Prefs.MuteSpeakers;
+	for (auto& item : Prefs.EventLogRestartString)
 		prefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS].push_back(item);
-	for (auto& item : EventLogShutdownString)
+	for (auto& item : Prefs.EventLogShutdownString)
 		prefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS].push_back(item);
-	if (WhiteList.size() > 0)
-		for (auto& w : WhiteList)
+	if (Prefs.WhiteList.size() > 0)
+		for (auto& w : Prefs.WhiteList)
 			prefs[JSON_PREFS_NODE][JSON_WHITELIST][common::narrow(w.Name)] = common::narrow(w.Application);
-	if (FsExclusions.size() > 0)
-		for (auto& w : FsExclusions)
+	if (Prefs.FsExclusions.size() > 0)
+		for (auto& w : Prefs.FsExclusions)
 			prefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS][common::narrow(w.Name)] = common::narrow(w.Application);
 
 	//Iterate devices
@@ -758,7 +803,7 @@ void ipc::PipeServer::Log(std::wstring ss)
 	while (bLock2)
 		Sleep(MUTEX_WAIT);
 	bLock2 = true;
-	std::wstring path = L"c:/programdata/lgtv companion/log2.txt";
+	std::wstring path = L"c:/programdata/lgtv companion/pipeserver.txt";
 	std::ofstream m;
 
 	char buffer[80];
@@ -1117,7 +1162,7 @@ void ipc::PipeClient::Log(std::wstring ss)
 	while (bLock)
 		Sleep(MUTEX_WAIT);
 	bLock = true;
-	std::wstring path = L"c:/programdata/lgtv companion/log3.txt";
+	std::wstring path = L"c:/programdata/lgtv companion/pipeclient.txt";
 	std::ofstream m;
 
 	char buffer[80];

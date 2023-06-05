@@ -2,6 +2,7 @@
 #pragma comment(lib, "urlmon.lib")
 #pragma comment(lib, "Wtsapi32.lib")
 #pragma comment(lib, "User32.lib")
+#pragma comment(lib, "Ws2_32.lib")
 
 #if defined _M_IX86
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
@@ -33,7 +34,9 @@
 #include <initguid.h>
 #include <usbiodef.h>
 #include <Dbt.h>
+#include <lmcons.h>
 #include <algorithm>
+#include <WinSock2.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <filesystem>
 #include <wintoast/wintoastlib.h>
@@ -48,7 +51,7 @@
 #define         TIMER_TOPOLOGY							20
 #define         TIMER_CHECK_PROCESSES					21
 #define         TIMER_TOPOLOGY_COLLECTION				22
-#define         TIMER_MAIN_DELAY_WHEN_BUSY				5000
+#define         TIMER_MAIN_DELAY_WHEN_BUSY				100
 #define         TIMER_MAIN_DELAY_WHEN_IDLE				100
 #define         TIMER_REMOTE_DELAY						10000
 #define         TIMER_TOPOLOGY_DELAY					8000

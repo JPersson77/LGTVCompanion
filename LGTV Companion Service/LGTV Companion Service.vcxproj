@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -161,14 +161,23 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\Common.h" />
-    <ClInclude Include="Handshake.h" />
+    <ClInclude Include="LgApi.h" />
+    <ClInclude Include="lg_api_buttons.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Service.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="LGTV Companion Service.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="lg_api_commands.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ProjectExtensions>
+    <VisualStudio>
+      <UserProperties />
+    </VisualStudio>
+  </ProjectExtensions>
 </Project>
