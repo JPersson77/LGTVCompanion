@@ -5,12 +5,11 @@
 	illustrate how to listen to events sent from LGTV Companion. Note that bi-directional communication is
 	supported and sending commands/events to LGTV Companion is covered in another example script.
 	
-	Please install AHK by downloading the installer from here: https://www.autohotkey.com/ and then install.
+	AutoHotkey is a free, open-source scripting language for Windows that allows users to easily create scripts for all 
+	kinds of tasks such as: form fillers, auto-clicking, macros, etc. Please install AHK by downloading the installer 
+	from here: https://www.autohotkey.com/ and then install.
 	
-	AutoHotkey is a free, open-source scripting language for Windows that allows users to easily create small 
-	to complex scripts for all kinds of tasks such as: form fillers, auto-clicking, macros, etc.
-	
-	PLEASE NOTE that the LGTV Companion API is using named pipes for its intra-process communication so any 
+	PLEASE NOTE that the LGTV Companion API is using named pipes for its intra-process communication so ANY 
 	scripting or programming language which can access named pipes (which is surely the vast majority) can be used 
 	to communicate with LGTV Companion.
 	
@@ -27,90 +26,6 @@
 
 ;Only one instance of the script can run
 #SingleInstance Ignore
-
-; The following DllCall() is optional: it tells the OS to shut down this script last (after all other applications).
-DllCall("kernel32.dll\SetProcessShutdownParameters", "UInt", 0x101, "UInt", 0)
-
-; The name of the named pipe to connect to
-PipeName := "\\.\pipe\LGTVyolo"
-
-;; Create event objects for the overlapped structure
-read_event := DllCall("CreateEvent", "ptr", 0, "int", 1, "int", 0, "ptr", 0)
-stop_event := DllCall("CreateEvent", "ptr", 0, "int", 1, "int", 0, "ptr", 0)
-
-; Create a handle to the named pipe server with overlapped flag
-pipe := DllCall("CreateFile", "str", PipeName, "uint", 0xC0000000, "uint", 0x3, "ptr", 0, "uint", 0x3, "uint", 0x40000000, "ptr", 0)
-
-; Check if the handle is valid
-if (pipe = -1)
-{
-    MsgBox("Pipe handle is invalid. Script will Terminate!")
-    ExitApp
-}
-
-; Initialize an OVERLAPPED structure with the event handle
-overlap := Buffer(32,0)
-; NumPut("type", value, Buffer, offset)
-NumPut("Ptr",read_event, overlap, 24)
-
-; Initialize variables
-VarSetStrCapacity(&buff , 1024)
-bytesread := 0
-WritePerformed := false
-
-; Create an array of event handles
-handles := [read_event, stop_event, pipe]
-
-
-; Read data from the pipe server asynchronously (overlapped)
-DllCall("ReadFile", "ptr", pipe, "str", buff, "uint", 1024, "uint*", 0, "Ptr", overlap)
-
-;Loop until the pipe is closed or an error occurs
-loop
-{
-    ; Wait for the read operation or the pipe handle to be signaled
-    result := DllCall("WaitForMultipleObjects", "uint", 3, "ptr", handles[1], "int", 0, "uint", 0xFFFFFFFF) ; wait indefinitely
-
-    ; Check the result of the wait
-    if (result = 0) ; READ or WRITE event
-    {
-        ; Get the number of bytes read
-        if(!DllCall("GetOverlappedResult", "ptr", pipe, "ptr", overlap, "uint*", bytesread, "int", 0))
-		{
-			Log("ERROR, GetOverlappedResult() failed. Script will Terminate!")
-			break
-		}
-		
-		overlap := Buffer(32,0)
-		; NumPut("type", value, Buffer, offset)
-		NumPut("Ptr",read_event, overlap, 24)
-
-		; Read data from the pipe server asynchronously (overlapped)
-		DllCall("ReadFile", "ptr", pipe, "ptr", &buff, "uint", 256, "uint*", 0, "ptr", overlap)
-		
-        ; Display the data read
-        MsgBox(buffer)
-    }
-    else if (result = 1) ; STOP event
-    {
-        ; The pipe handle was signaled, meaning it was closed by the server
-        MsgBox("The pipe server has closed the connection.")
-        break ; exit the loop
-    }
-    else ; WAIT_FAILED
-    {
-        MsgBox("Failed to wait for data: %A_LastError%")
-        break ; exit the loop
-    }
-}
-
-; Close the handle and the event object
-DllCall("CloseHandle", "ptr", pipe)
-DllCall("CloseHandle", "ptr", read_event)
-DllCall("CloseHandle", "ptr", stop_event)
-
-
-/*
 
 ; The following DllCall() is optional: it tells the OS to shut down this script last (after all other applications).
 DllCall("kernel32.dll\SetProcessShutdownParameters", "UInt", 0x101, "UInt", 0)
@@ -194,7 +109,7 @@ while (Go = true)
 
 ; Close the handle
 DllCall("CloseHandle", "Ptr", Pipe)
-*/
+
 ExitApp
 
 ; This function will write 'message' to log.txt in the same directory as the script

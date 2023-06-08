@@ -1,19 +1,16 @@
 /*
 	Version 1.0
 	
-	This is a sample script using AutoHotKey (AHK) for accessing the API for LGTV Companion. This sample script
-	illustrate how to send events to LGTV Companion. Note that bi-directional communication is
+	This is a sample script using AutoHotKey (AHK) v2 for accessing the API for LGTV Companion. This sample script
+	illustrate how to send commands to LGTV Companion. Note that bi-directional communication is
 	supported and receiving commands/events to LGTV Companion is covered in another example script.
 	
-	Please install AHK by downloading the installer from here: https://www.autohotkey.com/ and then install.
+	AutoHotkey is a free, open-source scripting language for Windows that allows users to easily create scripts for all 
+	kinds of tasks such as: form fillers, auto-clicking, macros, etc.Please install AHK by downloading the installer from 
+	here: https://www.autohotkey.com/ and then install.
 	
-	AutoHotkey is a free, open-source scripting language for Windows that allows users to easily create small 
-	to complex scripts for all kinds of tasks such as: form fillers, auto-clicking, macros, etc.
-	
-	PLEASE NOTE that the LGTV Companion API is using named pipes for its intra-process communication so any	scripting or programming language which can access named pipes (which is surely the vast majority) can be used 
+	PLEASE NOTE that the LGTV Companion API is using named pipes for its intra-process communication so ANY	scripting or programming language which can access named pipes (which is surely the vast majority) can be used 
 	to communicate with LGTV Companion.
-	
-	Remember to enable the "External API" option in LGTV Companion.
 	
 	For discussions, tips and tricks etc please use Discord: https://discord.gg/7KkTPrP3fq
 	
