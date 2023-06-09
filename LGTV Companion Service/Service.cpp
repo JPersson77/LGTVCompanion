@@ -910,6 +910,38 @@ void NamedPipeCallback(std::wstring message)
 				Log(log);
 				continue;
 			}
+			else if (daemon_command == "remote_connect")
+			{
+				log += "Remote streaming client connected. All managed devices will power off.";
+				Log(log);
+				CreateEvent_system(EVENT_SYSTEM_DISPLAYOFF);
+				SessionManager.RemoteClientIsConnected(true);
+				continue;
+			}
+			else if (daemon_command == "remote_disconnect")
+			{
+				SessionManager.RemoteClientIsConnected(false);
+				if (SessionManager.GetWindowsPowerStatus())
+				{
+					log += "Remote streaming client disconnected. Powering on managed devices.";
+					Log(log);
+					CreateEvent_system(EVENT_SYSTEM_DISPLAYON);
+					continue;
+				}
+				else
+				{
+					log += "Remote streaming client disconnected. Managed devices will remain powered off.";
+					Log(log);
+					continue;
+				}
+			}
+			else if (daemon_command == "newversion")
+			{
+				log += "A new version of this app is available for download here : ";
+				log += common::narrow(NEWRELEASELINK);
+				Log(log);
+				continue;
+			}
 			if (physical_console != daemon_id) // only allow process communications from physical console
 			{ 
 				{ //debug remove me
@@ -917,13 +949,6 @@ void NamedPipeCallback(std::wstring message)
 					sm += daemon_id;
 					Log(sm);
 				}
-				continue;
-			}
-			else if (daemon_command == "newversion")
-			{
-				log += "A new version of this app is available for download here : ";
-				log += common::narrow(NEWRELEASELINK);
-				Log(log);
 				continue;
 			}
 			else if (daemon_command == "userbusy")
@@ -947,31 +972,6 @@ void NamedPipeCallback(std::wstring message)
 				}
 				CreateEvent_system(EVENT_SYSTEM_USERIDLE);
 				continue;
-			}
-			else if (daemon_command == "remote_connect")
-			{
-				log += "Remote streaming client connected. All managed devices will power off.";
-				Log(log);
-				CreateEvent_system(EVENT_SYSTEM_DISPLAYOFF);
-				SessionManager.RemoteClientIsConnected(true);
-				continue;
-			}
-			else if (daemon_command == "remote_disconnect")
-			{
-				SessionManager.RemoteClientIsConnected(false);
-				if (SessionManager.GetWindowsPowerStatus())
-				{
-					log +="Remote streaming client disconnected. Powering on managed devices.";
-					Log(log);
-					CreateEvent_system(EVENT_SYSTEM_DISPLAYON);
-					continue;
-				}
-				else
-				{
-					log += "Remote streaming client disconnected. Managed devices will remain powered off.";
-					Log(log);
-					continue;
-				}
 			}
 			else if (daemon_command == "topology")
 			{
