@@ -7,8 +7,9 @@
 This application (UI and service) controls LG WebOS TVs and displays.
 
 This application aim to be a set and forget application to:
-- provide automatic management for your WebOS device (TV), to shut off and turn on in reponse to to the PC shutting down, rebooting, entering low power modes and when user is afk (idle) as well as in response to changes in the windows monitor topology, in a multi-monitor environment.
-- provide the user with a command line tool to turn displays on or off.
+- provide automatic management for your WebOS device (TV), to shut off and turn on in reponse to the PC shutting down, rebooting, entering low power modes and when user is idle as well as in response to changes in the windows monitor topology, in a multi-monitor environment.
+- provide you with a powerful command line tool which can be used to control your WebOS device and change most of its settings.
+- provide you with an API, which external scripts and/or applications can use to facilitate automation.
 
 ## Background
 With the rise in popularity of using OLED TVs as PC monitors, it is apparent that standard functionality of PC-monitors is missing. Particularly turning the device on or off in response to power events in windows. With OLED monitors this is particularly important to prevent "burn-in", or more accurately pixel-wear.
@@ -17,7 +18,7 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 
 - *"That is a really janky solution. But... it WORKS!"* - Linus Tech Tips at [YouTube](https://youtu.be/4mgePWWCAmA?t=21m14s)
 - *"The best kind of programming is fueled by pure hate for an annoying situation."* - reddituser at [Reddit]( https://www.reddit.com/r/OLED_Gaming/comments/okhv67/comment/h58alyu/?utm_source=share&utm_medium=web2x&context=3)
-- *"Yeah, that's really nice!" - my wife
+- *"Yeah, that's really nice..." - my wife
 
 ## Installation and usage
 1. Important prerequisites:
@@ -25,7 +26,7 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
    - Ensure that the TV can be woken via the network. For the CX line of displays this is accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->Mobile Connection Management->TV On with Mobile, and then enable 'Turn On via Wi-Fi'. For C1 and C2 it's All Settings->General->Devices->External Devices->TV On With Mobile->Turn on via Wi-Fi. NOTE! This step is needed regardless of using WiFi or a cable.
    - Open the administrative interface of your router, and set a static DHCP lease for your WebOS devices, i.e. to ensure that your devices always have the same IP-addresses on your LAN.
 
-HOT TIP! While in the settings of the TV, ensure that the device automatic power off is set long enough to not interfere with youur sessions with the PC, f e 8 hours. Note that for the C2 displays this setting can be found here: All settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off. The LGTV Companion app will manage the power state of the display and the less interference the better.
+HOT TIP! While in the settings of the TV, ensure that the device automatic power off is set long enough to not interfere with your sessions with the PC, f e 8 hours. Note that for the C2 displays this setting can be found here: All settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off. The LGTV Companion app will manage the power state of the display and the less interference the better.
 
 2. Download the latest version of the setup package from the releases page ( [Click here](https://github.com/JPersson77/LGTVCompanion/releases) ) and install it. This will install and start the service (LGTVsvc.exe), install the user interface (LGTV Companion.exe) as well as the desktop user mode daemon (LGTVdaemon.exe).
 3. Open the user interface from the Windows start menu, it is called "LGTV Companion".
@@ -33,16 +34,16 @@ HOT TIP! While in the settings of the TV, ensure that the device automatic power
 ![l_main](https://user-images.githubusercontent.com/77928210/213521847-31f66061-629f-4808-a20c-1bb7bbf441ca.jpg)
 
 4. Click the 'Scan' button to let the application try and automatically find network attached WebOs devices (TVs) (This button is called 'Configure' in the screenshot above). If the 'Scan' feature does not work properly you will be able to add your devices manually.
-5. Optionally, click the drop down button to manually add, remove, configure devices and the parameters of the respective device, this includes the network IP-address, the physical address, i.e. the MAC(s). This information can easily be found in the network settings of the TV. Also, the default wake-on-lan network options should work for most configurations, but if your TV has difficulties powering on try the other options. 
+5. Optionally, click the drop down button to manually add, remove, configure devices and the parameters of the respective device, this includes the network IP-address, the physical address, i.e. the MAC(s). This information can easily be found in the network settings of the TV. Also, the default wake-on-lan network options should work for most configurations, but if your TV has difficulties powering on then try the other options. 
 
 HOT TIP! Clicking the 'What's this?' links will show you more information about all options throughout the UI.
 
 ![l_dev](https://user-images.githubusercontent.com/77928210/213522732-ee6c737c-c12e-4f32-b638-863e875151e2.jpg)
 
 6. In the main application window, ensure the 'Manage this device' checkbox is checked so the application will automatically respond to power events (shutdown, restart, suspend, resume, idle) for the respective devices.
-7. Optionally, tweak the additional settings, by clicking on the hamburger icon button (options). 
+7. Optionally, tweak the global options, by clicking on the hamburger icon button (options). 
 
-HOT TIP! The "User idle mode" works seprately from all other windows power options and can be really useful to provide maximum protection against screen burn-in and also some power savings.
+HOT TIP! The "User Idle Mode" works seprately from all other windows power options and can be really useful to provide maximum protection against screen burn-in and also some additional power savings.
 
 ![l_opt](https://user-images.githubusercontent.com/77928210/213523626-e54dc98e-9ea2-4f3c-ac55-fe2ad7c1088e.jpg)
     
@@ -59,7 +60,7 @@ HOT TIP! The "User idle mode" works seprately from all other windows power optio
 11. You can now close the main UI. The service will continue running in the background.
 
 ## Limitations
-- LG OLED displays can sometimes not be turned on via network when an automatic pixel refresh is being performed. You can on some models hear an internal relay click after the pixel refresh, when the display is actually powered down, at which point it can be turned on again at any time by this application.
+- Some LG OLED displays can sometimes not be turned on via network when an automatic pixel refresh is being performed. You can on some models hear an internal relay click after the pixel refresh, when the display is actually powered down, at which point it can be turned on again at any time by this application.
 - The WebOS device can only be turned on/off when the PC and the device are both connected to a network. 
 - The TV cannnot be on a different subnet/VLAN from your PC. This is because the TV is powerd on by means of broadcasting a magic packet, aka Wake-on-lan, which is restricted to layer 2, i.e. same subnet only. There are ways to bypass this limitation but it is outside the scope of this application, even though you can probably make it work. Let me know if you need help to make it work for you.
 
@@ -89,28 +90,7 @@ HOT tip! Enable the built in logger and check the output, it can be very useful 
 
 ## Commandline arguments
 
-The 'LGTV companion.exe" also accepts command line arguments for integration in scripts or similar.
-
-*LGTV Companion.exe -[idle|-unidle][poweron|poweroff|screenon|screenoff|autoenable|autodisable|sethdmi1|sethdmi2|sethdmi3|sethdmi4|mute|unmute] [Device1|Name] [Device2|Name] ... [DeviceX|Name]*
-- *-poweron* - power on a device.
-- *-poweroff* - power off a device
-- *-screenon* - power on and enable the emitters, i e disable internal power saving mode and do not blank screen.
-- *-screenoff* - disable emitters, i.e. enable internal power saving mode whereby the display is blanked.
-- *-sethdmi1* - set HDMI input 1
-- *-sethdmi2* - set HDMI input 2
-- *-sethdmi3* - set HDMI input 3
-- *-sethdmi4* - set HDMI input 4
-- *-mute* - mute the built-in-speakers of a device
-- *-unmute* - unmute the built-in-speakers of a device
-- *-autoenable* - temporarily enable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. (I personally use this for my home automation system).
-- *-autodisable* - temporarily disable the automatic management of a device, i.e. to respond to power events. This is effective until next restart of the service. 
-- *-idle* - enable user idle mode. This is a global setting.
-- *-unidle* - disable user idle mode. This is a global setting.
-- *[DeviceX|Name]* - device identifier. Either use Device1, Device2, ..., DeviceX or the friendly device name as determined in the User Interface, for example OLED48CX.
-
-Example usage: LGTV Companion.exe -poweron Device1 Device2 "LG OLED48CX" -autodisable Device2
-
-This command will power on device 1, device 2 and the device named LG OLED48CX, and additionally device2 is thereafter set to temporarily not respond to automatic power events (on/off). Note the usage of "quotes" for the device name.
+ 'LGTV companion.exe" can accept hundreds of command line arguments for controlling the application and managed devices. Please see the documentation for all command line arguments here: [Command line documentation](https://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Commandline.md)
 
 ## License
 Copyright © 2021-2023 Jörgen Persson
@@ -128,9 +108,10 @@ Discord: https://discord.gg/7KkTPrP3fq
 Please use the Github issue tracker for potential bug reports and/or feature requests
 
 ## Thanks to
-- @nlohmann - Niels Lohmann, author of JSON for Modern CPP https://github.com/nlohmann/json
 - Boost libs - Boost and Beast https://www.boost.org/
-- @Maassoft for initial helpi with understanding the WebOS comms - https://github.com/Maassoft
+- @nlohmann - Niels Lohmann, author of JSON for Modern CPP https://github.com/nlohmann/json
+- @chros73 - for thorough documentation of the api https://github.com/chros73
+- @Maassoft - for initial help with understanding the WebOS comms - https://github.com/Maassoft
 - @mohabouje - Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
 - OpenSSL - https://www.openssl.org/
 - Vcpkg - https://github.com/microsoft/vcpkg
