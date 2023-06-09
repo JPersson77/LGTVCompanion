@@ -15,7 +15,7 @@ Multiple commands can be sent at once - every new hyphen (which is not escaped b
 
 Please see the many examples below to learn more. Please also note that feature sets vary between models and model years and it's not guaranteed that all commands below will work for all models/series of devices.
 ## Scripting support
-Please note that LGTV Companion also supports bidirectional communication and support for external scripting, as outlined TODO:LINK_HERE. This can be used in a lot of ways, to automate tasks and customise the behaviour of your WebOS-device.
+Please note that LGTV Companion also supports bidirectional communication and support for external scripting, as outlined [here](https://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Scripting.md). This can be used in a lot of ways, to automate tasks and customise the behaviour of your WebOS-device.
 
 ## Power commands
 - *-poweroff* 	- power off the device(s).
