@@ -158,20 +158,7 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		params["label"] = Event.luna_device_info_label;
 		Session.SendLunaRawRequest(LG_LUNA_SET_DEVICE_INFO, params.dump(), Event.log_message);
 		break;
-		/*
-	case EVENT_USER_SETHDMI:
-		Session.SendRequest(LG_HDMI_INPUT, Event.sArgument, Event.sEventLogMessage);
-		break;
-	case EVENT_USER_MUTE:
-		Session.SendRequest(LG_MUTE, Event.sArgument, Event.sEventLogMessage);
-		break;
-	case EVENT_USER_UNMUTE:
-		Session.SendRequest(LG_UNMUTE, Event.sArgument, Event.sEventLogMessage);
-		break;
-	case EVENT_USER_LUNA:
-		Session.SendRequest("LUNA", Event.sArgument, Event.sEventLogMessage);
-		break;
-		*/
+
 	default:break;
 	}
 
@@ -210,11 +197,6 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 			common::ReplaceAllInPlace(payload, "#ARG#", std::to_string(Session.Parameters.SetHDMIInputOnResumeToNumber));
 			common::ReplaceAllInPlace(log, "#ARG#", std::to_string(Session.Parameters.SetHDMIInputOnResumeToNumber));
 			Session.SendRequest(LG_URI_LAUNCH, payload, log, true);
-	/*
-			std::stringstream input;
-			input << Session.Parameters.SetHDMIInputOnResumeToNumber;
-			Session.SendRequest(LG_HDMI_INPUT, input.str(), "set HDMI-input #ARGUMENT#", true);
-	*/
 		}
 		break;
 	case EVENT_SYSTEM_DISPLAYON:
@@ -260,11 +242,6 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 			common::ReplaceAllInPlace(payload, "#ARG#", std::to_string(Session.Parameters.SetHDMIInputOnResumeToNumber));
 			common::ReplaceAllInPlace(log, "#ARG#", std::to_string(Session.Parameters.SetHDMIInputOnResumeToNumber));
 			Session.SendRequest(LG_URI_LAUNCH, payload, log, true);
-/*
-			std::stringstream input;
-			input << Session.Parameters.SetHDMIInputOnResumeToNumber;
-			Session.SendRequest(LG_HDMI_INPUT, input.str(), "set HDMI-input #ARGUMENT#", true);
-*/
 		}
 		break;
 	case EVENT_SYSTEM_TOPOLOGY:
@@ -620,8 +597,6 @@ void CSession::SendButtonRequest(std::string button, std::string log_message)
 json CSession::CreateRequestJson(std::string uri, std::string payload)
 {
 	json j, payl;
-//	std::stringstream ss;
-//	ss << requestId;
 	j["id"] = requestId;
 	j["type"] = "request";
 
@@ -673,14 +648,9 @@ json CSession::CreateLunaSystemSettingJson(std::string setting, std::string valu
 json CSession::CreateRawLunaJson(std::string lunauri, std::string params)
 {
 	nlohmann::json payload, params_parsed, button, event;
-//	settings[setting] = value;// json::parse(value);
-
-
 	try
 	{
 		params_parsed = nlohmann::json::parse(params);
-//		params["settings"] = json::parse(settings_json);
-//		params["category"] = category;
 		button["label"] = "";
 		button["onClick"] = lunauri;
 		button["params"] = params_parsed;
