@@ -1774,17 +1774,25 @@ void CSession::Thread_ButtonRequest(std::string button, std::string log_message)
 				if (!k.empty() && k.is_string())
 				{
 					std::string path = k.get<std::string>();
+					size_t pos = path.find("/resources");
+					if (pos != std::string::npos)
+					{
+						path = path.substr(pos);
+					}
+					else
+					{
+						log = Parameters.DeviceId;
+						log += ", WARNING! Thread_SendRequest() - no resource path received.";
+						Log(log);
+						goto threadend;
+					}
 
-	//				std::string path  = Parameters.IP;
-//					beast::flat_buffer buffer;
 					net::io_context iocx;
 					tcp::resolver resolverx{ iocx };
 					ssl::context ctxx{ ssl::context::tlsv12_client }; //context holds certificates
 					//load_root_certificates(ctx);
 					websocket::stream<beast::ssl_stream<tcp::socket>> wssx{ iocx, ctxx };
 					websocket::stream<tcp::socket> wsx{ iocx };
-					common::ReplaceAllInPlace(path, "wss://192.168.1.56:3001", "");
-					common::ReplaceAllInPlace(path, "ws://192.168.1.56:3000", "");
 
 					auto const resultsx = resolverx.resolve(Parameters.IP, Parameters.SSL ? SERVICE_PORT_SSL : SERVICE_PORT);
 					auto epx = net::connect(Parameters.SSL ? get_lowest_layer(wssx) : wsx.next_layer(), resultsx);
@@ -1831,6 +1839,10 @@ void CSession::Thread_ButtonRequest(std::string button, std::string log_message)
 						wsx.write(net::buffer(std::string(button_command)));
 //						wsx.read(buffer); // read the response
 					}
+					log = Parameters.DeviceId;
+					log += ", "; 
+					log += log_message; 
+					Log(log);
 
 					if (Parameters.SSL)
 						wssx.close(websocket::close_code::normal);
@@ -1841,43 +1853,20 @@ void CSession::Thread_ButtonRequest(std::string button, std::string log_message)
 					else
 						ws.close(websocket::close_code::normal);
 				}
-//				log = Parameters.DeviceId;
-//				log += ", ";
-//				log += log_message;
-//				Log(log);
-
-//				if (Parameters.SSL)
-//					wss.close(websocket::close_code::normal);
-//				else
-//					ws.close(websocket::close_code::normal);
-//				goto threadend;
 			}
 			else
 			{
-//				log = Parameters.DeviceId;
-//				log += ", WARNING! Thread_SendRequest() - returnValue is FALSE.";
-//				Log(log);
+				log = Parameters.DeviceId;
+				log += ", WARNING! Thread_SendRequest() - returnValue is FALSE.";
+				Log(log);
 			}
-
 		}
 		else
 		{
-			/*
 			log = Parameters.DeviceId;
-			log += ", WARNING! Thread_SendRequest() - Invalid response from device.";
+			log += ", WARNING! Thread_ButtonRequest() - Invalid response.";
 			Log(log);
-			if (Parameters.SSL)
-				wss.close(websocket::close_code::normal);
-			else
-				ws.close(websocket::close_code::normal);
-			goto threadend;
-			*/
 		}
-
-//		if (Parameters.SSL)
-//			wss.close(websocket::close_code::normal);
-//		else
-//			ws.close(websocket::close_code::normal);
 	}
 	catch (std::exception const& e)
 	{
