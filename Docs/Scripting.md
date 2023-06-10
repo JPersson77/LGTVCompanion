@@ -11,7 +11,7 @@ The following is not in final implementation:
 Directly reading the response from managed LG devices, f e to get current power state, volume level, channel etc
 
 ## How is the API implemented?
-It is implemented using asynchronous named pipes, which means that most scripting- and programming languages can access it. Check the various examples available here to learn more:
+It is implemented using asynchronous named pipes, which means that most scripting- and programming languages can access it. Check the various examples available [here](https://github.com/JPersson77/LGTVCompanion/tree/master/Docs/Example%20scripts) to learn more:
 
 Please remember to enable the "External API" option in LGTV Companion to be able to read events from LGTV Companion.
 
