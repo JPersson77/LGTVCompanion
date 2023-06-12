@@ -1310,7 +1310,7 @@ void NamedPipeCallback(std::wstring message)
 				std::string uri = LG_URI_LAUNCH;
 				std::string id = words[1];
 				sLogMessage = "[IPC] start app [";
-				sLogMessage += uri;
+				sLogMessage += id;
 				sLogMessage += "] : ";
 				sLogMessage += SessionManager.ValidateDevices(devices);
 				Log(sLogMessage);
@@ -1338,7 +1338,7 @@ void NamedPipeCallback(std::wstring message)
 					j["id"] = id;
 					j["params"] = nlohmann::json::parse(params);
 					sLogMessage = "[IPC] start app [";
-					sLogMessage += uri;
+					sLogMessage += id;
 					sLogMessage += "] with params [";
 					sLogMessage += params;
 					sLogMessage += "] : ";
