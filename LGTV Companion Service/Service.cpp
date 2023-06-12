@@ -1370,7 +1370,7 @@ void NamedPipeCallback(std::wstring message)
 				std::string uri = LG_URI_CLOSE;
 				std::string id = words[1];
 				sLogMessage = "[IPC] close app [";
-				sLogMessage += uri;
+				sLogMessage += id;
 				sLogMessage += "] : ";
 				sLogMessage += SessionManager.ValidateDevices(devices);
 				Log(sLogMessage);
