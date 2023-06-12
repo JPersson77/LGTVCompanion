@@ -1078,15 +1078,17 @@ void NamedPipeCallback(std::wstring message)
 		}
 		else if (command.find("sethdmi") == 0)							// SET HDMI INPUT
 		{
+			int cmd_offset = 1;
 			std::string argument;
 			if (command.size() > 7)		// -sethdmiX ...
 			{
 				argument = command.substr(7, 1);
+				cmd_offset = 1;
 			}
 			else if (nWords > 1)			// -sethdmi X ...
 			{
-				int device_list_offset = 2;
 				argument = words[1].substr(0, 1);
+				cmd_offset = 2;
 			}
 			else
 			{
@@ -1096,7 +1098,7 @@ void NamedPipeCallback(std::wstring message)
 			argument = SessionManager.ValidateArgument(argument, "1 2 3 4");
 			if (argument != "")
 			{
-				std::vector<std::string> devices = _Devices(words, 1);
+				std::vector<std::string> devices = _Devices(words, cmd_offset);
 				std::string payload = LG_URI_PAYLOAD_SETHDMI;
 
 				common::ReplaceAllInPlace(payload, "#ARG#", argument);
