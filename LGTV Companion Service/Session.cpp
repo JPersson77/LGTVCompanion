@@ -511,7 +511,7 @@ void CSession::PowerOffDisplay(bool forced, bool blankonly)
 		std::thread thread_obj(&CSession::Thread_DisplayOff, this, forced, blankonly);
 		thread_obj.detach();
 		lastOffTime = now;
-		Sleep(200);
+//		Sleep(200);
 	//	SetThreadExecutionState(ES_CONTINUOUS);
 	}
 	return;
