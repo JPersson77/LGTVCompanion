@@ -108,6 +108,22 @@ void CSessionManager::NewEvent(EVENT& Event)
 				if (Dev_lowercase == Sess->DeviceID_lowercase || Dev_lowercase == Sess->Name_lowercase)
 					ProcessEvent(Event, *Sess);
 			}
+	switch (Event.dwType)
+	{
+//		case EVENT_SYSTEM_SHUTDOWN:
+//		case EVENT_SYSTEM_UNSURE:
+//		case EVENT_SYSTEM_SUSPEND:
+//		case EVENT_SYSTEM_RESUME:
+		case EVENT_SYSTEM_DISPLAYDIMMED:
+		case EVENT_SYSTEM_DISPLAYOFF:
+			bDisplaysCurrentlyPoweredOnByWindows = false;
+			break;
+//		case EVENT_SYSTEM_RESUMEAUTO:
+		case EVENT_SYSTEM_DISPLAYON:
+			bDisplaysCurrentlyPoweredOnByWindows = true;
+			break;
+	default:break;
+	}
 	return;
 }
 void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
@@ -173,20 +189,20 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		break;
 	case EVENT_SYSTEM_SHUTDOWN:
 	case EVENT_SYSTEM_UNSURE:
-		bDisplaysCurrentlyPoweredOnByWindows = false;
+//		bDisplaysCurrentlyPoweredOnByWindows = false;
 		Session.PowerOffDisplay();
 		bRemoteClientIsConnected = false;
 		break;
 	case EVENT_SYSTEM_SUSPEND:
-		bDisplaysCurrentlyPoweredOnByWindows = false;
+//		bDisplaysCurrentlyPoweredOnByWindows = false;
 		bRemoteClientIsConnected = false;
 		break;
 	case EVENT_SYSTEM_RESUME:
-		bDisplaysCurrentlyPoweredOnByWindows = false;
+//		bDisplaysCurrentlyPoweredOnByWindows = false;
 		bRemoteClientIsConnected = false;
 		break;
 	case EVENT_SYSTEM_RESUMEAUTO:
-		bDisplaysCurrentlyPoweredOnByWindows = true;
+//		bDisplaysCurrentlyPoweredOnByWindows = true;
 		bRemoteClientIsConnected = false;
 		if (Prefs.AdhereTopology && !Session.TopologyEnabled)
 			break;
@@ -200,7 +216,7 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		}
 		break;
 	case EVENT_SYSTEM_DISPLAYON:
-		bDisplaysCurrentlyPoweredOnByWindows = true;
+//		bDisplaysCurrentlyPoweredOnByWindows = true;
 		if (bRemoteClientIsConnected)
 			break;
 		if (Prefs.AdhereTopology && !Session.TopologyEnabled)
@@ -214,7 +230,7 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 			break;
 		if(GetWindowsPowerStatus() == true)
 			Session.PowerOffDisplay();
-		bDisplaysCurrentlyPoweredOnByWindows = false;
+//		bDisplaysCurrentlyPoweredOnByWindows = false;
 		break;
 	case EVENT_SYSTEM_USERIDLE:
 		if (bRemoteClientIsConnected)
@@ -425,6 +441,7 @@ bool CSession::IsBusy(void)
 {
 	time_t now = time(0);
 
+	
 	//failsafe
 	if (now - lastOnTime > 2)
 		Thread_DisplayOn_isRunning = false;
@@ -487,7 +504,7 @@ void CSession::PowerOffDisplay(bool forced, bool blankonly)
 	}
 	else
 	{
-		SetThreadExecutionState(ES_AWAYMODE_REQUIRED | ES_CONTINUOUS);
+	//	SetThreadExecutionState(ES_AWAYMODE_REQUIRED | ES_CONTINUOUS);
 		logmsg += ", spawning Thread_DisplayOff().";
 		Log(logmsg);
 		Thread_DisplayOff_isRunning = true;
@@ -495,7 +512,7 @@ void CSession::PowerOffDisplay(bool forced, bool blankonly)
 		thread_obj.detach();
 		lastOffTime = now;
 		Sleep(200);
-		SetThreadExecutionState(ES_CONTINUOUS);
+	//	SetThreadExecutionState(ES_CONTINUOUS);
 	}
 	return;
 }

@@ -475,13 +475,17 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 				{
 					if (PBS->Data[0] == 0)
 					{
+						SetThreadExecutionState(ES_AWAYMODE_REQUIRED | ES_CONTINUOUS);
 						Log("** System requests displays OFF.");
 						CreateEvent_system(EVENT_SYSTEM_DISPLAYOFF);
+						SetThreadExecutionState(ES_CONTINUOUS);
 					}
 					else if (PBS->Data[0] == 2)
 					{
+						SetThreadExecutionState(ES_AWAYMODE_REQUIRED | ES_CONTINUOUS);
 						Log("** System requests displays OFF(DIMMED).");
 						CreateEvent_system(EVENT_SYSTEM_DISPLAYDIMMED);
+						SetThreadExecutionState(ES_CONTINUOUS);
 					}
 					else
 					{

@@ -93,11 +93,13 @@ CHANGELOG
 						- refactored code for common modules
 						- minor bugfixes
 
+	v 3.0.0				- Much extended command line support to control the app and managed devices
+
+
 	TODO:
 						- [ ] Feature to power on only when PC input s selected on TV (if possible)
 						- [ ] Device on/off indicator
 						- [ ] compatibility mode for topology
-						- [ ] Exclusion list from fullscreen detection, or detect which monitor fullscreen is happening on. https://github.com/JPersson77/LGTVCompanion/issues/96
 						- [ ] Build restart word phrases, see issue #132
 LICENSE
 	Copyright (c) 2021-2023 Jörgen Persson
@@ -113,14 +115,6 @@ LICENSE
 	WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 	COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 	ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-THANKS TO
-	- Niels Lohmann - JSON for Modern CPP https://github.com/nlohmann/json
-	- Boost libs - Boost and Beast https://www.boost.org/
-	- Maassoft for initial inspo and understanding re the WebOS comms - https://github.com/Maassoft
-	- Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
-	- OpenSSL https://github.com/openssl/openssl
-	- Etienne Dechanmps - valuable contributions
 
 COPYRIGHT
 	Copyright (c) 2021-2023 Jörgen Persson
