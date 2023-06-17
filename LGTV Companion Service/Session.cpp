@@ -209,7 +209,7 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		if (Session.Parameters.SetHDMIInputOnResume)
 		{
 			std::string payload = LG_URI_PAYLOAD_SETHDMI;
-			std::string log = "set hdmi-input [#ARG]";
+			std::string log = "set hdmi-input [#ARG#]";
 			common::ReplaceAllInPlace(payload, "#ARG#", std::to_string(Session.Parameters.SetHDMIInputOnResumeToNumber));
 			common::ReplaceAllInPlace(log, "#ARG#", std::to_string(Session.Parameters.SetHDMIInputOnResumeToNumber));
 			Session.SendRequest(LG_URI_LAUNCH, payload, log, true);
@@ -254,7 +254,7 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		if (Session.Parameters.SetHDMIInputOnResume)
 		{
 			std::string payload = LG_URI_PAYLOAD_SETHDMI;
-			std::string log = "set hdmi-input [#ARG]";
+			std::string log = "set hdmi-input [#ARG#]";
 			common::ReplaceAllInPlace(payload, "#ARG#", std::to_string(Session.Parameters.SetHDMIInputOnResumeToNumber));
 			common::ReplaceAllInPlace(log, "#ARG#", std::to_string(Session.Parameters.SetHDMIInputOnResumeToNumber));
 			Session.SendRequest(LG_URI_LAUNCH, payload, log, true);
