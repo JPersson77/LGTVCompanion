@@ -1141,6 +1141,18 @@ void NamedPipeCallback(std::wstring message)
 			CreateEvent_request(devices, LG_URI_SETMUTE,"", "unmuting speakers");
 			continue;
 		}
+		else if (command == "freesyncinfo")									// SHOW FREESYNC INFORMATION
+		{
+			std::vector<std::string> devices = _Devices(words, 1);
+			std::string cmd_line_start_app_with_param = "-start_app_with_param com.webos.app.tvhotkey \"{\\\"activateType\\\": \\\"freesync-info\\\"}\"";
+			for (auto& dev : devices)
+			{
+				cmd_line_start_app_with_param += " ";
+				cmd_line_start_app_with_param += dev;
+			}
+			NamedPipeCallback(common::widen(cmd_line_start_app_with_param));
+			continue;
+		}	
 		else if (command == "clearlog")									// CLEAR LOG
 		{
 			std::wstring log = Settings.Prefs.DataPath;
@@ -1192,6 +1204,7 @@ void NamedPipeCallback(std::wstring message)
 				Log("[IPC] Too few arguments for -button");
 			continue;
 		}
+
 		else if (command == "settings_picture")
 		{
 			if (nWords > 1)
