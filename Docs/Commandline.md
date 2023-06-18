@@ -153,13 +153,19 @@ Please note that LGTV Companion also supports bidirectional communication and su
 ```
 "LGTV Companion.exe" -contrast 80 device1
 ```
-## Network settings
+## Network and misc other settings
 - *-wol* [true|false] 	- enable or disable the Wake-On-Lan setting, a k a "On with Mobile" or "Turn on via Wi-Fi"
+- *-freesyncinfo* 	- show the freesync information panel (the 7 x tap on green button), i e current FPS in freesync/gsync mode
 #### Examples: 
 *Set the wake-on-lan setting to ON for all devices*
 ```
 "LGTV Companion.exe" -wol true
 ```
+*Show the freesync info on device1*
+```
+"LGTV Companion.exe" -freesyncinfo device1
+```
+
 # Commands for sending generic requests to the device (for advanced users only) 
 In addition to the above commands it is also possible to send various arbitrary requests to WebOS devices. 
 - *-request [endpoint]* 	- Send a json request to an endpoint (with no params)
