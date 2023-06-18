@@ -52,7 +52,7 @@ Please note that LGTV Companion also supports bidirectional communication and su
 >[label]: "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", Satellite, "Set-Top Box", "DVD Player", "Blu-ray Player", "Home Theatre", "Game Console", "Streaming Box", "Generic Camera", "Mobile Device", PC  
 - *-gamemode_hdmiX [off | on]* 	- set Game Optimizer for HDMI-input X (X = 1, 2, 3 or 4)
 - *-uhddeepcolor_hdmiX [off | on]* 	- set UHD Deep Color for HDMI-input X (X = 1, 2, 3 or 4) 
-- *-gameoptimization_hdmiX [off | on]* 	- set game optimization for HDMI-input X (X = 1, 2, 3 or 4)
+- *-gameoptimization_hdmiX [off | on]* 	- set game optimization (Instant game response) for HDMI-input X (X = 1, 2, 3 or 4)
 - *-freesyncoled_hdmiX [off | on]* 	- set OLED freesync for HDMI-input X (X = 1, 2, 3 or 4) 
 - *-hdmipcmode_hdmiX [off | on]* 	- set PC-mode for HDMI-input X (X = 1, 2, 3 or 4) 
 #### Examples: 
