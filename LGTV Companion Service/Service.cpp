@@ -1466,7 +1466,19 @@ void NamedPipeCallback(std::wstring message)
 							sLogMessage += ": ";
 							sLogMessage += SessionManager.ValidateDevices(devices);
 							Log(sLogMessage);
-							CreateEvent_luna_set_system_setting_basic(devices, category, setting, argument, logmessage);
+							size_t hdmi_type_command = setting.find("_hdmi");
+							if (hdmi_type_command != std::string::npos) 
+							{
+								std::string command_ex = setting.substr(0, hdmi_type_command);
+								std::string hdmi_input = setting.substr(hdmi_type_command+5, 1);
+								std::string payload = "{\"#CMD#\":{\"hdmi#INPUT#\":\"#ARG#\"}}";
+								common::ReplaceAllInPlace(payload, "#CMD#", command_ex);
+								common::ReplaceAllInPlace(payload, "#INPUT#", hdmi_input);
+								common::ReplaceAllInPlace(payload, "#ARG#", argument);
+								CreateEvent_luna_set_system_setting_payload(devices, category, payload, logmessage);
+							}
+							else
+								CreateEvent_luna_set_system_setting_basic(devices, category, setting, argument, logmessage);
 						}
 						else
 						{
