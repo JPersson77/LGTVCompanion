@@ -93,6 +93,8 @@ void CSessionManager::NewEvent(EVENT& Event)
 {	
 	if (Sessions.size() == 0)
 		return;
+	
+	SetThreadExecutionState(ES_AWAYMODE_REQUIRED | ES_CONTINUOUS);
 
 	// process event for all devices
 	if (Event.devices.size() == 0)			
@@ -110,20 +112,29 @@ void CSessionManager::NewEvent(EVENT& Event)
 			}
 	switch (Event.dwType)
 	{
-//		case EVENT_SYSTEM_SHUTDOWN:
-//		case EVENT_SYSTEM_UNSURE:
-//		case EVENT_SYSTEM_SUSPEND:
-//		case EVENT_SYSTEM_RESUME:
+		case EVENT_SYSTEM_SHUTDOWN:
+		case EVENT_SYSTEM_UNSURE:
+		case EVENT_SYSTEM_REBOOT:
+		case EVENT_SYSTEM_SUSPEND:
+			Log("[DEBUG] Entering 1000ms sleep - suspend/reboot/shutdown");
+			Sleep(1000);
+			Log("[DEBUG] Exiting 1000ms sleep - suspend/reboot/shutdown");
+			break;
 		case EVENT_SYSTEM_DISPLAYDIMMED:
 		case EVENT_SYSTEM_DISPLAYOFF:
 			bDisplaysCurrentlyPoweredOnByWindows = false;
+			Log("[DEBUG] Entering 200ms sleep - display off");
+			Sleep(200);
+			Log("[DEBUG] Exiting 200ms sleep - display off");
 			break;
-//		case EVENT_SYSTEM_RESUMEAUTO:
+		case EVENT_SYSTEM_RESUME:
+		case EVENT_SYSTEM_RESUMEAUTO:
 		case EVENT_SYSTEM_DISPLAYON:
 			bDisplaysCurrentlyPoweredOnByWindows = true;
 			break;
-	default:break;
+		default:break;
 	}
+	SetThreadExecutionState(ES_CONTINUOUS);
 	return;
 }
 void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
@@ -701,7 +712,7 @@ void CSession::Thread_DisplayOn(void)
 	// Spawn the Wake-On-LAN thread
 	std::thread wolthread(&CSession::Thread_WOL, this);
 	wolthread.detach();
-	Sleep(500);
+//	Sleep(500);
 
 	//try waking up the display, but not longer than timeout user preference
 	while (!bTerminateThread && (time(0) - origtim < (Prefs.PowerOnTimeout + 1)))

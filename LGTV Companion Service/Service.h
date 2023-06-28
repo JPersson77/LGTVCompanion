@@ -26,7 +26,7 @@
 #include <boost/utility/string_view.hpp>
 #include <Iphlpapi.h>
 #include "../Common/Common.h"
-#include "LgApi.h"
+#include "../Common/LgApi.h"
 
 #pragma comment(lib, "Powrprof.lib")
 #pragma comment(lib, "Wevtapi.lib")
@@ -37,61 +37,13 @@
 // global definitions for the service
 #define SVCNAME											L"LGTVsvc"
 #define SVCDISPLAYNAME									L"LGTV Companion Service"
-#define SERVICE_PORT									"3000"
-#define SERVICE_PORT_SSL								"3001"
 #define SERVICE_DEPENDENCIES							L"Dhcp\0Dnscache\0LanmanServer\0\0"
 #define SERVICE_ACCOUNT									NULL		
 #define THREAD_WAIT          							1			// wait to spawn new thread (seconds)
 #define DIMMED_OFF_DELAY_WAIT							20			// delay after a screen dim request
 #define MAX_RECORD_BUFFER_SIZE							0x10000		// 64K
 
-// system events define's
-#define EVENT_SYSTEM_SHUTDOWN							1	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_REBOOT								2	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_RESUME								3	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_RESUMEAUTO							4	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_SUSPEND							5	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_DISPLAYOFF							6	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_DISPLAYON							7	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_UNSURE								8	// valid members of EVENT: dwEvent // Uncertain if the system is shutting down or rebooting
-#define EVENT_SYSTEM_DISPLAYDIMMED						9	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_USERBUSY							10	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_USERIDLE							11	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_BOOT								12	// valid members of EVENT: dwEvent
-#define EVENT_SYSTEM_TOPOLOGY							13	// valid members of EVENT: dwEvent
 
-// user events define's
-#define EVENT_USER_DISPLAYON							30	// valid members of EVENT: dwEvent, devices
-#define EVENT_USER_DISPLAYOFF							31	// valid members of EVENT: dwEvent, devices
-#define EVENT_USER_BLANKSCREEN							32	// valid members of EVENT: dwEvent, devices
-//#define EVENT_USER_SETHDMI							33
-//#define EVENT_USER_MUTE								34 
-//#define EVENT_USER_UNMUTE								35
-
-// generic events define's
-#define EVENT_REQUEST									60	// valid members of EVENT: dwEvent, request_uri, request_payload_json (optional), devices, log_message
-#define EVENT_LUNA_SYSTEMSET_BASIC						61	// valid members of EVENT: dwEvent, luna_system_setting_category, luna_system_setting_setting, luna_system_setting_value, devices, log_message
-#define EVENT_LUNA_SYSTEMSET_PAYLOAD					62	// valid members of EVENT: dwEvent, luna_system_setting_category, luna_payload_json, devices, log_message
-#define EVENT_BUTTON									63	// valid members of EVENT: dwEvent, button, devices, log_message
-#define EVENT_LUNA_DEVICEINFO							64	// valid members of EVENT: dwEvent, luna_device_info_input, luna_device_info_icon, luna_device_info_label, devices, log_message
-
-// The EVENT struct contains information about an Event, i.e a global power event, a daemon event or a command line event.
-struct EVENT { 
-	DWORD												dwType= NULL;					
-	std::string											request_uri;					
-	std::string											request_payload_json;			
-	std::string											luna_system_setting_category;	
-	std::string											luna_system_setting_setting;	
-	std::string											luna_system_setting_value;		
-	std::string											luna_payload_json;				
-	std::string											luna_device_info_input;
-	std::string											luna_device_info_icon;
-	std::string											luna_device_info_label;
-	std::string											button;
-	std::vector<std::string>							devices;				
-	std::string											log_message;			
-	bool												repeat = false;			
-};
 
 // The CSession object represents a WebOS-device and manages network communication respectively
 class CSession {

@@ -14,6 +14,7 @@
 #define LG_URI_LAUNCH				"system.launcher/launch"
 #define LG_URI_CLOSE				"system.launcher/close"
 #define LG_URI_SETMUTE				"audio/setMute"
+#define LG_URI_GET_SYSTEM_SETTINGS	"settings/getSystemSettings"
 #define LG_LUNA_SET_SYSTEM_SETT		"luna://com.webos.settingsservice/setSystemSettings"
 #define LG_LUNA_SET_DEVICE_INFO		"luna://com.webos.service.eim/setDeviceInfo"
 

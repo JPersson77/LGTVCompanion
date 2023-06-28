@@ -298,12 +298,12 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 	try {
 		nlohmann::json lg_api_buttons_json;
 		std::string json_str =
-		#include "lg_api_commands.h"
+		#include "../Common/lg_api_commands.h"
 			;
 		lg_api_commands_json = nlohmann::json::parse(json_str);
 
 		json_str =
-		#include "lg_api_buttons.h"
+		#include "../Common/lg_api_buttons.h"
 			;
 		lg_api_buttons_json = nlohmann::json::parse(json_str);
 		nlohmann::json j = lg_api_buttons_json["Buttons"];
@@ -358,8 +358,8 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 	
 
 	//make sure the process is shutdown as early as possible
-	if (SetProcessShutdownParameters(0x100, SHUTDOWN_NORETRY))
-		Log("Setting shutdown parameter level 0x100");
+	if (SetProcessShutdownParameters(0x3FF, SHUTDOWN_NORETRY))
+		Log("Setting shutdown parameter level 0x3FF");
 	else
 		Log("Could not set shutdown parameter level");
 
@@ -399,7 +399,7 @@ VOID ReportSvcStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHi
 
 	if (dwCurrentState == SERVICE_START_PENDING)
 		gSvcStatus.dwControlsAccepted = 0;
-	else gSvcStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_PRESHUTDOWN | SERVICE_ACCEPT_POWEREVENT; //SERVICE_ACCEPT_PRESHUTDOWN | // | SERVICE_ACCEPT_USERMODEREBOOT; //does not work
+	else gSvcStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_POWEREVENT; //SERVICE_ACCEPT_PRESHUTDOWN | // | SERVICE_ACCEPT_USERMODEREBOOT; //does not work
 
 	if ((dwCurrentState == SERVICE_RUNNING) ||
 		(dwCurrentState == SERVICE_STOPPED))
@@ -460,7 +460,7 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 			}
 			else
 			{
-				Log("** System is suspending to a low power state.");
+				Log("** System is suspending to a low power state.(or event callback is missing)");
 				CreateEvent_system(EVENT_SYSTEM_SUSPEND);
 			}
 		}	break;
@@ -475,17 +475,13 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 				{
 					if (PBS->Data[0] == 0)
 					{
-						SetThreadExecutionState(ES_AWAYMODE_REQUIRED | ES_CONTINUOUS);
 						Log("** System requests displays OFF.");
 						CreateEvent_system(EVENT_SYSTEM_DISPLAYOFF);
-						SetThreadExecutionState(ES_CONTINUOUS);
 					}
 					else if (PBS->Data[0] == 2)
 					{
-						SetThreadExecutionState(ES_AWAYMODE_REQUIRED | ES_CONTINUOUS);
 						Log("** System requests displays OFF(DIMMED).");
 						CreateEvent_system(EVENT_SYSTEM_DISPLAYDIMMED);
-						SetThreadExecutionState(ES_CONTINUOUS);
 					}
 					else
 					{
@@ -512,7 +508,7 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 		default:break;
 		}
 	}	break;
-	case SERVICE_CONTROL_PRESHUTDOWN:
+	case SERVICE_CONTROL_SHUTDOWN:
 	{
 		if (EventCallbackStatus == EVENT_SYSTEM_REBOOT)
 		{

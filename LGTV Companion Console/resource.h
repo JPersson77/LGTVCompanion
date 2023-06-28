@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by LGTV Companion Service.rc
+// Used by LGTV Companion Console.rc
 //
 #define IDI_ICON1                       101
 

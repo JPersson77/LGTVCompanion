@@ -25,24 +25,25 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 // TEXTINCLUDE
 //
 
-1 TEXTINCLUDE
+1 TEXTINCLUDE 
 BEGIN
-"resource.h\0"
+    "resource.h\0"
 END
 
-2 TEXTINCLUDE
+2 TEXTINCLUDE 
 BEGIN
-"#include ""winres.h""\r\n"
-"\0"
+    "#include ""winres.h""\r\n"
+    "\0"
 END
 
-3 TEXTINCLUDE
+3 TEXTINCLUDE 
 BEGIN
-"\r\n"
-"\0"
+    "\r\n"
+    "\0"
 END
 
 #endif    // APSTUDIO_INVOKED
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -50,40 +51,52 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION 1, 0, 0, 1
-PRODUCTVERSION 1, 0, 0, 1
-FILEFLAGSMASK 0x3fL
+ FILEVERSION 1,0,0,1
+ PRODUCTVERSION 1,0,0,1
+ FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
-FILEFLAGS 0x1L
+ FILEFLAGS 0x1L
 #else
-FILEFLAGS 0x0L
+ FILEFLAGS 0x0L
 #endif
-FILEOS 0x40004L
-FILETYPE 0x1L
-FILESUBTYPE 0x0L
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
 BEGIN
-BLOCK "StringFileInfo"
-BEGIN
-BLOCK "200004b0"
-BEGIN
-VALUE "CompanyName", "Jörgen Persson"
-VALUE "FileDescription", "This service manages LG WebOS TV's"
-VALUE "FileVersion", "1.0.0.1"
-VALUE "InternalName", "LGTVsvc.exe"
-VALUE "LegalCopyright", "Copyright (C) 2021 Jörgen Persson"
-VALUE "OriginalFilename", "LGTVsvc.exe"
-VALUE "ProductName", "LGTV Service"
-VALUE "ProductVersion", "1.0.0.1"
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "200004b0"
+        BEGIN
+            VALUE "CompanyName", "J Persson"
+            VALUE "FileDescription", "This service manages LG WebOS TV's"
+            VALUE "FileVersion", "1.0.0.1"
+            VALUE "InternalName", "LGTVsvc.exe"
+            VALUE "LegalCopyright", "Copyright (C) 2021-2023 Jörgen Persson"
+            VALUE "OriginalFilename", "LGTVsvc.exe"
+            VALUE "ProductName", "LGTV Service"
+            VALUE "ProductVersion", "1.0.0.1"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x2000, 1200
+    END
 END
-END
-BLOCK "VarFileInfo"
-BEGIN
-VALUE "Translation", 0x2000, 1200
-END
-END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON1               ICON                    "mainicon.ico"
 
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
+
+
 
 #ifndef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -91,5 +104,7 @@ END
 // Generated from the TEXTINCLUDE 3 resource.
 //
 
+
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
+
