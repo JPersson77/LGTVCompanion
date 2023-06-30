@@ -124,7 +124,7 @@ All other commands following the -output command will obey the formatting. Pleas
 ## Retrieving system settings (LGTVcli only)
 - *-get_system_settings [category] [Json-array of keys]* 	- get one or many system settings in a specified category. Supported values below:
 ```
-"twinTv": [
+	"twinTv": [
                 "status",
                 "role",
                 "systemMode"
