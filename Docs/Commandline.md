@@ -13,11 +13,34 @@ The device argument is always optional, but when it is used it shall be specifie
 
 Multiple commands can be sent at once - every new hyphen (which is not escaped by double quotes) indicates the start of a new command.
 
-Please see the many examples below to learn more. Please also note that feature sets vary between models and model years and it's not guaranteed that all commands below will work for all models/series of devices.
+Please note! The double quotes (") are an important component of the LG JSON API, so whenever you want to send JSON to a device please escape the double quotes with \. 
+
+Please see the many examples below to learn more. Don't worry, it's not super complicated. Please also note that feature sets vary between models and model years and it's not guaranteed that all commands below will work for all models/series of devices.
 ## Scripting support
 Please note that LGTV Companion also supports bidirectional communication and support for external scripting, as outlined [here](https://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Scripting.md). This can be used in a lot of ways, to automate tasks and customise the behaviour of your WebOS-device.
 
-## Power commands
+## The two command line interfaces
+Please note that both "LGTV Companion.exe" and "LGTVcli.exe" support all of the commands below (some exceptions are noted below). There are however a few notable differences in the usage."LGTV Companion.exe" is a multi-threaded windows application and will send your commands to the devices as quickly as possible and without waiting for a response. LGTVcli.exe on the other hand is single-threaded application which will relay the response from the devices and present them to the user in a JSON object, guranteed to be in the correct order. So as a rule of thumb, if you just need to fire-and-forget a command you can use "LGTV Companion.exe" but if you are interested in the response then "LGTVcli.exe" should be used. 
+
+## Formatting the output of LGTVcli
+All console (STDOUT) output of LGTVCli is in the form of a JSON container. For easy usage there are a few command line options for formatting the output. 
+- *-output* [default | friendly | key] [key]	- format the output
+- *-od* 	- shorter version of -output default
+- *-of* 	- shorter version of -output friendly
+- *-ok* [key] 	- shorter version of -output key 
+
+All other commands following the -output command will obey the formatting. Please note that the default output is compact and with no formatting. The friendly output adds indentation and line breaks to make the output human-friendly. When using the "key" argument you must also supply the name of the key to filter for and then only the value of the respectivev key is output.
+#### Examples:
+*Power on the device with id Device1 and apply friendly formatting to the output.*
+```
+"LGTVcli.exe" -of -poweron Device1 "OLED 42"
+```
+*Get the value of the backlight for Device1 and filter the output for the backlight key (the below will output only the value, f e 100)*
+```
+"LGTVcli.exe" -ok backlight -get_system_settings picture [\"backlight\"]
+```
+
+## Power commands (LGTV Companion and LGTVcli)
 - *-poweroff* 	- power off the device(s).
 - *-poweron* 	- power on
 - *-screenoff* 	- blank the screen, i e disable the emitters.
@@ -31,7 +54,7 @@ Please note that LGTV Companion also supports bidirectional communication and su
 ```
 "LGTV Companion.exe" -poweroff
 ```
-## Application commands
+## Application commands (LGTV Companion only)
 - *-autodisable* 	- temporarily disable the automatic management, i.e. to stop processing power events for device(s). This is effective until next restart of the service. 
 - *-autoenable* 	- temporarily enable the application's automatic management of a device. This is effective until next restart of the service.
 - *-clearlog* 		- clear the application log. This takes no further arguments
@@ -43,7 +66,7 @@ Please note that LGTV Companion also supports bidirectional communication and su
 ```
 "LGTV Companion.exe" -poweron Device1 -autodisable Device1
 ```
-## HDMI input commands
+## HDMI input commands (LGTV Companion and LGTVcli)
 - *-sethdmi1 | sethdmi2 | sethdmi3 | sethdmi4* - set active HDMI input to 1, 2, 3 or 4
 - *-sethdmi [1 | 2 | 3 | 4]* - equivalent to the above but the active input is supplied using an argument.
 - *-set_input_type [hdmi_input] [icon] [label]* - Set the type of the input. This can be used to switch f e between PC and non-PC modes
@@ -68,7 +91,7 @@ Please note that LGTV Companion also supports bidirectional communication and su
 ```
 "LGTV Companion.exe" -gamemode_hdmi1 on Device1
 ```
-## Audio commands
+## Audio commands (LGTV Companion and LGTVcli)
 - *-mute* 	- mute the built-in-speakers of a device
 - *-unmute* - unmute the built-in-speakers of a device
 - *-soundmode [aiSoundPlus | aiSound | standard | news | music | movie | sports | game]* 	- set sound mode
@@ -79,7 +102,7 @@ Please note that LGTV Companion also supports bidirectional communication and su
 ```
 "LGTV Companion.exe" -mute Device1
 ```
-## Button commands
+## Button commands (LGTV Companion and LGTVcli)
 - *-button [button]* 	- virtual remote key press 
 
 >[button]: LEFT, RIGHT, UP, DOWN, RED, GREEN, YELLOW, BLUE, CHANNELUP, CHANNELDOWN, VOLUMEUP, VOLUMEDOWN, PLAY, PAUSE, STOP, REWIND, FASTFORWARD, ASTERISK, BACK, EXIT, ENTER, AMAZON, NETFLIX, 3D_MODE, AD *(Audio Description)*, ADVANCE_SETTING, ALEXA, AMAZON, ASPECT_RATIO, CC *(Closed Captions)*, DASH *(Live TV)*, EMANUAL, EZPIC, EZ_ADJUST *(CAREFUL! EzAdjust Service Menu. Default code is 0413)*, EYE_Q, GUIDE, HCEC, HOME (Dashboard), INFO, IN_START *(CAREFUL! InStart Service Menu. Default code is 0413)*, INPUT_HUB, IVI, LIST, LIVE_ZOOM, MAGNIFIER_ZOOM, MENU, MUTE, MYAPPS, NETFLIX, POWER, PROGRAM, QMENU, RECENT, RECLIST, RECORD, SAP, SCREEN_REMOTE, SEARCH, SOCCER, TELETEXT, TEXTOPTION, TIMER, TV, TWIN, UPDOWN *(Always Ready app)* USP, YANDEX, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
@@ -92,7 +115,90 @@ Please note that LGTV Companion also supports bidirectional communication and su
 ```
 "LGTV Companion.exe" -button IN_START device1
 ```
-## Picture commands
+## Retrieving system settings (LGTVcli only)
+- *-get_system_settings [category] [Json-array of keys]* 	- get one or many system settings in a specified category. Supported values below:
+```
+		"twinTv": [
+                "status",
+                "role",
+                "systemMode"
+        ],
+        "network": [
+                "deviceName",
+                "wolwowlOnOff",
+                "bleAdvertisingOnOff"
+        ],
+        "option": [
+                "audioGuidance",
+                "country",
+                "zipcode",
+                "livePlus",
+                "firstTvSignalStatus",
+                "addressInfo",
+                "phlCitySelection",
+                "smartServiceCountryCode3",
+                "syncMode",
+                "storeMode",
+                "localeCountryGroup",
+                "japanCitySelection",
+                "countryBroadcastSystem",
+                "yourMomentsVersion",
+                "wallPaperSettings"
+        ],
+        "time": [
+                "onTimerVolume",
+                "timeZone"
+        ],
+        "picture": [
+                "brightness",
+                "backlight",
+                "contrast",
+                "color",
+                "energySaving"
+        ],
+        "" : [
+                "eulaStatus",
+                "eulaInfoNetwork",
+                "mobileSetupStatus",
+                "localeInfo"
+        ],
+        "other": [
+                "simplinkEnable",
+                "ueiEnable",
+                "gameWallpaper"
+        ],
+        "sound": [
+                "avSync",
+                "avSyncSpdif",
+                "avSyncBypassInput",
+                "eArcSupport",
+                "soundOutput",
+                "soundOutputDigital",
+                "soundMode",
+                "tvSetupConfiguration"
+        ],
+        "lock": [
+                "parentalGuidance",
+                "ziggoRaiting"
+        ],
+        "general": [
+                "alwaysOn",
+                "tvOnScreen",
+                "tvInstallMethod",
+                "powerOffBySCA3SystemChanged",
+                "SCA3SystemCountry",
+                "homeAutoLaunch",
+                "lifeOnScreenMode"
+        ]
+```
+
+#### Examples: 
+*Get the current values for contrast, color and backlight for device 1*
+```
+"LGTVcli.exe" -get_system_settings picture [\"color\",\"contrast\",\"backlight\"] device1
+```
+
+## Picture commands (LGTV Companion and LGTVcli)
 - *-picturemode [mode]* 	- set picture mode
 
 >[mode]: cinema, eco, expert1, expert2, game, normal, photo, sports, technicolor, vivid, hdrEffect, filmMaker, hdrCinema, hdrCinemaBright, hdrExternal, hdrGame, hdrStandard, hdrTechnicolor, hdrVivid, hdrFilmMaker, dolbyHdrCinema, dolbyHdrCinemaBright, dolbyHdrDarkAmazon, dolbyHdrGame, dolbyHdrStandard, dolbyHdrVivid, dolbyStandard
@@ -153,7 +259,7 @@ Please note that LGTV Companion also supports bidirectional communication and su
 ```
 "LGTV Companion.exe" -contrast 80 device1
 ```
-## Network and misc other settings
+## Network and misc other settings (LGTV Companion and LGTVcli)
 - *-wol* [true|false] 	- enable or disable the Wake-On-Lan setting, a k a "On with Mobile" or "Turn on via Wi-Fi"
 - *-freesyncinfo* 	- show the freesync information panel (the 7 x tap on green button), i e current FPS in freesync/gsync mode
 #### Examples: 
@@ -166,7 +272,7 @@ Please note that LGTV Companion also supports bidirectional communication and su
 "LGTV Companion.exe" -freesyncinfo device1
 ```
 
-# Commands for sending generic requests to the device (for advanced users only) 
+# Commands for sending generic requests to the device, for advanced users only (LGTV Companion and LGTVcli)
 In addition to the above commands it is also possible to send various arbitrary requests to WebOS devices. 
 - *-request [endpoint]* 	- Send a json request to an endpoint (with no params)
 		[endpoint] below are examples of publically published endpoints:
@@ -212,7 +318,7 @@ In addition to the above commands it is also possible to send various arbitrary 
             format_value: BMP, JPG, PNG, RGB, RGBA, YUV422
 		com.webos.service.apiadapter/audio/changeSoundOutput {"output":"output"} (also see -soundoutput)
 
-The following endpoints are used to query information from WebOS devices and are currently not in final implementation. Please check the scripting support for more information on how to retreive data from these calls
+The following endpoints are used to query information from WebOS devices, using -request (LGTVcli only).
 
 		config/getConfigs 
 		com.webos.service.attachedstoragemanager/listDevices 
@@ -255,7 +361,7 @@ The following endpoints are used to query information from WebOS devices and are
 ```
 "LGTV Companion.exe" -close_app com.webos.app.screensaver device1
 ```
-## picture system settings
+## picture system settings (LGTV Companion and LGTVcli)
 - *-settings_picture [payload]* 	- Send a generic JSON payload containing settings for the "picture" system settings category (see examples of applicable settings below)
 
 		{"adjustingLuminance":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
@@ -354,7 +460,7 @@ The following endpoints are used to query information from WebOS devices and are
 ```
 "LGTV Companion.exe" -settings_picture {"color":"50","brightness":"50","contrast":"85"} device2
 ```
-## Other system settings
+## Other system settings (LGTV Companion and LGTVcli)
 
 - *-settings_other [payload]* 	- Send a generic JSON payload containing settings for the "other" system settings category (see examples of applicable settings below)  
 
@@ -496,7 +602,7 @@ The following endpoints are used to query information from WebOS devices and are
 "LGTV Companion.exe" -settings_other {"blackStabilizer":13} device1
 ```
 
-## Option system settings
+## Option system settings (LGTV Companion and LGTVcli)
 - *-settings_options [payload]* 	- Send a generic JSON payload containing settings for the "options" system settings category (see examples of applicable settings below)  
 
 		{"IPControlSecureKey":""}
