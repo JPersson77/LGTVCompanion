@@ -110,6 +110,8 @@
 #define IDC_CHECK_API                   1064
 #define IDC_CHECK1                      1066
 #define IDC_CHECK_MUTE                  1066
+#define IDC_COMBO1                      1067
+#define IDC_COMBO_TIMING                1067
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -136,7 +138,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        155
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1067
+#define _APS_NEXT_CONTROL_VALUE         1068
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

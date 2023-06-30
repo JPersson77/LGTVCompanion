@@ -245,6 +245,10 @@ bool settings::Preferences::Initialize() {
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS];
 			if (!j.empty() && j.is_boolean())
 				Prefs.MuteSpeakers = j.get<bool>();
+			// Shutdown timing
+			j = jsonPrefs[JSON_PREFS_NODE][JSON_TIMING_PRESHUTDOWN];
+			if (!j.empty() && j.is_boolean())
+				Prefs.TimingPreshutdown = j.get<bool>();
 			// User idle mode whitelist
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
 			if (!j.empty() && j.size() > 0)
@@ -399,6 +403,7 @@ void settings::Preferences::WriteToDisk(void)
 	prefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE] = (bool)Prefs.TopologyPreferPowerEfficiency;
 	prefs[JSON_PREFS_NODE][JSON_EXTERNAL_API] = (bool)Prefs.ExternalAPI;
 	prefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS] = (bool)Prefs.MuteSpeakers;
+	prefs[JSON_PREFS_NODE][JSON_TIMING_PRESHUTDOWN] = (bool)Prefs.TimingPreshutdown;
 	for (auto& item : Prefs.EventLogRestartString)
 		prefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS].push_back(item);
 	for (auto& item : Prefs.EventLogShutdownString)

@@ -15,7 +15,7 @@
 
 // common general application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"3.1.1"
+#define         APP_VERSION                     L"3.1.2"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"Log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
@@ -46,6 +46,7 @@
 #define         JSON_TOPOLOGYMODE				"TopologyPreferPowerEfficient"
 #define         JSON_EXTERNAL_API				"ExternalAPI"
 #define			JSON_MUTE_SPEAKERS				"MuteSpeakers"
+#define			JSON_TIMING_PRESHUTDOWN			"TimingPreshutdown"
 #define			JSON_DEVICE_NAME				"Name"
 #define			JSON_DEVICE_IP					"IP"
 #define			JSON_DEVICE_UNIQUEKEY			"UniqueDeviceKey"
@@ -206,6 +207,7 @@ namespace jpersson77 {
 			bool								TopologyPreferPowerEfficiency = true;
 			bool								ExternalAPI = false;
 			bool								MuteSpeakers = false;
+			bool								TimingPreshutdown = false;
 			std::wstring						DataPath;
 		};
 		class Preferences {

@@ -357,11 +357,9 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 		EvtSubscribeToFutureEvents);
 	
 
-	//make sure the process is shutdown as early as possible
-	if (SetProcessShutdownParameters(0x3FF, SHUTDOWN_NORETRY))
-		Log("Setting shutdown parameter level 0x3FF");
-	else
-		Log("Could not set shutdown parameter level");
+	//set shutdown timing
+	SetProcessShutdownParameters(Settings.Prefs.TimingPreshutdown ? 0x100 : 0x3FF, SHUTDOWN_NORETRY);
+	Log(Settings.Prefs.TimingPreshutdown ? "Shutdown timing: early" : "Shutdown timing: default");
 
 	ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
 
@@ -399,7 +397,7 @@ VOID ReportSvcStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHi
 
 	if (dwCurrentState == SERVICE_START_PENDING)
 		gSvcStatus.dwControlsAccepted = 0;
-	else gSvcStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_POWEREVENT; //SERVICE_ACCEPT_PRESHUTDOWN | // | SERVICE_ACCEPT_USERMODEREBOOT; //does not work
+	else gSvcStatus.dwControlsAccepted = Settings.Prefs.TimingPreshutdown ? SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_PRESHUTDOWN | SERVICE_ACCEPT_POWEREVENT : SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_POWEREVENT; 
 
 	if ((dwCurrentState == SERVICE_RUNNING) ||
 		(dwCurrentState == SERVICE_STOPPED))
@@ -508,6 +506,7 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 		default:break;
 		}
 	}	break;
+	case SERVICE_CONTROL_PRESHUTDOWN:
 	case SERVICE_CONTROL_SHUTDOWN:
 	{
 		if (EventCallbackStatus == EVENT_SYSTEM_REBOOT)

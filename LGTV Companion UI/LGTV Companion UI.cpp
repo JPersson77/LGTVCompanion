@@ -1332,6 +1332,15 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		SendDlgItemMessage(hWnd, IDC_COMBO_MODE, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_TIMEOUT, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_TIMING, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		std::wstring s;
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		s = L"Default";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		s = L"Early";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_SETCURSEL, (WPARAM)Settings.Prefs.TimingPreshutdown ? 1 : 0, (LPARAM)0);
+
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(100, 1));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Settings.Prefs.PowerOnTimeout);
 
@@ -1432,12 +1441,12 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, Settings.Prefs.AdhereTopology ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_API, Settings.Prefs.ExternalAPI ? BST_CHECKED : BST_UNCHECKED);
 
-		std::wstring s;
+		std::wstring ls;
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-		s = L"Power efficiency (display off)";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		s = L"Compatibility (display blanked)";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		ls = L"Power efficiency (display off)";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ls.c_str());
+		ls = L"Compatibility (display blanked)";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ls.c_str());
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_SETCURSEL, (WPARAM)Settings.Prefs.TopologyPreferPowerEfficiency ? 0 : 1, (LPARAM)0);
 
 		//		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), Settings.Prefs.AdhereTopology ? true :  false);
@@ -1556,6 +1565,12 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					else
 						Settings.Prefs.TopologyPreferPowerEfficiency = true;
 
+					sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+					if (sel == 1)
+						Settings.Prefs.TimingPreshutdown = true;
+					else
+						Settings.Prefs.TimingPreshutdown = false;
+
 					int count = ListView_GetItemCount(GetDlgItem(hWnd, IDC_LIST));
 					Settings.Prefs.EventLogRestartString.clear();
 					Settings.Prefs.EventLogShutdownString.clear();
@@ -1638,7 +1653,14 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			{
 				MessageBox(hWnd, L"This application rely on events in the windows event log to determine whether a reboot or shutdown was initiated by the user."
 					"\n\nThese events are localised in the language of your operating system, and the user must therefore assist with manually indicating which "
-					"strings refers to the system restarting.\n\nPlease put a checkmark for every string which refers to 'restart'",
+					"word or phrase that refers to the system restarting.\n\nPlease put a checkmark for every word or phrase that refers to 'restart'in the list and "
+					"make sure that all other checkboxes are cleared.\n\n"
+					"The timing option determine the timing of managing shutdown/restart. When set to \"Default\" the app will trigger the shutdown/restart routine "
+					"as late as possible during system shutdown. This will maximize the opportunity for detecting if the system is restarting or shutting down. \n\nIf "
+					"however the devices are not shutting down properly during system shutdown you may want to consider changing to the \"Early\" method. This option will "
+					"trigger the shutdown/restart routine earlier, which will leave more time during shutdown for properly shutting down the devices, but there is "
+					"instead a higher risk of not properly detecting restarts.",
+
 					L"Restart words", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the power on timeout, logging etc
