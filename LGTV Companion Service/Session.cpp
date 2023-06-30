@@ -116,16 +116,16 @@ void CSessionManager::NewEvent(EVENT& Event)
 		case EVENT_SYSTEM_UNSURE:
 		case EVENT_SYSTEM_REBOOT:
 		case EVENT_SYSTEM_SUSPEND:
-			Log("[DEBUG] Entering 1000ms sleep - suspend/reboot/shutdown");
+//			Log("[DEBUG] Entering 1000ms sleep - suspend/reboot/shutdown");
 			Sleep(1000);
-			Log("[DEBUG] Exiting 1000ms sleep - suspend/reboot/shutdown");
+//			Log("[DEBUG] Exiting 1000ms sleep - suspend/reboot/shutdown");
 			break;
 		case EVENT_SYSTEM_DISPLAYDIMMED:
 		case EVENT_SYSTEM_DISPLAYOFF:
 			bDisplaysCurrentlyPoweredOnByWindows = false;
-			Log("[DEBUG] Entering 200ms sleep - display off");
+//			Log("[DEBUG] Entering 200ms sleep - display off");
 			Sleep(200);
-			Log("[DEBUG] Exiting 200ms sleep - display off");
+//			Log("[DEBUG] Exiting 200ms sleep - display off");
 			break;
 		case EVENT_SYSTEM_RESUME:
 		case EVENT_SYSTEM_RESUMEAUTO:
@@ -951,101 +951,108 @@ void CSession::Thread_WOL(void)
 	if (Parameters.MAC.size() < 1)
 		return;
 
+	bool wol_log_message_performed = false;
+
 	SOCKET WOLsocket = INVALID_SOCKET;
 	std::string logmsg;
 	std::string IPentry_saved;
+	time_t origtim = time(0);
 
-	try
+	//send WOL packet every second until timeout, or until the calling thread has ended
+	while (!bTerminateThread && (time(0) - origtim < (Prefs.PowerOnTimeout + 1)))
 	{
-		struct sockaddr_in LANDestination {};
-		LANDestination.sin_family = AF_INET;
-		LANDestination.sin_port = htons(9);
-		std::stringstream wolstr;
-		if (Parameters.WOLtype == WOL_SUBNETBROADCAST && Parameters.Subnet != "")
+		time_t looptim = time(0);
+		try
 		{
-			std::vector<std::string> vIP = common::stringsplit(Parameters.IP, ".");
-			std::vector<std::string> vSubnet = common::stringsplit(Parameters.Subnet, ".");
-			std::stringstream broadcastaddress;
-
-			if (vIP.size() == 4 && vSubnet.size() == 4)
+			struct sockaddr_in LANDestination {};
+			LANDestination.sin_family = AF_INET;
+			LANDestination.sin_port = htons(9);
+			std::stringstream wolstr;
+			if (Parameters.WOLtype == WOL_SUBNETBROADCAST && Parameters.Subnet != "")
 			{
-				for (int i = 0; i < 4; i++)
-				{
-					int a = atoi(vIP[i].c_str());
-					int b = atoi(vSubnet[i].c_str());
-					int c = 256 + (a | (~b));
+				std::vector<std::string> vIP = common::stringsplit(Parameters.IP, ".");
+				std::vector<std::string> vSubnet = common::stringsplit(Parameters.Subnet, ".");
+				std::stringstream broadcastaddress;
 
-					broadcastaddress << c;
-					if (i < 3)
-						broadcastaddress << ".";
+				if (vIP.size() == 4 && vSubnet.size() == 4)
+				{
+					for (int i = 0; i < 4; i++)
+					{
+						int a = atoi(vIP[i].c_str());
+						int b = atoi(vSubnet[i].c_str());
+						int c = 256 + (a | (~b));
+
+						broadcastaddress << c;
+						if (i < 3)
+							broadcastaddress << ".";
+					}
+					wolstr << " using broadcast address: " << broadcastaddress.str();
+					LANDestination.sin_addr.s_addr = inet_addr(broadcastaddress.str().c_str());
 				}
-				wolstr << " using broadcast address: " << broadcastaddress.str();
-				LANDestination.sin_addr.s_addr = inet_addr(broadcastaddress.str().c_str());
+				else
+				{
+					std::stringstream ss;
+					ss << Parameters.DeviceId;
+					ss << ", ERROR! Thread_WOL malformed subnet/IP";
+					Log(ss.str());
+					return;
+				}
+			}
+			else if (Parameters.WOLtype == WOL_IPSEND)
+			{
+				LANDestination.sin_addr.s_addr = inet_addr(Parameters.IP.c_str());
+				wolstr << " using IP address: " << Parameters.IP;
 			}
 			else
 			{
-				std::stringstream ss;
-				ss << Parameters.DeviceId;
-				ss << ", ERROR! Thread_WOL malformed subnet/IP";
-				Log(ss.str());
-				return;
+				LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
+				wolstr << " using network broadcast: 255.255.255.255";
 			}
-		}
-		else if (Parameters.WOLtype == WOL_IPSEND)
-		{
-			LANDestination.sin_addr.s_addr = inet_addr(Parameters.IP.c_str());
-			wolstr << " using IP address: " << Parameters.IP;
-		}
-		else
-		{
-			LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
-			wolstr << " using network broadcast: 255.255.255.255";
-		}
-		time_t origtim = time(0);
-		WOLsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-		if (WOLsocket == INVALID_SOCKET)
-		{
-			int dw = WSAGetLastError();
-			std::stringstream ss;
-			ss << Parameters.DeviceId;
-			ss << ", ERROR! Thread_WOL WS socket(): ";
-			ss << dw;
-			Log(ss.str());
-			return;
-		}
-		else
-		{
-			const bool optval = TRUE;
-			if (setsockopt(WOLsocket, SOL_SOCKET, SO_BROADCAST, (char*)&optval, sizeof(optval)) == SOCKET_ERROR)
+
+			WOLsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+			if (WOLsocket == INVALID_SOCKET)
 			{
-				closesocket(WOLsocket);
 				int dw = WSAGetLastError();
 				std::stringstream ss;
 				ss << Parameters.DeviceId;
-				ss << ", ERROR! Thread_WOL WS setsockopt(): ";
+				ss << ", ERROR! Thread_WOL WS socket(): ";
 				ss << dw;
 				Log(ss.str());
-				return;
+				goto loop_end;
 			}
-		}
-		for (auto& MAC : Parameters.MAC)
-		{
-			logmsg = Parameters.DeviceId;
-			logmsg += ", repeating WOL broadcast started to MAC: ";
-			logmsg += MAC;
-			if (wolstr.str() != "")
-				logmsg += wolstr.str();
-			Log(logmsg);
+			else
+			{
+				const bool optval = TRUE;
+				if (setsockopt(WOLsocket, SOL_SOCKET, SO_BROADCAST, (char*)&optval, sizeof(optval)) == SOCKET_ERROR)
+				{
+					closesocket(WOLsocket);
+					int dw = WSAGetLastError();
+					std::stringstream ss;
+					ss << Parameters.DeviceId;
+					ss << ", ERROR! Thread_WOL WS setsockopt(): ";
+					ss << dw;
+					Log(ss.str());
+					goto loop_end;
+				}
+			}
+			for (auto& MAC : Parameters.MAC)
+			{
+				//remove filling from MAC
+				char CharsToRemove[] = ".:- ";
+				for (int i = 0; i < strlen(CharsToRemove); ++i)
+					MAC.erase(remove(MAC.begin(), MAC.end(), CharsToRemove[i]), MAC.end());
 
-			//remove filling from MAC
-			char CharsToRemove[] = ".:- ";
-			for (int i = 0; i < strlen(CharsToRemove); ++i)
-				MAC.erase(remove(MAC.begin(), MAC.end(), CharsToRemove[i]), MAC.end());
-		}
-		//send WOL packet every second until timeout, or until the calling thread has ended
-		while (!bTerminateThread && (time(0) - origtim < (Prefs.PowerOnTimeout + 1)))
-		{
-			time_t looptim = time(0);
+				logmsg = Parameters.DeviceId;
+				logmsg += ", repeating WOL broadcast started to MAC: ";
+				logmsg += MAC;
+				if (wolstr.str() != "")
+					logmsg += wolstr.str();
+				if (wol_log_message_performed == false)
+				{
+					Log(logmsg);
+					wol_log_message_performed = true;
+				}
+			}
 			if (WOLsocket != INVALID_SOCKET)
 			{
 				// build and broadcast magic packet(s) for every MAC
@@ -1098,32 +1105,32 @@ void CSession::Thread_WOL(void)
 				logmsg += ", WARNING! Thread_WOL illegal socket reference";
 				Log(logmsg);
 			}
-			time_t endtim = time(0);
-			time_t execution_time = endtim - looptim;
-			if (execution_time >= 0 && execution_time < 1)
-				Sleep((1 - (DWORD)execution_time) * 1000);
-			if (Thread_DisplayOn_isRunning == false)
-				break;
+		}
+		catch (std::exception const& e)
+		{
+
+			logmsg = Parameters.DeviceId;
+			logmsg += ", ERROR! Thread_WOL: ";
+			logmsg += e.what();
+			Log(logmsg);
 		}
 		if (WOLsocket != INVALID_SOCKET)
 		{
 			closesocket(WOLsocket);
 			WOLsocket = INVALID_SOCKET;
 		}
-	}
-	catch (std::exception const& e)
-	{
-		logmsg = Parameters.DeviceId;
-		logmsg += ", ERROR! Thread_WOL: ";
-		logmsg += e.what();
-		Log(logmsg);
+loop_end:
+		time_t endtim = time(0);
+		time_t execution_time = endtim - looptim;
+		if (execution_time >= 0 && execution_time < 1)
+			Sleep((1 - (DWORD)execution_time) * 1000);
+		if (Thread_DisplayOn_isRunning == false)
+			break;
 	}
 	logmsg = Parameters.DeviceId;
 	logmsg += ", repeating WOL broadcast ended";
 	Log(logmsg);
 
-	if (WOLsocket != INVALID_SOCKET)
-		closesocket(WOLsocket);
 	return;
 }
 void CSession::Thread_DisplayOff(bool UserForced, bool BlankScreen)
