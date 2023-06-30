@@ -300,7 +300,7 @@ std::string ProcessCommand(std::vector<std::string>& words)
 		std::vector<std::string> newCmdLine;
 		newCmdLine.push_back("-start_app_with_param");
 		newCmdLine.push_back("com.webos.app.tvhotkey");
-		newCmdLine.push_back("\"{\\\"activateType\\\": \\\"freesync-info\\\"}\"");
+		newCmdLine.push_back("{\"activateType\":\"freesync-info\"}");
 		newCmdLine.insert(std::end(newCmdLine), std::begin(devices), std::end(devices));
 		return ProcessCommand(newCmdLine);
 	}
@@ -708,6 +708,10 @@ std::string	ProcessEvent(EVENT& event)
 			}
 		}
 	}
+	if (!response.is_object())
+	{
+		response["error"] = "Mo matching devices.";
+	}
 	return response.dump();
 }
 nlohmann::json CreateRequestJson(std::string uri, std::string payload)
@@ -901,9 +905,16 @@ nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json r
 				else
 					response["payload"] = j["payload"];
 			}
+			else if (std::string(type) == "error")
+			{
+				nlohmann::json k = j["error"];
+				if (!k.empty() && k.is_string())
+					response["error"] = k.get<std::string>();
+				else
+					response["error"] = "An unknown error occured";
+			}
 			else
 				response["error"] = "Invalid response from device.";
-
 			if (device.SSL)
 				wss.close(websocket::close_code::normal);
 			else

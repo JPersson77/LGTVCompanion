@@ -1605,6 +1605,23 @@ void CSession::Thread_SendRequest(std::string input_json, std::string log_messag
 				}
 
 			}
+			else if (std::string(type) == "error")
+			{
+				nlohmann::json k = j["error"];
+				if (!k.empty() && k.is_string())
+				{
+					log = Parameters.DeviceId;
+					log += ", WARNING! Thread_SendRequest() - Error: ";
+					log += k.get<std::string>();
+					Log(log);
+				}
+				else
+				{
+					log = Parameters.DeviceId;
+					log += ", WARNING! Thread_SendRequest() - Unknown response from device";
+					Log(log);
+				}
+			}
 			else
 			{
 				log = Parameters.DeviceId;
