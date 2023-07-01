@@ -153,7 +153,7 @@ int main(int argc, char* argv[])
 					try
 					{
 						iterateJsonKeys(nlohmann::json::parse(result), field);
-						std::cout << std::endl;
+						std::cout;
 					}
 					catch (std::exception)
 					{
