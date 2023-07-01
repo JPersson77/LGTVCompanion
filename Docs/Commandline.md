@@ -1,7 +1,7 @@
 # LGTV Companion Command line documentation
 
 ## Disclaimer:
-This is a powerful tool so please use these commands responsibly! The author of this app shall not be liable for any damage incurred. 
+This is a powerful tool so please use these commands responsibly! The author of this app shall not be liable for any damage incurred. ❤️
 ## Usage of the command line parameters
 "LGTV companion.exe" accepts command line arguments which can be used to control aspects of the application and any attached WebOS-device. The general format for the command line is:
 
@@ -13,18 +13,24 @@ The device argument is always optional, but when it is used it shall be specifie
 
 Multiple commands can be sent at once - every new hyphen (which is not escaped by double quotes) indicates the start of a new command.
 
-Please note! The double quotes (") are an important component of the LG JSON API, so whenever you want to send JSON to a device please escape the double quotes with \. 
+Please note! The double quotes (") are an important component of the LG JSON API, so whenever you want to send JSON to a device please escape the double quotes with \\. 
 
-Please see the many examples below to learn more. Don't worry, it's not super complicated. Please also note that feature sets vary between models and model years and it's not guaranteed that all commands below will work for all models/series of devices.
+Please see the many examples below to learn more. Don't worry, it's not super complicated! 👍 
+
+Please also note that feature sets vary between models and model years and it's not guaranteed that all commands below will work for all models/series of devices.
 ## Scripting support
-Please note that LGTV Companion also supports bidirectional communication and support for external scripting, as outlined [here](https://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Scripting.md). This can be used in a lot of ways, to automate tasks and customise the behaviour of your WebOS-device.
+LGTV Companion supports bidirectional communication and support for external scripting, as outlined [here](https://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Scripting.md). This can be used in a lot of ways, to automate tasks and customise the behaviour of your WebOS-device.
 
 ## The two command line interfaces
-Please note that both "LGTV Companion.exe" and "LGTVcli.exe" support all of the commands below (some exceptions are noted below). There are however a few notable differences in the usage."LGTV Companion.exe" is a multi-threaded windows application and will send your commands to the devices as quickly as possible and without waiting for a response. LGTVcli.exe on the other hand is single-threaded application which will relay the response from the devices and present them to the user in a JSON object, guranteed to be in the correct order. So as a rule of thumb, if you just need to fire-and-forget a command you can use "LGTV Companion.exe" but if you are interested in the response then "LGTVcli.exe" should be used. 
+Please note that both "LGTV Companion.exe" and "LGTVcli.exe" support all of the commands below (some exceptions are noted below). There are however a few notable differences in the usage.
 
-## Formatting the output of LGTVcli
-All console (STDOUT) output of LGTVCli is in the form of a JSON container. For easy usage there are a few command line options for formatting the output. 
-- *-output* [default | friendly | key] [key]	- format the output
+"LGTV Companion.exe" is a multi-threaded windows application and will send your commands to the devices as quickly as possible and without waiting for a response. 
+
+"LGTVcli.exe" on the other hand is single-threaded application which will relay the response from the devices and present them to the user in a JSON object, and in the correct order. So as a rule of thumb, if you just need to fire-and-forget a command you can use "LGTV Companion.exe" but if you are interested in the response then "LGTVcli.exe" should be used. 
+
+## Formatting the output of LGTVcli (LGTVcli only)
+Almost all console (STDOUT) output of LGTVCli is in the form of a JSON container. For easy usage there are a few command line options for formatting the output. 
+- *-output [default | friendly | key] [key]*	- format the output
 - *-od* 	- shorter version of -output default
 - *-of* 	- shorter version of -output friendly
 - *-ok* [key] 	- shorter version of -output key 
@@ -118,7 +124,7 @@ All other commands following the -output command will obey the formatting. Pleas
 ## Retrieving system settings (LGTVcli only)
 - *-get_system_settings [category] [Json-array of keys]* 	- get one or many system settings in a specified category. Supported values below:
 ```
-		"twinTv": [
+	"twinTv": [
                 "status",
                 "role",
                 "systemMode"
