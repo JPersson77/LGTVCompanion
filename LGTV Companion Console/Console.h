@@ -158,3 +158,4 @@ nlohmann::json											SendRequest(jpersson77::settings::DEVICE, nlohmann::jso
 nlohmann::json											SendButtonRequest(jpersson77::settings::DEVICE, std::string);
 void													iterateJsonKeys(const nlohmann::json&, std::string );
 void													Thread_WOL(jpersson77::settings::DEVICE);
+std::string												helpText(void);

@@ -151,6 +151,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\Common.h" />
+    <ClInclude Include="..\Common\help_commands.h" />
     <ClInclude Include="..\Common\LgApi.h" />
     <ClInclude Include="..\Common\lg_api_buttons.h" />
     <ClInclude Include="..\Common\lg_api_commands.h" />

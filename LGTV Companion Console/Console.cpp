@@ -28,7 +28,8 @@ int main(int argc, char* argv[])
 	// Output some info if no arguments
 	if (argc == 1)
 	{
-		std::cout <<  APPNAME_FULL << " v" << common::narrow(APP_VERSION) << "\n\nUsage is "<< argv[0] << " [-command] [[Argument 1] [Argument 2] ... [Argument X]] [[Device1|Name] [Device2|Name]...[DeviceX|Name]" << std::endl;
+		std::cout << APPNAME_FULL << " v" << common::narrow(APP_VERSION) << "\n\nUsage is "<< argv[0] << " [-command] [[Argument 1] ... [Argument X]] [[Device1|Name]...[DeviceX|Name]]\n\n";
+		std::cout << "Use -help for an overview of commands, or for the full documentation please visit:\nhttps://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Commandline.md" << std::endl;
 		return 0;
 	}
 	// check that first argument is a command (prefixed with hyphen)
@@ -175,14 +176,26 @@ int main(int argc, char* argv[])
 	WSACleanup();
 	return 0;
 }
-void iterateJsonKeys(const nlohmann::json& json_obj, std::string key_value) {
+void iterateJsonKeys(const nlohmann::json& json_obj, std::string key_value) 
+{
+	bool bMany = false;
 	if (json_obj.is_object()) {
 		for (auto it = json_obj.begin(); it != json_obj.end(); ++it) {
 			const auto& key = it.key();
 			const auto& value = it.value();
 
 			if (value.is_string() && key == key_value)
-				std::cout << std::string(value) << " ";
+			{
+				if (!bMany)
+				{
+					std::cout << std::string(value);
+					bMany = true;
+				}
+				else
+				{
+					std::cout << " " << std::string(value);
+				}
+			}
 
 			// Recursively iterate over nested objects
 			if (value.is_object() || value.is_array()) {
@@ -206,7 +219,9 @@ std::string ProcessCommand(std::vector<std::string>& words)
 	std::string command = words[0].substr(1);
 	std:: string error;
 	transform(command.begin(), command.end(), command.begin(), ::tolower);
-	if (command == "output" )													// OUTPUT FORMATTING
+	if (command == "help" || command == "?" || command == "h")	
+		return helpText();
+	else if (command == "output" )													// OUTPUT FORMATTING
 	{
 		if (nWords > 1)
 		{
@@ -1441,4 +1456,14 @@ void Thread_WOL(jpersson77::settings::DEVICE device)
 	if (WOLsocket != INVALID_SOCKET)
 		closesocket(WOLsocket);
 	return;
+}
+std::string helpText(void)
+{
+	std::string response=
+#include "../Common/help_commands.h"
+			;
+	std::string ver = "v ";
+	ver += common::narrow(APP_VERSION);
+	common::ReplaceAllInPlace(response, "%%VER%%", ver);
+	return response;
 }
