@@ -112,26 +112,55 @@ void common::ReplaceAllInPlace(std::string& str, const std::string& from, const 
 	wsRet += str.substr(start_pos);
 	str.swap(wsRet); 
 }
-// Get the local host ip, e.g 192.168.1.x
+// Get the local host ip and subnet
 std::vector <std::string> common::GetOwnIP(void)
 {
 	std::vector <std::string> IPs;
-	char host[256];
-	if (gethostname(host, sizeof(host)) != SOCKET_ERROR)
+	std::string ip;
+
+	// Get network interface info
+	SOCKET socketObj = socket(AF_INET, SOCK_DGRAM, 0);
+	if (socketObj != INVALID_SOCKET)
 	{
-		struct hostent* phent = gethostbyname(host);
-		if (phent != 0)
+		INTERFACE_INFO adapterInfo[100] = {};
+		DWORD bufferSize = sizeof(adapterInfo);
+		DWORD dwBytesReturned = 0; 
+		DWORD dwNumInterfaces = 0;
+
+		if (WSAIoctl(socketObj, SIO_GET_INTERFACE_LIST, NULL, 0, (void*)adapterInfo, bufferSize, &dwBytesReturned, nullptr, nullptr) != SOCKET_ERROR)
 		{
-			for (int i = 0; phent->h_addr_list[i] != 0; ++i)
+			dwNumInterfaces = dwBytesReturned / sizeof(INTERFACE_INFO);
+			for (DWORD index = 0; index < dwNumInterfaces; index++)
 			{
-				std::string ip;
-				struct in_addr addr;
-				memcpy(&addr, phent->h_addr_list[i], sizeof(struct in_addr));
-				ip = inet_ntoa(addr);
-				if (ip != "127.0.0.1")
-					IPs.push_back(ip);
+				ip = "";
+				char szIP[120] = {};
+				char szNetMask[120] = {};
+				if (adapterInfo[index].iiAddress.Address.sa_family == AF_INET)
+				{
+					sockaddr_in* pAddr4 = &adapterInfo[index].iiAddress.AddressIn;
+					inet_ntop(AF_INET, &pAddr4->sin_addr, szIP, ARRAYSIZE(szIP));
+					ip = std::string(szIP);				
+					pAddr4 = &adapterInfo[index].iiNetmask.AddressIn;
+					inet_ntop(AF_INET, &pAddr4->sin_addr, szNetMask, ARRAYSIZE(szNetMask));
+
+					if (ip != "127.0.0.1" && ip != "")
+					{
+						std::stringstream v;
+						int CIDR = 0;
+						int m;
+						inet_pton(AF_INET, szNetMask, &m);
+						while (m > 0) {
+							m = m >> 1;
+							CIDR++;
+						}
+						v << ip << "/" << CIDR;
+						IPs.push_back(v.str());
+					}
+				}
+
 			}
 		}
+		closesocket(socketObj);
 	}
 	return IPs;
 }

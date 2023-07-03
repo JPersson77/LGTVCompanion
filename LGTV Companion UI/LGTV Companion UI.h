@@ -4,6 +4,8 @@
 #pragma comment(lib, "SetupAPI.lib")
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "urlmon.lib")
+#pragma comment(lib, "Iphlpapi.lib")
+#pragma comment(lib, "ws2_32.lib")
 
 #if defined _M_IX86
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
@@ -43,6 +45,9 @@
 #include <strsafe.h>
 #include <winsock2.h>
 #include <urlmon.h>
+#include <Iphlpapi.h>
+#include <ws2tcpip.h>
+
 #include "../Common/Common.h"
 #include "resource.h"
 
@@ -91,4 +96,7 @@ static BOOL CALLBACK		meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM 
 std::vector<jpersson77::settings::DISPLAY_INFO> QueryDisplays();
 bool						MessageDaemon(std::wstring);
 void						NamedPipeCallback(std::wstring message);
+bool						isSameSubnet(const char* ip1, const char* ip2, const char* subnetMask);
+
+
 

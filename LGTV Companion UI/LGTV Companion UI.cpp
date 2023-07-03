@@ -603,31 +603,39 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}break;
 	case APP_MESSAGE_APPLY:
 	{
-		if (Settings.Devices.size() > 0)
+		std::vector<std::string> IPs = common::GetOwnIP();
+		if(IPs.size()>0)
 		{
-			//check if devices are on other subnets and warn user
-			std::vector<std::string> HostIPs = common::GetOwnIP();
-			int found = 0;
-			if (HostIPs.size() > 0)
+			for (auto& Dev : Settings.Devices)
 			{
-				for (auto& Dev : Settings.Devices)
+				bool bFound = false;
+				for (auto& IP : IPs)
 				{
-					for (auto& HostIP : HostIPs)
+					std::vector temp = common::stringsplit(IP, "/");
+					std::string IP, CIRD;
+					if (temp.size() > 1)
 					{
-						if (Dev.IP != "" && HostIP != "")
-						{
-							std::vector<std::string> DevIPcat = common::stringsplit(Dev.IP, ".");
-							DevIPcat.pop_back();
-							std::vector<std::string> HostIPcat = common::stringsplit(HostIP, ".");
-							HostIPcat.pop_back();
-							if (HostIPcat == DevIPcat)
-								found++;
-						}
+						std::stringstream subnet;
+						IP = temp[0];
+						CIRD = temp[1];
+						unsigned long mask = (0xFFFFFFFF << (32 - atoi(CIRD.c_str())) & 0xFFFFFFFF);
+						subnet << (mask >> 24) << "." << ((mask >> 16) & 0xFF) << "." << ((mask >> 8) & 0xFF) << "." << (mask & 0xFF);
+						if (isSameSubnet(Dev.IP.c_str(), IP.c_str(), subnet.str().c_str()))
+							bFound = true;
 					}
+					else
+						bFound = true;
 				}
-				if (found < Settings.Devices.size())
+				if (!bFound)
 				{
-					int mb = MessageBox(hWnd, L"One or several devices have been configured to a subnet different from the PC. Please note that this might cause problems with waking up the TV. Please check the documentation and the configuration.\n\n Do you want to continue anyway?", L"Warning", MB_YESNO | MB_ICONEXCLAMATION);
+					std::string mess = Dev.DeviceId;
+					mess += " with name \"";
+					mess += Dev.Name;
+					mess += "\" and IP ";
+					mess += Dev.IP;
+					mess += " is not on the same subnet as the PC. Please note that this might cause problems with waking "
+						"up the TV. Please check the documentation and the configuration.\n\n Do you want to continue anyway?";
+					int mb = MessageBox(hWnd, common::widen(mess).c_str(), L"Warning", MB_YESNO | MB_ICONEXCLAMATION);
 					if (mb == IDNO)
 					{
 						EnableWindow(hWnd, true);
@@ -636,6 +644,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}
 			}
 		}
+
 		Settings.WriteToDisk();
 
 		//restart the service
@@ -3040,4 +3049,14 @@ bool MessageDaemon(std::wstring cmdline)
 void NamedPipeCallback(std::wstring message)
 {
 	return;
+}
+
+bool isSameSubnet(const char* ip1, const char* ip2, const char* subnetMask)
+{
+	in_addr addr1, addr2, mask;
+	inet_pton(AF_INET, ip1, &addr1);
+	inet_pton(AF_INET, ip2, &addr2);
+	inet_pton(AF_INET, subnetMask, &mask);
+
+	return (addr1.s_addr & mask.s_addr) == (addr2.s_addr & mask.s_addr);
 }
