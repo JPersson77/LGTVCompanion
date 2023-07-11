@@ -33,3 +33,13 @@ function setVolume([int]$value)
     & 'C:\Program Files\LGTV Companion\LGTVcli.exe' -request_with_param com.webos.service.audio/master/setVolume "{\`"volume\`":$value}" | Out-Null
     Write-Host "Volume set to $value"
 }
+
+function setHDMI([int]$value)
+{
+    if ($value -In 1..4) {
+        & 'C:\Program Files\LGTV Companion\LGTVcli.exe' -setHdmi "$value" | Out-Null
+        Write-Host "HDMI is set to $value"
+    } else {
+        Write-Host "HDMI can only be set between 1-4!"
+    }
+}

@@ -8,6 +8,7 @@ Following functions are definedin the file [Microsoft.PowerShell_profile.ps1](./
 - setVolume [0-100]
 - volumeUp
 - volumeDown
+- setHDMI [1-4]
 
 If you don't have this file already, just make a folder called `WindowsPowerShell` in your `C:\Users\<username>\Documents` and copy the file [Microsoft.PowerShell_profile.ps1](./Example%20scripts/Microsoft.PowerShell_profile.ps1) into it. The functions will be then usable in the every new powershell session.
 
@@ -48,5 +49,15 @@ function setVolume([int]$value)
 {
     & 'C:\Program Files\LGTV Companion\LGTVcli.exe' -request_with_param com.webos.service.audio/master/setVolume "{\`"volume\`":$value}" | Out-Null
     Write-Host "Volume set to $value"
+}
+
+function setHDMI([int]$value)
+{
+    if ($value -In 1..4) {
+        & 'C:\Program Files\LGTV Companion\LGTVcli.exe' -setHdmi "$value" | Out-Null
+        Write-Host "HDMI is set to $value"
+    } else {
+        Write-Host "HDMI can only be set between 1-4!"
+    }
 }
 ```
