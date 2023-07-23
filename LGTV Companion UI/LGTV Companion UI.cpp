@@ -721,7 +721,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (Settings.Devices.size() > 0)
 					SendMessage(hWnd, APP_MESSAGE_MANAGE, NULL, NULL);
 				else
+				{
+					int ms = MessageBoxW(hWnd, L"Scanning will discover and add any LG devices found.\n\nThe scan is performed locally by filtering the 'Digital Media Devices' category in the device manager for LG devices.\n\nClick OK to continue!", L"Scanning", MB_OKCANCEL | MB_ICONEXCLAMATION);
+					if (ms == IDCANCEL)
+						break;
 					SendMessage(hWnd, APP_MESSAGE_SCAN, NULL, NULL);
+				}
 			}break;
 			case IDC_OPTIONS:
 			{
@@ -832,7 +837,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				{
 					if (Settings.Devices.size() > 0)
 					{
-						int ms = MessageBoxW(hWnd, L"Scanning will discover and add network attached LG devices.\n\nDo you want to replace the current devices with any discovered devices?\n\nYES = clear current devices before adding, \n\nNO = add to current list of devices.", L"Scanning", MB_YESNOCANCEL | MB_ICONEXCLAMATION);
+						int ms = MessageBoxW(hWnd, L"Scanning will discover and add any LG devices found.\n\nThe scan is performed locally by filtering the 'Digital Media Devices' category in the device manager for LG devices.\n\nDo you want to replace the current devices with any discovered devices?\n\nYES = clear current devices before adding, \n\nNO = add to current list of devices.", L"Scanning", MB_YESNOCANCEL | MB_ICONEXCLAMATION);
 
 						if (ms == IDCANCEL)
 							break;
@@ -840,7 +845,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)ms == IDYES ? 0 : 1, (LPARAM)lParam);
 					}
 					else
+					{
+						int ms = MessageBoxW(hWnd, L"Scanning will discover and add any LG devices found.\n\nThe scan is performed locally by filtering the 'Digital Media Devices' category in the device manager for LG devices.\n\nClick OK to continue!", L"Scanning", MB_OKCANCEL| MB_ICONEXCLAMATION);
+						if (ms == IDCANCEL)
+							break;
 						SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)0, (LPARAM)lParam);
+					}
 				}break;
 				case ID_M_TEST:
 				{

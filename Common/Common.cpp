@@ -187,188 +187,195 @@ bool settings::Preferences::Initialize() {
 			nlohmann::json jsonPrefs;
 			i >> jsonPrefs;
 			i.close();
-			// The restart strings
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS];
-			if (!j.empty() && j.size() > 0)
-			{
-				for (auto& str : j.items())
-				{
-					std::string temp = str.value().get<std::string>();
-					if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
-						Prefs.EventLogRestartString.push_back(temp);
-				}
-			}
-			// The shutdown strings
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS];
-			if (!j.empty() && j.size() > 0)
-			{
-				for (auto& str : j.items())
-				{
-					std::string temp = str.value().get<std::string>();
-					if (std::find(Prefs.EventLogShutdownString.begin(), Prefs.EventLogShutdownString.end(), temp) == Prefs.EventLogShutdownString.end())
-						if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
-							Prefs.EventLogShutdownString.push_back(temp);
-				}
-			}
-			// Version (of the preferences file)
+
+			// Read version of the preferences file. If this key is found it is assumed the config file has been populated
 			j = jsonPrefs[JSON_PREFS_NODE][JSON_VERSION];
 			if (!j.empty() && j.is_number())
+			{
 				Prefs.version = j.get<int>();
-			// Power On timeout
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT];
-			if (!j.empty() && j.is_number())
-				Prefs.PowerOnTimeout = j.get<int>();
-			if (Prefs.PowerOnTimeout < 1)
-				Prefs.PowerOnTimeout = 1;
-			else if (Prefs.PowerOnTimeout > 100)
-				Prefs.PowerOnTimeout = 100;
-			// Logging
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_LOGGING];
-			if (!j.empty() && j.is_boolean())
-				Prefs.Logging = j.get<bool>();
-			// Update notifications
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_AUTOUPDATE];
-			if (!j.empty() && j.is_boolean())
-				Prefs.AutoUpdate = j.get<bool>();
-			// User idle mode
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANK];
-			if (!j.empty() && j.is_boolean())
-				Prefs.BlankScreenWhenIdle = j.get<bool>();
-			// User idle mode delay
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY];
-			if (!j.empty() && j.is_number())
-				Prefs.BlankScreenWhenIdleDelay = j.get<int>();
-			if (Prefs.BlankScreenWhenIdleDelay < 1)
-				Prefs.BlankScreenWhenIdleDelay = 1;
-			else if (Prefs.BlankScreenWhenIdleDelay > 240)
-				Prefs.BlankScreenWhenIdleDelay = 240;
-			// Multi-monitor topology support
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY];
-			if (!j.empty() && j.is_boolean())
-				Prefs.AdhereTopology = j.get<bool>();
-			// User idle mode whitelist enabled
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST];
-			if (!j.empty() && j.is_boolean())
-				Prefs.bIdleWhitelistEnabled = j.get<bool>();
-			// User idle mode fullscreen exclusions enabled
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE];
-			if (!j.empty() && j.is_boolean())
-				Prefs.bIdleFsExclusionsEnabled = j.get<bool>();
-			// User idle mode, prohibit fullscreen
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN];
-			if (!j.empty() && j.is_boolean())
-				Prefs.bFullscreenCheckEnabled = j.get<bool>();
-			// Remote streaming host support
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM];
-			if (!j.empty() && j.is_boolean())
-				Prefs.RemoteStreamingCheck = j.get<bool>();
-			// Multi-monitor topology mode
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE];
-			if (!j.empty() && j.is_boolean())
-				Prefs.TopologyPreferPowerEfficiency = j.get<bool>();
-			// External API
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_EXTERNAL_API];
-			if (!j.empty() && j.is_boolean())
-				Prefs.ExternalAPI = j.get<bool>();
-			// Mute Speakers
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS];
-			if (!j.empty() && j.is_boolean())
-				Prefs.MuteSpeakers = j.get<bool>();
-			// Shutdown timing
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_TIMING_PRESHUTDOWN];
-			if (!j.empty() && j.is_boolean())
-				Prefs.TimingPreshutdown = j.get<bool>();
-			// User idle mode whitelist
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
-			if (!j.empty() && j.size() > 0)
-			{
-				for (auto& elem : j.items())
-				{
-					PROCESSLIST w;
-					w.Application = common::widen(elem.value().get<std::string>());
-					w.Name = common::widen(elem.key());
-					Prefs.WhiteList.push_back(w);
-				}
-			}
-			// User idle mode fullscreen exclusions
-			j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS];
-			if (!j.empty() && j.size() > 0)
-			{
-				for (auto& elem : j.items())
-				{
-					PROCESSLIST w;
-					w.Application = common::widen(elem.value().get<std::string>());
-					w.Name = common::widen(elem.key());
-					Prefs.FsExclusions.push_back(w);
-				}
-			}
 
-			// initialize the configuration for WebOS devices
-			Devices.clear();
-			for (const auto& item : jsonPrefs.items())
-			{
-				if (item.key() == JSON_PREFS_NODE)
-					break;
-				settings::DEVICE params;
-				params.DeviceId = item.key();
-
-				if (item.value()[JSON_DEVICE_NAME].is_string())
-					params.Name = item.value()[JSON_DEVICE_NAME].get<std::string>();
-
-				if (item.value()[JSON_DEVICE_IP].is_string())
-					params.IP = item.value()[JSON_DEVICE_IP].get<std::string>();
-
-				if (item.value()[JSON_DEVICE_UNIQUEKEY].is_string())
-					params.UniqueDeviceKey = item.value()[JSON_DEVICE_UNIQUEKEY].get<std::string>();
-
-				if (item.value()[JSON_DEVICE_HDMICTRL].is_boolean())
-					params.HDMIinputcontrol = item.value()[JSON_DEVICE_HDMICTRL].get<bool>();
-
-				if (item.value()[JSON_DEVICE_HDMICTRLNO].is_number())
-					params.OnlyTurnOffIfCurrentHDMIInputNumberIs = item.value()[JSON_DEVICE_HDMICTRLNO].get<int>();
-				if (params.OnlyTurnOffIfCurrentHDMIInputNumberIs < 1)
-					params.OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
-				else if (params.OnlyTurnOffIfCurrentHDMIInputNumberIs > 4)
-					params.OnlyTurnOffIfCurrentHDMIInputNumberIs = 4;
-
-				if (item.value()[JSON_DEVICE_ENABLED].is_boolean())
-					params.Enabled = item.value()[JSON_DEVICE_ENABLED].get<bool>();
-
-				if (item.value()[JSON_DEVICE_SESSIONKEY].is_string())
-					params.SessionKey = item.value()[JSON_DEVICE_SESSIONKEY].get<std::string>();
-
-				if (item.value()[JSON_DEVICE_SUBNET].is_string())
-					params.Subnet = item.value()[JSON_DEVICE_SUBNET].get<std::string>();
-
-				if (item.value()[JSON_DEVICE_WOLTYPE].is_number())
-					params.WOLtype = item.value()[JSON_DEVICE_WOLTYPE].get<int>();
-				if (params.WOLtype < 1)
-					params.WOLtype = 1;
-				else if (params.WOLtype > 3)
-					params.WOLtype = 3;
-
-				if (item.value()[JSON_DEVICE_SETHDMI].is_boolean())
-					params.SetHDMIInputOnResume = item.value()[JSON_DEVICE_SETHDMI].get<bool>();
-
-				if (item.value()[JSON_DEVICE_NEWSOCK].is_boolean())
-					params.SSL = item.value()[JSON_DEVICE_NEWSOCK].get<bool>();
-
-				if (item.value()[JSON_DEVICE_SETHDMINO].is_number())
-					params.SetHDMIInputOnResumeToNumber = item.value()[JSON_DEVICE_SETHDMINO].get<int>();
-				if (params.SetHDMIInputOnResumeToNumber < 1)
-					params.SetHDMIInputOnResumeToNumber = 1;
-				else if (params.SetHDMIInputOnResumeToNumber > 4)
-					params.SetHDMIInputOnResumeToNumber = 4;
-
-				j = item.value()[JSON_DEVICE_MAC];
+				// The restart strings
+				Prefs.EventLogRestartString.clear();
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS];
 				if (!j.empty() && j.size() > 0)
 				{
-					for (auto& m : j.items())
+					for (auto& str : j.items())
 					{
-						params.MAC.push_back(m.value().get<std::string>());
+						std::string temp = str.value().get<std::string>();
+						if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
+							Prefs.EventLogRestartString.push_back(temp);
 					}
 				}
-				Devices.push_back(params);
+				// The shutdown strings
+				Prefs.EventLogShutdownString.clear();
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS];
+				if (!j.empty() && j.size() > 0)
+				{
+					for (auto& str : j.items())
+					{
+						std::string temp = str.value().get<std::string>();
+						if (std::find(Prefs.EventLogShutdownString.begin(), Prefs.EventLogShutdownString.end(), temp) == Prefs.EventLogShutdownString.end())
+							if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
+								Prefs.EventLogShutdownString.push_back(temp);
+					}
+				}
+
+				// Power On timeout
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT];
+				if (!j.empty() && j.is_number())
+					Prefs.PowerOnTimeout = j.get<int>();
+				if (Prefs.PowerOnTimeout < 1)
+					Prefs.PowerOnTimeout = 1;
+				else if (Prefs.PowerOnTimeout > 100)
+					Prefs.PowerOnTimeout = 100;
+				// Logging
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_LOGGING];
+				if (!j.empty() && j.is_boolean())
+					Prefs.Logging = j.get<bool>();
+				// Update notifications
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_AUTOUPDATE];
+				if (!j.empty() && j.is_boolean())
+					Prefs.AutoUpdate = j.get<bool>();
+				// User idle mode
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANK];
+				if (!j.empty() && j.is_boolean())
+					Prefs.BlankScreenWhenIdle = j.get<bool>();
+				// User idle mode delay
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY];
+				if (!j.empty() && j.is_number())
+					Prefs.BlankScreenWhenIdleDelay = j.get<int>();
+				if (Prefs.BlankScreenWhenIdleDelay < 1)
+					Prefs.BlankScreenWhenIdleDelay = 1;
+				else if (Prefs.BlankScreenWhenIdleDelay > 240)
+					Prefs.BlankScreenWhenIdleDelay = 240;
+				// Multi-monitor topology support
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY];
+				if (!j.empty() && j.is_boolean())
+					Prefs.AdhereTopology = j.get<bool>();
+				// User idle mode whitelist enabled
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST];
+				if (!j.empty() && j.is_boolean())
+					Prefs.bIdleWhitelistEnabled = j.get<bool>();
+				// User idle mode fullscreen exclusions enabled
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE];
+				if (!j.empty() && j.is_boolean())
+					Prefs.bIdleFsExclusionsEnabled = j.get<bool>();
+				// User idle mode, prohibit fullscreen
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN];
+				if (!j.empty() && j.is_boolean())
+					Prefs.bFullscreenCheckEnabled = j.get<bool>();
+				// Remote streaming host support
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM];
+				if (!j.empty() && j.is_boolean())
+					Prefs.RemoteStreamingCheck = j.get<bool>();
+				// Multi-monitor topology mode
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE];
+				if (!j.empty() && j.is_boolean())
+					Prefs.TopologyPreferPowerEfficiency = j.get<bool>();
+				// External API
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_EXTERNAL_API];
+				if (!j.empty() && j.is_boolean())
+					Prefs.ExternalAPI = j.get<bool>();
+				// Mute Speakers
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS];
+				if (!j.empty() && j.is_boolean())
+					Prefs.MuteSpeakers = j.get<bool>();
+				// Shutdown timing
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_TIMING_PRESHUTDOWN];
+				if (!j.empty() && j.is_boolean())
+					Prefs.TimingPreshutdown = j.get<bool>();
+				// User idle mode whitelist
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
+				if (!j.empty() && j.size() > 0)
+				{
+					for (auto& elem : j.items())
+					{
+						PROCESSLIST w;
+						w.Application = common::widen(elem.value().get<std::string>());
+						w.Name = common::widen(elem.key());
+						Prefs.WhiteList.push_back(w);
+					}
+				}
+				// User idle mode fullscreen exclusions
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS];
+				if (!j.empty() && j.size() > 0)
+				{
+					for (auto& elem : j.items())
+					{
+						PROCESSLIST w;
+						w.Application = common::widen(elem.value().get<std::string>());
+						w.Name = common::widen(elem.key());
+						Prefs.FsExclusions.push_back(w);
+					}
+				}
+
+				// initialize the configuration for WebOS devices
+				Devices.clear();
+				for (const auto& item : jsonPrefs.items())
+				{
+					if (item.key() == JSON_PREFS_NODE)
+						break;
+					settings::DEVICE params;
+					params.DeviceId = item.key();
+
+					if (item.value()[JSON_DEVICE_NAME].is_string())
+						params.Name = item.value()[JSON_DEVICE_NAME].get<std::string>();
+
+					if (item.value()[JSON_DEVICE_IP].is_string())
+						params.IP = item.value()[JSON_DEVICE_IP].get<std::string>();
+
+					if (item.value()[JSON_DEVICE_UNIQUEKEY].is_string())
+						params.UniqueDeviceKey = item.value()[JSON_DEVICE_UNIQUEKEY].get<std::string>();
+
+					if (item.value()[JSON_DEVICE_HDMICTRL].is_boolean())
+						params.HDMIinputcontrol = item.value()[JSON_DEVICE_HDMICTRL].get<bool>();
+
+					if (item.value()[JSON_DEVICE_HDMICTRLNO].is_number())
+						params.OnlyTurnOffIfCurrentHDMIInputNumberIs = item.value()[JSON_DEVICE_HDMICTRLNO].get<int>();
+					if (params.OnlyTurnOffIfCurrentHDMIInputNumberIs < 1)
+						params.OnlyTurnOffIfCurrentHDMIInputNumberIs = 1;
+					else if (params.OnlyTurnOffIfCurrentHDMIInputNumberIs > 4)
+						params.OnlyTurnOffIfCurrentHDMIInputNumberIs = 4;
+
+					if (item.value()[JSON_DEVICE_ENABLED].is_boolean())
+						params.Enabled = item.value()[JSON_DEVICE_ENABLED].get<bool>();
+
+					if (item.value()[JSON_DEVICE_SESSIONKEY].is_string())
+						params.SessionKey = item.value()[JSON_DEVICE_SESSIONKEY].get<std::string>();
+
+					if (item.value()[JSON_DEVICE_SUBNET].is_string())
+						params.Subnet = item.value()[JSON_DEVICE_SUBNET].get<std::string>();
+
+					if (item.value()[JSON_DEVICE_WOLTYPE].is_number())
+						params.WOLtype = item.value()[JSON_DEVICE_WOLTYPE].get<int>();
+					if (params.WOLtype < 1)
+						params.WOLtype = 1;
+					else if (params.WOLtype > 3)
+						params.WOLtype = 3;
+
+					if (item.value()[JSON_DEVICE_SETHDMI].is_boolean())
+						params.SetHDMIInputOnResume = item.value()[JSON_DEVICE_SETHDMI].get<bool>();
+
+					if (item.value()[JSON_DEVICE_NEWSOCK].is_boolean())
+						params.SSL = item.value()[JSON_DEVICE_NEWSOCK].get<bool>();
+
+					if (item.value()[JSON_DEVICE_SETHDMINO].is_number())
+						params.SetHDMIInputOnResumeToNumber = item.value()[JSON_DEVICE_SETHDMINO].get<int>();
+					if (params.SetHDMIInputOnResumeToNumber < 1)
+						params.SetHDMIInputOnResumeToNumber = 1;
+					else if (params.SetHDMIInputOnResumeToNumber > 4)
+						params.SetHDMIInputOnResumeToNumber = 4;
+
+					j = item.value()[JSON_DEVICE_MAC];
+					if (!j.empty() && j.size() > 0)
+					{
+						for (auto& m : j.items())
+						{
+							params.MAC.push_back(m.value().get<std::string>());
+						}
+					}
+					Devices.push_back(params);
+				}
 			}
 			return true;
 		}
