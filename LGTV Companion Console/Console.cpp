@@ -19,6 +19,7 @@ nlohmann::json					lg_api_commands_json;
 std::string						lg_api_buttons;
 std::atomic_bool				bTerminateThread = { false };
 WSADATA							WSAData;
+bool							bOutputContainsManyResults = false;
 
 int main(int argc, char* argv[])
 {
@@ -135,16 +136,16 @@ int main(int argc, char* argv[])
 		{
 			// OUTPUT THE RESULT
 			if (json_output_type == JSON_OUTPUT_DEFAULT)
-				std::cout << result << std::endl;
+				std::cout << result;
 			else if (json_output_type == JSON_OUTPUT_FRIENDLY)
 			{
 				try
 				{
-					std::cout << std::setw(4) << nlohmann::json::parse(result) << std::endl;
+					std::cout << std::setw(4) << nlohmann::json::parse(result);
 				}
 				catch (std::exception)
 				{
-					std::cout << result << std::endl;
+					std::cout << result;
 				}
 			}
 			else if (json_output_type == JSON_OUTPUT_FIELD)
@@ -153,22 +154,27 @@ int main(int argc, char* argv[])
 				{
 					try
 					{
+						bOutputContainsManyResults = false;
 						iterateJsonKeys(nlohmann::json::parse(result), field);
-						std::cout;
 					}
 					catch (std::exception)
 					{
-						err["error"] = "Unknown error when iterating JSON.";
-						std::cout << err.dump() << std::endl;
+						err["error"] = "Unknown error when iterating JSON. ";
+						std::cout << err.dump();
 					}
 				}
 				else
 				{
-					err["error"] = "Invalid field.";
-					std::cout << err.dump() << std::endl;
+					err["error"] = "Invalid field. ";
+					std::cout << err.dump();
 				}
-
 			}
+			else
+			{
+				err["error"] = "Unknown output type. ";
+				std::cout << err.dump();
+			}
+			std::cout << std::endl;
 		}
 
 	}
@@ -178,7 +184,6 @@ int main(int argc, char* argv[])
 }
 void iterateJsonKeys(const nlohmann::json& json_obj, std::string key_value) 
 {
-	bool bMany = false;
 	if (json_obj.is_object()) {
 		for (auto it = json_obj.begin(); it != json_obj.end(); ++it) {
 			const auto& key = it.key();
@@ -186,14 +191,14 @@ void iterateJsonKeys(const nlohmann::json& json_obj, std::string key_value)
 
 			if (value.is_string() && key == key_value)
 			{
-				if (!bMany)
+				if (!bOutputContainsManyResults)
 				{
 					std::cout << std::string(value);
-					bMany = true;
+					bOutputContainsManyResults = true;
 				}
 				else
 				{
-					std::cout << " " << std::string(value);
+					std::cout << std::endl << std::string(value);
 				}
 			}
 
