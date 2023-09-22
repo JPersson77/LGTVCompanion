@@ -121,11 +121,16 @@ void CSessionManager::NewEvent(EVENT& Event)
 //			Log("[DEBUG] Exiting 1000ms sleep - suspend/reboot/shutdown");
 			break;
 		case EVENT_SYSTEM_DISPLAYDIMMED:
+			// fix for only receiving DIMMED event when screensaver is active
+			if (Event.ScreenSaverActiveWhileDimmed) 
+			{
+				bDisplaysCurrentlyPoweredOnByWindows = false;
+				Sleep(200);
+			}
+			break;
 		case EVENT_SYSTEM_DISPLAYOFF:
 			bDisplaysCurrentlyPoweredOnByWindows = false;
-//			Log("[DEBUG] Entering 200ms sleep - display off");
 			Sleep(200);
-//			Log("[DEBUG] Exiting 200ms sleep - display off");
 			break;
 		case EVENT_SYSTEM_RESUME:
 		case EVENT_SYSTEM_RESUMEAUTO:
@@ -167,7 +172,7 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		}
 		catch (std::exception const& e)
 		{
-			std::string ss = "ERROR!Invalid payload JSON.Error: ";
+			std::string ss = "ERROR! Invalid payload JSON.Error: ";
 			ss += e.what();
 			Log(ss);
 			break;
@@ -200,20 +205,16 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		break;
 	case EVENT_SYSTEM_SHUTDOWN:
 	case EVENT_SYSTEM_UNSURE:
-//		bDisplaysCurrentlyPoweredOnByWindows = false;
 		Session.PowerOffDisplay();
 		bRemoteClientIsConnected = false;
 		break;
 	case EVENT_SYSTEM_SUSPEND:
-//		bDisplaysCurrentlyPoweredOnByWindows = false;
 		bRemoteClientIsConnected = false;
 		break;
 	case EVENT_SYSTEM_RESUME:
-//		bDisplaysCurrentlyPoweredOnByWindows = false;
 		bRemoteClientIsConnected = false;
 		break;
 	case EVENT_SYSTEM_RESUMEAUTO:
-//		bDisplaysCurrentlyPoweredOnByWindows = true;
 		bRemoteClientIsConnected = false;
 		if (Prefs.AdhereTopology && !Session.TopologyEnabled)
 			break;
@@ -227,7 +228,6 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		}
 		break;
 	case EVENT_SYSTEM_DISPLAYON:
-//		bDisplaysCurrentlyPoweredOnByWindows = true;
 		if (bRemoteClientIsConnected)
 			break;
 		if (Prefs.AdhereTopology && !Session.TopologyEnabled)
@@ -235,13 +235,21 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		Session.PowerOnDisplay();
 		break;
 	case EVENT_SYSTEM_DISPLAYDIMMED:
+		//fix for only receiving DIMMED event when screensaver is active
+		if (Event.ScreenSaverActiveWhileDimmed)
+		{
+			if (bRemoteClientIsConnected)
+				break;
+			if (GetWindowsPowerStatus() == true)
+				Session.PowerOffDisplay();
+		}
+		break;
 	case EVENT_SYSTEM_DISPLAYOFF:
 		
 		if (bRemoteClientIsConnected)
 			break;
 		if(GetWindowsPowerStatus() == true)
 			Session.PowerOffDisplay();
-//		bDisplaysCurrentlyPoweredOnByWindows = false;
 		break;
 	case EVENT_SYSTEM_USERIDLE:
 		if (bRemoteClientIsConnected)

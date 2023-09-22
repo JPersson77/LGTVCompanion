@@ -24,7 +24,7 @@
 
 // common general application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"3.1.6"
+#define         APP_VERSION                     L"3.1.7"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"Log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
@@ -138,6 +138,7 @@ struct EVENT {
 	std::vector<std::string>							devices;
 	std::string											log_message;
 	bool												repeat = false;
+	bool												ScreenSaverActiveWhileDimmed = false;
 };
 
 namespace jpersson77 {

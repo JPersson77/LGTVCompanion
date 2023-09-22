@@ -1561,6 +1561,11 @@ void CreateEvent_system(DWORD dwEvent)
 {
 	EVENT event;
 	event.dwType = dwEvent;
+
+	// fix for the issue with only a DIMMED event sent when screensaver is active
+	event.ScreenSaverActiveWhileDimmed = (dwEvent == EVENT_SYSTEM_DISPLAYDIMMED && IsScreenSaverActive());
+	if (event.ScreenSaverActiveWhileDimmed)
+		Log("** Screen saver is active during DIMMED.");
 	SessionManager.NewEvent(event);
 
 	// Send the global event to named pipe
@@ -1691,4 +1696,27 @@ std::vector<std::string> Extract_Commands(std::string str) {
 		}		
 	}
 	return res;
+}
+bool IsScreenSaverActive()
+{
+	// Iterate over currently running processes
+	PROCESSENTRY32 entry;
+	entry.dwSize = sizeof(PROCESSENTRY32);
+	const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
+	if (!Process32First(snapshot, &entry)) {
+		CloseHandle(snapshot);
+		Log("[Error] Failed to iterate running processes while determining screen saver status");
+		return false;
+	}
+	do
+	{
+		std::filesystem::path exe = entry.szExeFile;
+		if (exe.extension() == ".scr")
+		{
+			CloseHandle(snapshot);
+			return true;
+		}
+	} while (Process32Next(snapshot, &entry));
+	CloseHandle(snapshot);
+	return false;
 }

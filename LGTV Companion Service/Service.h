@@ -12,8 +12,10 @@
 #include <sstream>
 #include <iomanip>
 #include <string>
+#include <filesystem>
 #include <powerbase.h>
 #include <Shlobj_core.h>
+#include <tlhelp32.h>
 #include <winevt.h>
 #include <thread>
 #include <atomic>
@@ -40,7 +42,6 @@
 #define SERVICE_DEPENDENCIES							L"Dhcp\0Dnscache\0LanmanServer\0\0"
 #define SERVICE_ACCOUNT									NULL		
 #define THREAD_WAIT          							1			// wait to spawn new thread (seconds)
-#define DIMMED_OFF_DELAY_WAIT							20			// delay after a screen dim request
 #define MAX_RECORD_BUFFER_SIZE							0x10000		// 64K
 
 
@@ -159,7 +160,6 @@ private:
 	jpersson77::settings::PREFERENCES					Prefs;													// Copy of the global preferences
 	bool												bDisplaysCurrentlyPoweredOnByWindows = false;			// Current power status requested by Windows
 	bool												bRemoteClientIsConnected = false;						// Indicates that a remote client is connected
-	time_t												ScreenDimmedRequestTime = 0;							// The time when the dimmed power off event occured
 };
 
 // Service.cpp
@@ -193,3 +193,4 @@ void													CreateEvent_luna_set_device_info(std::vector<std::string>, std:
 void													CreateEvent_button(std::vector<std::string>, std::string, std::string = "");
 std::vector<std::string>								_Devices(std::vector<std::string>, int);
 std::vector<std::string>								Extract_Commands(std::string);
+bool													IsScreenSaverActive(void);
