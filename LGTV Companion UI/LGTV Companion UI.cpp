@@ -1701,7 +1701,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"power saver. \n\n"
 					"The option to support remote streaming hosts will power off managed devices while the system is acting as streaming host or being remoted into. Supported "
 					"hosts include Nvidia gamestream, Moonlight, Steam Link and RDP. \n\nPlease note that the devices will remain powered off until the remote connection is disconnected. \n\n"
-					"Also note that the Sunshine streaming host support require Sunshine logging level be at minimum on level \"Info\" (default)",
+					"NOTE! Support for detecting Sunshine streaming host require Sunshine to be installed (i.e. not portable install) and Sunshine logging level be at minimum on level \"Info\" (default)",
 					L"Andvanced power options", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the pmulti-monitor conf
@@ -1727,7 +1727,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"when an HDMI-output is disabled in the graphics card configuration the associated device will also power off. \n\n"
 					
 					"This option will however not work on all system configuration and may fail to power on the devices again appropriately. "
-					"Enabling \"Always Ready\" in the settings of compatible WebOS devices (2022-models, A2, B2,C2 etc, and later) will ensure that "
+					"Enabling \"Always Ready\" in the settings of compatible WebOS devices (2022-models, C2, G2 etc, and later) will ensure that "
 					"the feature works properly.\n\n"
 					"If you have a multi-monitor system and a compatible WebOS device it is recommended to configure and enable this feature.\n\n"
 					"PLEASE NOTE! A change of GPU or adding more displays may invalidate the configuration. If so, please run the configuration guide "
