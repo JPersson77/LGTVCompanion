@@ -603,9 +603,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}break;
 	case APP_MESSAGE_APPLY:
 	{
+		std::string logmsg = "Applying settings...";
+		Log(logmsg);
 		std::vector<std::string> IPs = common::GetOwnIP();
 		if(IPs.size()>0)
 		{
+			{
+				logmsg = "Enumerating network interfaces:";
+				Log(logmsg);
+				for (auto& IP : IPs)
+				{
+					Log(IP);
+				}
+
+			}
 			for (auto& Dev : Settings.Devices)
 			{
 				bool bFound = false;
@@ -1704,24 +1715,9 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"NOTE! Support for detecting Sunshine streaming host require Sunshine to be installed (i.e. not portable install) and Sunshine logging level be at minimum on level \"Info\" (default)",
 					L"Andvanced power options", MB_OK | MB_ICONINFORMATION);
 			}
-			// explain the pmulti-monitor conf
+			// explain the multi-monitor conf
 			else if (wParam == IDC_SYSLINK6)
 			{
-				/*
-				MessageBox(hWnd, L"The option to support the windows multi-monitor topology ensures that the "
-					"power state of individual devices will match the enabled or disabled state in the Windows monitor configuration, i e "
-					"when an HDMI-output is disabled in the graphics card configuration the associated device will also power off. \n\n"
-					"The \"Power efficiency\" option will ensure that devices are set to a powered off state in response to changes in the topology and is the recommended option. "
-					"This option will however not work on all system configuration and may fail to powere on the devices again appropriately. "
-					"Enabling \"Always Ready\" in the settings of compatible WebOS devices (2022-models, A2, B2,C2 etc, and later) will ensure that "
-					"\"Power efficiency\" works properly.\n\n In case the \"Power efficiency\" option does not work the \"Compatibility\" option "
-					"will work on all configurations and will instead blank the screen (instead of powering off) in response to "
-					"changes in the monitor topology\n\n"
-					"If you have a multi-monitor system it is recommended to configure and enable this feature.\n\n"
-					"PLEASE NOTE! A change of GPU or adding more displays may invalidate the configuration. If so, please run the configuration guide "
-					"again to ensure correct operation.",
-					L"Multi-monitor support", MB_OK | MB_ICONINFORMATION);
-					*/
 				MessageBox(hWnd, L"The option to support the windows multi-monitor topology ensures that the "
 					"power state of individual devices will match the enabled or disabled state in the Windows monitor configuration, i e "
 					"when an HDMI-output is disabled in the graphics card configuration the associated device will also power off. \n\n"
@@ -1735,7 +1731,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					L"Multi-monitor support", MB_OK | MB_ICONINFORMATION);
 			}
 			
-			// explain the pmulti-monitor conf
+			// explain the external api
 			else if (wParam == IDC_SYSLINK11)
 			{
 				if (MessageBox(hWnd, L"Scripts or other applications can use the \"External API\" to be notified of power events. The "
@@ -2959,6 +2955,9 @@ void VersionCheckThread(HWND hWnd)
 
 std::vector<settings::DISPLAY_INFO> QueryDisplays()
 {
+	std::string logmsg = "Enumerating active displays...";
+	Log(logmsg);
+
 	std::vector<settings::DISPLAY_INFO> targets;
 	//populate targets struct with information about attached displays
 	EnumDisplayMonitors(NULL, NULL, meproc, (LPARAM)&targets);
@@ -2968,6 +2967,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 {
 	if (!pData)
 		return false;
+	std::string logmsg;
 	std::vector<settings::DISPLAY_INFO>* targets = (std::vector<settings::DISPLAY_INFO> *) pData;
 	UINT32 requiredPaths, requiredModes;
 	std::vector<DISPLAYCONFIG_PATH_INFO> paths;
@@ -2978,9 +2978,17 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 	ZeroMemory(&mi, sizeof(mi));
 	mi.cbSize = sizeof(mi);
 	GetMonitorInfo(hMonitor, &mi);
+	{
+		logmsg = "Display: ";
+		logmsg += common::narrow(mi.szDevice);
+		logmsg += " ------------------------------";
+		Log(logmsg);
+	}
 	isError = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &requiredPaths, &requiredModes);
 	if (isError)
 	{
+		logmsg = "Error! GetDisplayConfigBufferSizes() failed.";
+		Log(logmsg);
 		targets->clear();
 		return false;
 	}
@@ -2990,6 +2998,8 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 	isError = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &requiredPaths, paths.data(), &requiredModes, modes.data(), NULL);
 	if (isError)
 	{
+		logmsg = "Error! QueryDisplayConfig() failed.";
+		Log(logmsg);
 		targets->clear();
 		return false;
 	}
@@ -2998,6 +3008,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 
 	for (auto& p : paths)
 	{
+
 		DISPLAYCONFIG_SOURCE_DEVICE_NAME sourceName;
 		sourceName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
 		sourceName.header.size = sizeof(sourceName);
@@ -3005,6 +3016,11 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 		sourceName.header.id = p.sourceInfo.id;
 
 		DisplayConfigGetDeviceInfo(&sourceName.header);
+		{
+			logmsg = "Source: ";
+			logmsg += common::narrow(sourceName.viewGdiDeviceName);
+			Log(logmsg);
+		}
 		if (wcscmp(mi.szDevice, sourceName.viewGdiDeviceName) == 0)
 		{
 			DISPLAYCONFIG_TARGET_DEVICE_NAME name;
@@ -3013,9 +3029,19 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 			name.header.adapterId = p.sourceInfo.adapterId;
 			name.header.id = p.targetInfo.id;
 			DisplayConfigGetDeviceInfo(&name.header);
-			std::wstring FriendlyName = name.monitorFriendlyDeviceName;
-			if (FriendlyName.find(L"LG TV") != std::wstring::npos)
 			{
+				logmsg = "Source match! Target friendly name: ";
+				logmsg += common::narrow(name.monitorFriendlyDeviceName);
+				Log(logmsg);
+			}
+			std::wstring FriendlyName = name.monitorFriendlyDeviceName;
+			transform(FriendlyName.begin(), FriendlyName.end(), FriendlyName.begin(), ::tolower);
+			if (FriendlyName.find(L"lg tv") != std::wstring::npos)
+			{
+				{
+					logmsg = "Friendly name match! It is an LG TV!";
+					Log(logmsg);
+				}
 				settings::DISPLAY_INFO di;
 				di.monitorinfo = mi;
 				di.hMonitor = hMonitor;
@@ -3069,4 +3095,34 @@ bool isSameSubnet(const char* ip1, const char* ip2, const char* subnetMask)
 	inet_pton(AF_INET, subnetMask, &mask);
 
 	return (addr1.s_addr & mask.s_addr) == (addr2.s_addr & mask.s_addr);
+}
+//   Write some debug info to a log file
+void Log(std::string ss)
+{
+	//disable 
+	return;
+
+	std::ofstream m;
+	time_t rawtime;
+	struct tm timeinfo;
+	char buffer[80];
+	std::wstring path = Settings.Prefs.DataPath;
+
+	time(&rawtime);
+	localtime_s(&timeinfo, &rawtime);
+
+	strftime(buffer, 80, "%a %H:%M:%S > ", &timeinfo);
+	puts(buffer);
+
+	std::string s = buffer;
+	s += ss;
+	s += "\n";
+
+	path += L"ui_log.txt";
+	m.open(path.c_str(), std::ios::out | std::ios::app);
+	if (m.is_open())
+	{
+		m << s.c_str();
+		m.close();
+	}
 }

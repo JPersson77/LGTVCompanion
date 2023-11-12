@@ -337,6 +337,19 @@ std::string ProcessCommand(std::vector<std::string>& words)
 		else
 			iError = 1;
 	}
+	else if (command == "button_nocheck")												// BUTTON PRESS
+	{
+		if (nWords > 1)
+		{
+			std::string validated_button = words[1];
+			if (validated_button != "")
+				return CreateEvent_button(_Devices(words, 2), validated_button);
+			iError = 3;
+			error = lg_api_buttons;
+		}
+		else
+			iError = 1;
+	}
 	else if (command == "settings_picture")										// LUNA PICTURE SETTINGS
 	{
 		std::string parsed_json;

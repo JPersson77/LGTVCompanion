@@ -97,6 +97,6 @@ std::vector<jpersson77::settings::DISPLAY_INFO> QueryDisplays();
 bool						MessageDaemon(std::wstring);
 void						NamedPipeCallback(std::wstring message);
 bool						isSameSubnet(const char* ip1, const char* ip2, const char* subnetMask);
-
+void						Log(std::string ss);
 
 
