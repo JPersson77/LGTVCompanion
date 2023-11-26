@@ -40,6 +40,9 @@
 #define SVCNAME											L"LGTVsvc"
 #define SVCDISPLAYNAME									L"LGTV Companion Service"
 #define SERVICE_DEPENDENCIES							L"Dhcp\0Dnscache\0LanmanServer\0\0"
+#define	TOPOLOGY_CONFIGURATION_FILE						L"topology_config.json"
+#define	JSON_TOPOLOGY_NODE								"Topology"
+
 #define SERVICE_ACCOUNT									NULL		
 #define THREAD_WAIT          							1			// wait to spawn new thread (seconds)
 #define MAX_RECORD_BUFFER_SIZE							0x10000		// 64K
@@ -141,6 +144,12 @@ public:
 
 	//													Set Topology presence/status for CSession objects. Arg 1: pointer to a vector of device ID's
 	std::string											SetTopology(std::vector<std::string>&);
+
+	//													Load the previously known topology configuration, if it exists. 
+	std::string											LoadSavedTopologyConfiguration(void);
+
+	//													Load the previously known topology configuration, if it exists. 
+	void												SaveTopologyConfiguration(void);
 
 	//													Are the displays globally requested to be powered on / active? 
 	bool												GetWindowsPowerStatus(void);

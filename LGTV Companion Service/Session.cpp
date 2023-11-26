@@ -343,6 +343,66 @@ void CSessionManager::SetPreferences(jpersson77::settings::PREFERENCES& pPrefs)
 	Prefs = pPrefs;
 	Prefs.AdhereTopology = false; // disable initially
 }
+std::string CSessionManager::LoadSavedTopologyConfiguration(void)
+{
+	std::vector<std::string> devices;
+	std::string return_value;
+	std::wstring file = Prefs.DataPath;
+	file += TOPOLOGY_CONFIGURATION_FILE;
+	std::ifstream i(file.c_str());
+	if (i.is_open())
+	{
+		nlohmann::json j;
+		nlohmann::json topology_json;
+		i >> topology_json;
+		i.close();
+		// Read version of the preferences file. If this key is found it is assumed the config file has been populated
+		j = topology_json[JSON_PREFS_NODE][JSON_VERSION];
+		if (!j.empty() && j.is_number())
+		{
+			j = topology_json[JSON_PREFS_NODE][JSON_TOPOLOGY_NODE];
+			if (!j.empty() && j.size() > 0)
+			{
+				for (auto& str : j.items())
+				{
+					if (str.value().is_string())
+					{
+						std::string temp = str.value().get<std::string>();
+						devices.push_back(temp);
+					}
+				}			
+			}
+			return SetTopology(devices);
+		}
+		return "Invalid topology configuration file.";
+	}
+	return "No saved topology configuration.";
+}
+void CSessionManager::SaveTopologyConfiguration(void)
+{
+	if (Sessions.size() == 0)
+		return;
+
+	nlohmann::json topology_json;
+
+	std::wstring file = Prefs.DataPath;
+	CreateDirectory(Prefs.DataPath.c_str(), NULL);
+	file += TOPOLOGY_CONFIGURATION_FILE;
+	topology_json[JSON_PREFS_NODE][JSON_VERSION] = (int)Prefs.version;
+	for (auto& item : Sessions)
+		if(item->TopologyEnabled)
+			topology_json[JSON_PREFS_NODE][JSON_TOPOLOGY_NODE].push_back(item->DeviceID_lowercase);
+	
+	if (!topology_json.empty())
+	{
+		std::ofstream i(file.c_str());
+		if (i.is_open())
+		{
+			i << std::setw(4) << topology_json << std::endl;
+			i.close();
+		}
+	}
+}
 void CSessionManager::TerminateAndWait(void)
 {
 	bool bWait;

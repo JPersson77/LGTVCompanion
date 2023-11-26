@@ -252,6 +252,10 @@ bool settings::Preferences::Initialize() {
 				j = jsonPrefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY];
 				if (!j.empty() && j.is_boolean())
 					Prefs.AdhereTopology = j.get<bool>();
+				// Keep Multi-monitor topology support on boot
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_KEEPTOPOLOGYONBOOT];
+				if (!j.empty() && j.is_boolean())
+					Prefs.KeepTopologyOnBoot = j.get<bool>();
 				// User idle mode whitelist enabled
 				j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST];
 				if (!j.empty() && j.is_boolean())
@@ -432,6 +436,7 @@ void settings::Preferences::WriteToDisk(void)
 	prefs[JSON_PREFS_NODE][JSON_IDLEBLANK] = (bool)Prefs.BlankScreenWhenIdle;
 	prefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY] = (int)Prefs.BlankScreenWhenIdleDelay;
 	prefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY] = (bool)Prefs.AdhereTopology;
+	prefs[JSON_PREFS_NODE][JSON_KEEPTOPOLOGYONBOOT] = (bool)Prefs.KeepTopologyOnBoot;
 	prefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST] = (bool)Prefs.bIdleWhitelistEnabled;
 	prefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN] = (bool)Prefs.bFullscreenCheckEnabled;
 	prefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE] = (bool)Prefs.bIdleFsExclusionsEnabled;

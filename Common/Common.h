@@ -24,7 +24,7 @@
 
 // common general application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"3.2.1"
+#define         APP_VERSION                     L"3.2.3"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"Log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
@@ -46,6 +46,7 @@
 #define         JSON_IDLEBLANK                  "BlankWhenIdle"
 #define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
 #define         JSON_ADHERETOPOLOGY             "AdhereDisplayTopology"
+#define         JSON_KEEPTOPOLOGYONBOOT			"KeepTopologyOnBoot"
 #define         JSON_IDLEWHITELIST				"IdleWhiteListEnabled"
 #define         JSON_IDLEFULLSCREEN				"IdleFullscreen"
 #define         JSON_WHITELIST					"IdleWhiteList"
@@ -208,6 +209,7 @@ namespace jpersson77 {
 			bool								BlankScreenWhenIdle = false;
 			int									BlankScreenWhenIdleDelay = 10;
 			bool								AdhereTopology = false;
+			bool								KeepTopologyOnBoot = false;
 			bool								bIdleWhitelistEnabled = false;
 			bool								bFullscreenCheckEnabled = false;
 			std::vector<PROCESSLIST>			WhiteList;

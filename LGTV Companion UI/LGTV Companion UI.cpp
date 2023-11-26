@@ -1469,6 +1469,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		CheckDlgButton(hWnd, IDC_CHECK_BLANK, Settings.Prefs.BlankScreenWhenIdle ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_REMOTE, Settings.Prefs.RemoteStreamingCheck ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, Settings.Prefs.AdhereTopology ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY_LOGON, Settings.Prefs.KeepTopologyOnBoot ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_API, Settings.Prefs.ExternalAPI ? BST_CHECKED : BST_UNCHECKED);
 
 		std::wstring ls;
@@ -1481,7 +1482,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		//		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), Settings.Prefs.AdhereTopology ? true :  false);
 		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), false); //REMOVE
-
+		EnableWindow(GetDlgItem(hWnd, IDC_CHECK_TOPOLOGY_LOGON), Settings.Prefs.AdhereTopology ? true : false);
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
 	}break;
 	case WM_COMMAND:
@@ -1557,7 +1558,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 						}
 					}
 				}
-				//				EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY));
+				EnableWindow(GetDlgItem(hWnd, IDC_CHECK_TOPOLOGY_LOGON), IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY));
 			}break;
 
 			case IDC_LOGGING:
@@ -1587,6 +1588,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					Settings.Prefs.BlankScreenWhenIdle = IsDlgButtonChecked(hWnd, IDC_CHECK_BLANK) == BST_CHECKED;
 					Settings.Prefs.RemoteStreamingCheck = IsDlgButtonChecked(hWnd, IDC_CHECK_REMOTE) == BST_CHECKED;
 					Settings.Prefs.AdhereTopology = IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY) == BST_CHECKED;
+					Settings.Prefs.KeepTopologyOnBoot = IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY_LOGON) == BST_CHECKED;
 					Settings.Prefs.ExternalAPI = IsDlgButtonChecked(hWnd, IDC_CHECK_API) == BST_CHECKED;
 
 					int sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
@@ -1720,14 +1722,15 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			{
 				MessageBox(hWnd, L"The option to support the windows multi-monitor topology ensures that the "
 					"power state of individual devices will match the enabled or disabled state in the Windows monitor configuration, i e "
-					"when an HDMI-output is disabled in the graphics card configuration the associated device will also power off. \n\n"
-					
-					"This option will however not work on all system configuration and may fail to power on the devices again appropriately. "
+					"when an HDMI-output is disabled in the graphics card configuration the associated device will also power off. "
+					"If you have a multi-monitor system and a compatible WebOS device it is recommended to configure and enable this feature.\n\n"
+					"The option to keep the topology configuration also on the logon screen will apply the last known configuration at the logon "
+					"screen at system boot.\n\n"
+					"PLEASE NOTE! This option will not work on all system configuration and may fail to power on the devices again appropriately. "
 					"Enabling \"Always Ready\" in the settings of compatible WebOS devices (2022-models, C2, G2 etc, and later) will ensure that "
 					"the feature works properly.\n\n"
-					"If you have a multi-monitor system and a compatible WebOS device it is recommended to configure and enable this feature.\n\n"
-					"PLEASE NOTE! A change of GPU or adding more displays may invalidate the configuration. If so, please run the configuration guide "
-					"again to ensure correct operation.",
+					"ALSO NOTE! A change of GPU or adding more displays may invalidate the configuration. If so, please run the configuration guide "
+					"again to ensure correct operation.\n\n",
 					L"Multi-monitor support", MB_OK | MB_ICONINFORMATION);
 			}
 			
@@ -2058,6 +2061,7 @@ LRESULT CALLBACK ConfigureTopologyWndProc(HWND hWnd, UINT message, WPARAM wParam
 				if (!conf)
 				{
 					CheckDlgButton(GetParent(hWnd), IDC_CHECK_TOPOLOGY, BST_UNCHECKED);
+					EnableWindow(GetDlgItem(GetParent(hWnd), IDC_CHECK_TOPOLOGY_LOGON), false);
 				}
 				EndDialog(hWnd, 0);
 				EnableWindow(GetParent(hWnd), true);

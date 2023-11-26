@@ -294,7 +294,7 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 
 	//Initialise CSession objects
 	InitSessions();
-
+	
 	try {
 		nlohmann::json lg_api_buttons_json;
 		std::string json_str =
@@ -821,6 +821,25 @@ void InitSessions(void)
 		SessionManager.AddSession(dev);
 		Log(s.str());
 	}
+	if (Settings.Prefs.AdhereTopology)
+	{
+		if (Settings.Prefs.KeepTopologyOnBoot)
+		{
+			std::string ret = "Restoring topology configuration: ";
+			std::string device_state = SessionManager.LoadSavedTopologyConfiguration();
+			if (device_state == "")
+				ret += "No devices configured.";
+			else
+				ret += device_state;
+			Log(ret);
+		}
+		else
+		{
+			std::wstring file = Settings.Prefs.DataPath;
+			file += TOPOLOGY_CONFIGURATION_FILE;
+			DeleteFile(file.c_str());
+		}
+	}
 }
 void NamedPipeCallback(std::wstring message)
 {
@@ -1005,6 +1024,7 @@ void NamedPipeCallback(std::wstring message)
 					else
 						log += device_state;
 					Log(log);
+					SessionManager.SaveTopologyConfiguration();
 					CreateEvent_system(EVENT_SYSTEM_TOPOLOGY);
 				}
 				else
