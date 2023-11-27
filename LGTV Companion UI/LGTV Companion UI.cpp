@@ -1565,6 +1565,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			case IDC_AUTOUPDATE:
 			case IDC_CHECK_REMOTE:
 			case IDC_CHECK_API:
+			case IDC_CHECK_TOPOLOGY_LOGON:
 
 			{
 				EnableWindow(GetDlgItem(hWnd, IDOK), true);
