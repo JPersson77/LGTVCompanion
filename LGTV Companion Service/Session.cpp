@@ -352,27 +352,36 @@ std::string CSessionManager::LoadSavedTopologyConfiguration(void)
 	std::ifstream i(file.c_str());
 	if (i.is_open())
 	{
-		nlohmann::json j;
-		nlohmann::json topology_json;
-		i >> topology_json;
-		i.close();
-		// Read version of the preferences file. If this key is found it is assumed the config file has been populated
-		j = topology_json[JSON_PREFS_NODE][JSON_VERSION];
-		if (!j.empty() && j.is_number())
+		try
 		{
-			j = topology_json[JSON_PREFS_NODE][JSON_TOPOLOGY_NODE];
-			if (!j.empty() && j.size() > 0)
+			nlohmann::json j;
+			nlohmann::json topology_json;
+			i >> topology_json;
+			i.close();
+			// Read version of the preferences file. If this key is found it is assumed the config file has been populated
+			j = topology_json[JSON_PREFS_NODE][JSON_VERSION];
+			if (!j.empty() && j.is_number())
 			{
-				for (auto& str : j.items())
+				j = topology_json[JSON_PREFS_NODE][JSON_TOPOLOGY_NODE];
+				if (!j.empty() && j.size() > 0)
 				{
-					if (str.value().is_string())
+					for (auto& str : j.items())
 					{
-						std::string temp = str.value().get<std::string>();
-						devices.push_back(temp);
+						if (str.value().is_string())
+						{
+							std::string temp = str.value().get<std::string>();
+							devices.push_back(temp);
+						}
 					}
-				}			
+				}
+				return SetTopology(devices);
 			}
-			return SetTopology(devices);
+		}
+		catch (std::exception const& e)
+		{
+			std::string s = "Error parsing topology configuration file: ";
+			s += e.what();
+			return s;
 		}
 		return "Invalid topology configuration file.";
 	}

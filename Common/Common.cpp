@@ -149,7 +149,7 @@ std::vector <std::string> common::GetOwnIP(void)
 						int CIDR = 0;
 						int m;
 						inet_pton(AF_INET, szNetMask, &m);
-						while (m) {
+						while (m > 0) {
 							CIDR += (m & 0x01);
 							m = m >> 1;
 						}

@@ -1024,7 +1024,8 @@ void NamedPipeCallback(std::wstring message)
 					else
 						log += device_state;
 					Log(log);
-					SessionManager.SaveTopologyConfiguration();
+					if(Settings.Prefs.KeepTopologyOnBoot)
+						SessionManager.SaveTopologyConfiguration();
 					CreateEvent_system(EVENT_SYSTEM_TOPOLOGY);
 				}
 				else
