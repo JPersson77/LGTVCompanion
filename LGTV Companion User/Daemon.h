@@ -39,7 +39,7 @@
 #include <WinSock2.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <filesystem>
-#include <wintoast/wintoastlib.h>
+#include <wintoastlib.h>
 #include "resource.h"
 #include "../Common/Common.h"
 

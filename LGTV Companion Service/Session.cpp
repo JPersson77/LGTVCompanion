@@ -94,7 +94,7 @@ void CSessionManager::NewEvent(EVENT& Event)
 	if (Sessions.size() == 0)
 		return;
 	
-	SetThreadExecutionState(ES_AWAYMODE_REQUIRED | ES_CONTINUOUS);
+	SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 
 	// process event for all devices
 	if (Event.devices.size() == 0)			
@@ -1220,7 +1220,7 @@ void CSession::Thread_DisplayOff(bool UserForced, bool BlankScreen)
 	boost::string_view state;
 	boost::string_view appId;
 	
-	SetThreadExecutionState(ES_AWAYMODE_REQUIRED | ES_CONTINUOUS);
+	SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 	if (Parameters.SessionKey == "")
 	{
 			logmsg += ", WARNING! Thread_DisplayOff() - no pairing key";

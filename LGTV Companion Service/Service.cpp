@@ -1026,7 +1026,7 @@ void NamedPipeCallback(std::wstring message)
 					
 					if (SessionManager.GetWindowsPowerStatus() == false)
 					{
-						log += " (Monitors globally requested OFF. Not enforcinc monitor topology.)";
+						log += " (Monitors globally requested OFF. Not enforcing monitor topology.)";
 						Log(log);
 						continue;
 					}
