@@ -1023,8 +1023,15 @@ void NamedPipeCallback(std::wstring message)
 						log += "No devices configured.";
 					else
 						log += device_state;
+					
+					if (SessionManager.GetWindowsPowerStatus() == false)
+					{
+						log += " (Monitors globally requested OFF. Not enforcinc monitor topology.)";
+						Log(log);
+						continue;
+					}
 					Log(log);
-					if(Settings.Prefs.KeepTopologyOnBoot)
+					if (Settings.Prefs.KeepTopologyOnBoot)
 						SessionManager.SaveTopologyConfiguration();
 					CreateEvent_system(EVENT_SYSTEM_TOPOLOGY);
 				}

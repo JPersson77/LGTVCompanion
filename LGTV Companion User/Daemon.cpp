@@ -990,9 +990,10 @@ bool CheckDisplayTopology(void)
 {
 	std::stringstream s;
 	s << "topology state ";
-	std::vector<settings::DISPLAY_INFO> displays = QueryDisplays();
 	if (Settings.Devices.size() == 0)
 		return false;
+	std::vector<settings::DISPLAY_INFO> displays = QueryDisplays();
+
 	if (displays.size() > 0)
 	{
 		for (auto& disp : displays)
@@ -1001,11 +1002,14 @@ bool CheckDisplayTopology(void)
 			{
 				std::string ActiveDisplay = common::narrow(disp.target.monitorDevicePath);
 				std::string DeviceString = dev.UniqueDeviceKey;
-				transform(ActiveDisplay.begin(), ActiveDisplay.end(), ActiveDisplay.begin(), ::tolower);
-				transform(DeviceString.begin(), DeviceString.end(), DeviceString.begin(), ::tolower);
-				if (ActiveDisplay == DeviceString)
+				if(DeviceString != "")
 				{
-					s << dev.DeviceId << " ";
+					transform(ActiveDisplay.begin(), ActiveDisplay.end(), ActiveDisplay.begin(), ::tolower);
+					transform(DeviceString.begin(), DeviceString.end(), DeviceString.begin(), ::tolower);
+					if (ActiveDisplay == DeviceString)
+					{
+						s << dev.DeviceId << " ";
+					}
 				}
 			}
 		}
