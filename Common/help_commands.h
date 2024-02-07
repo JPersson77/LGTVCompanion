@@ -103,7 +103,7 @@ Commands are case-insensitive, but JSON typically is case-sensitive.
 -wol [true|false]                               set Wake-On-Lan, a k a "On with Mobile" or "Turn on via Wi-Fi"
 
 ## Other settings
--set_curve_preset [preset]						Set the curve preset for compatible devices
+-set_curve_preset [flat|1 -> 3]						Set the curve preset for compatible devices
 -adjust_curve_preset [preset] [0 -> 100]		Adjust value of curve preset for compatible devices
 -set_curvature [0 -> 100]						Set the curvature for compatible devices.
 -ambientlight [off|on]							Enable or disable the ambient light for compatible models
