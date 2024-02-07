@@ -274,13 +274,13 @@ All other commands following the -output command will obey the formatting. Pleas
 "LGTV Companion.exe" -freesyncinfo device1
 ```
 ## Other settings (LGTV Companion and LGTVcli)
-- *set_curve_preset* [1 -> 3]	- Set the curve preset for compatible devices
-- *adjust_curve_preset* [preset] [0 -> 100]	- Adjust value of curve preset for compatible devices
-- *set_curvature* [0 -> 100]	 - Set the curvature for compatible devices.
-- *ambientlight* [off|on]	- Enable or disable the ambient light for compatible models
-- *ambientlight_mode* [dynamic|peaceful|videoSyncMode|soundSyncMode|staticMode1|staticMode2|staticMode3|staticMode4]	- Set the ambient lighting mode
-- *ambientlight_brightness* [1 -> 10] - Set the ambient light brightness
-- *ambientlight_staticmodecolorX* [0 -> 42]	- Set the color for ambient static mode color X (1 -> 4)
+- *-set_curve_preset* [1 -> 3]	- Set the curve preset for compatible devices
+- *-adjust_curve_preset* [preset] [0 -> 100]	- Adjust value of curve preset for compatible devices
+- *-set_curvature* [0 -> 100]	 - Set the curvature for compatible devices.
+- *-ambientlight* [off|on]	- Enable or disable the ambient light for compatible models
+- *-ambientlight_mode* [dynamic|peaceful|videoSyncMode|soundSyncMode|staticMode1|staticMode2|staticMode3|staticMode4]	- Set the ambient lighting mode
+- *-ambientlight_brightness* [1 -> 10] - Set the ambient light brightness
+- *-ambientlight_staticmodecolorX* [0 -> 42]	- Set the color for ambient static mode color X (1 -> 4)
 
 #### Examples: 
 *Set the curvature on device 1 for compatible devices (e.g.LG OLED Flex)*
