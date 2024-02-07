@@ -1424,6 +1424,120 @@ void NamedPipeCallback(std::wstring message)
 				Log("[IPC] Insufficient arguments for -close_app.");
 			continue;
 		}
+
+		else if (command == "set_curve_preset")										// LUNA SET FLEX CURVE PRESET
+		{
+			if (nWords > 1)
+			{
+				std::string preset;
+				if (words[1] == "0" || words[1] == "flat" || words[1] == "Flat") preset = "flat";
+				else if (words[1] == "1" || words[1] == "2" || words[1] == "3")
+				{
+					preset = "curvature";
+					preset += words[1];
+				}
+				if (preset != "")
+				{
+					nlohmann::json payload;
+					payload["type"] = preset;
+					payload["reason"] = "com.pal.app.settings";
+					CreateEvent_luna_generic(_Devices(words, 2), LG_LUNA_SET_CURVE_PRESET, payload.dump());
+				}
+				else
+					Log("[IPC] Invalid arguments for -set_curve_preset."); 
+			}
+			else
+				Log("[IPC] Insufficient arguments for -set_curve_preset.");
+			continue;
+		}
+		else if (command == "adjust_curve_preset")									// LUNA ADJUST PRESET CURVATURE
+		{
+			if (nWords > 2)
+			{
+				std::string preset;
+				if (words[1] == "1" || words[1] == "2" || words[1] == "3")
+				{
+					preset = "curvature";
+					preset += words[1];
+				}
+				if (preset != "")
+				{
+					int curve = atoi(words[2].c_str());
+					if (curve > 100) curve = 100;
+					else if (curve < 0) curve = 0;
+					nlohmann::json payload;
+					std::string argument;
+					argument = std::to_string(curve);
+					argument += "%";
+					payload["type"] = preset;
+					payload["value"] = argument;
+					CreateEvent_luna_generic(_Devices(words, 3), LG_LUNA_ADJUST_CURVE_PRESET, payload.dump());
+				}
+				else
+					Log("[IPC] Invalid arguments for -adjust_curve_preset.");
+			}
+			else
+				Log("[IPC] Insufficient arguments for -adjust_curve_preset.");
+			continue;
+		}
+		else if (command == "set_curvature")										// LUNA SET CURVATURE
+		{
+			if (nWords > 1)
+			{
+
+				std::string argument;
+				if (words[1] == "flat" || words[1] == "Flat")
+					argument = "flat";
+				else
+				{
+					int curve = atoi(words[1].c_str());
+					if (curve > 100) curve = 100;
+					else if (curve < 0) curve = 0;
+					argument = std::to_string(curve);
+				}
+				std::vector<std::string> devices = _Devices(words, 2);
+				std::string cmd1, cmd2, cmd3, cmd4;
+
+				if (argument == "flat" || argument == "0")
+				{
+					cmd1 = "-set_curve_preset flat";
+					for (auto& dev : devices)
+					{
+						cmd1 += " ";
+						cmd1 += dev;
+					}
+					NamedPipeCallback(common::widen(cmd1));
+				}
+				else
+				{
+					cmd1 = "-adjust_curve_preset 2 "; cmd1 += argument;
+					cmd2 = "-adjust_curve_preset 3 "; cmd2 += argument;
+					cmd3 = "-set_curve_preset 3";
+					cmd4 = "-set_curve_preset 2";
+					for (auto& dev : devices)
+					{
+						cmd1 += " ";
+						cmd1 += dev;
+						cmd2 += " ";
+						cmd2 += dev;
+						cmd3 += " ";
+						cmd3 += dev;
+						cmd4 += " ";
+						cmd4 += dev;
+					}
+					NamedPipeCallback(common::widen(cmd1));
+					Sleep(10);
+					NamedPipeCallback(common::widen(cmd2));
+					Sleep(10);
+					NamedPipeCallback(common::widen(cmd3));
+					Sleep(10);
+					NamedPipeCallback(common::widen(cmd4));
+				}
+			}
+			else
+				Log("[IPC] Insufficient arguments for -set_curvature.");
+		}
+
 		else if (command == "set_input_type") // HDMI_1 icon label
 		{
 			if (nWords > 3)
@@ -1463,7 +1577,7 @@ void NamedPipeCallback(std::wstring message)
 					if (item.key() == command) // SETTINGS
 					{
 						found = true;
-						std::string category, setting, argument, arguments, logmessage;
+						std::string category, setting, argument, arguments, logmessage, format;
 						int max, min = -1;
 						if (item.value()["Category"].is_string())
 							category = item.value()["Category"].get<std::string>();
@@ -1477,6 +1591,8 @@ void NamedPipeCallback(std::wstring message)
 							max = item.value()["Max"].get<int>();
 						if (item.value()["Min"].is_number())
 							min = item.value()["Min"].get<int>();
+						if (item.value()["ValFormat"].is_string())
+							format = item.value()["ValFormat"].get<std::string>();
 
 						if (min != -1)
 						{
@@ -1505,16 +1621,20 @@ void NamedPipeCallback(std::wstring message)
 							size_t hdmi_type_command = setting.find("_hdmi");
 							if (hdmi_type_command != std::string::npos) 
 							{
+								std::string payload;
 								std::string command_ex = setting.substr(0, hdmi_type_command);
 								std::string hdmi_input = setting.substr(hdmi_type_command+5, 1);
-								std::string payload = "{\"#CMD#\":{\"hdmi#INPUT#\":\"#ARG#\"}}";
+								if(format == "int")
+									payload = "{\"#CMD#\":{\"hdmi#INPUT#\":#ARG#}}";
+								else
+									payload = "{\"#CMD#\":{\"hdmi#INPUT#\":\"#ARG#\"}}";
 								common::ReplaceAllInPlace(payload, "#CMD#", command_ex);
 								common::ReplaceAllInPlace(payload, "#INPUT#", hdmi_input);
 								common::ReplaceAllInPlace(payload, "#ARG#", argument);
 								CreateEvent_luna_set_system_setting_payload(devices, category, payload, logmessage);
 							}
 							else
-								CreateEvent_luna_set_system_setting_basic(devices, category, setting, argument, logmessage);
+								CreateEvent_luna_set_system_setting_basic(devices, category, setting, argument, format, logmessage);
 						}
 						else
 						{
@@ -1641,13 +1761,14 @@ void CreateEvent_request(std::vector<std::string> devices, std::string uri, std:
 	SessionManager.NewEvent(event);
 	return;
 }
-void CreateEvent_luna_set_system_setting_basic(std::vector<std::string> devices, std::string category, std::string setting, std::string value, std::string log_message)
+void CreateEvent_luna_set_system_setting_basic(std::vector<std::string> devices, std::string category, std::string setting, std::string value, std::string format, std::string log_message)
 {
 	EVENT event;
 	event.dwType = EVENT_LUNA_SYSTEMSET_BASIC;
 	event.luna_system_setting_category = category;
 	event.luna_system_setting_setting = setting;
 	event.luna_system_setting_value = value;
+	event.luna_system_setting_value_format = format;
 	event.log_message = log_message;
 	event.devices = devices;
 	SessionManager.NewEvent(event);
@@ -1681,6 +1802,17 @@ void CreateEvent_luna_set_device_info(std::vector<std::string> devices, std::str
 	event.luna_device_info_input = input;
 	event.luna_device_info_icon = icon;
 	event.luna_device_info_label = label;
+	event.log_message = log_message;
+	event.devices = devices;
+	SessionManager.NewEvent(event);
+	return;
+}
+void CreateEvent_luna_generic(std::vector<std::string> devices, std::string luna, std::string payload, std::string log_message)
+{
+	EVENT event;
+	event.dwType = EVENT_LUNA_GENERIC;
+	event.request_uri = luna;
+	event.luna_payload_json = payload;
 	event.log_message = log_message;
 	event.devices = devices;
 	SessionManager.NewEvent(event);

@@ -38,17 +38,20 @@ std::string												ValidateArgument(std::string, std::string);
 std::string												CreateEvent_system(DWORD, std::vector<std::string>);
 //														Create a URI event with optional payload for the Session Manager. Arg1: vector of the devices, Arg2: URI, Arg3: Json payload (optional). 
 std::string												CreateEvent_request(std::vector<std::string>, std::string, std::string = "");
-//														Create a basic luna event for the Session Manager. Arg1: vector of the devices, Arg2: Category, Arg3: Setting, Arg4: Value.
-std::string												CreateEvent_luna_set_system_setting_basic(std::vector<std::string>, std::string, std::string, std::string);
+//														Create a basic luna event for the Session Manager. Arg1: vector of the devices, Arg2: Category, Arg3: Setting, Arg4: Value, Arg5: Format of Value.
+std::string												CreateEvent_luna_set_system_setting_basic(std::vector<std::string>, std::string, std::string, std::string, std::string);
 //														Create a luna event with generic payload for the Session Manager. Arg1: vector of the devices, Arg2: Category, Arg3: Json payload.
 std::string												CreateEvent_luna_set_system_setting_payload(std::vector<std::string>, std::string, std::string);
 //														Create a luna set device info event for the Session Manager. Arg1: vector of the devices, Arg2: input, Arg3: icon, Arg4: label.
 std::string												CreateEvent_luna_set_device_info(std::vector<std::string>, std::string, std::string, std::string);
 //														Create a button-press event for the Session Manager. Arg1: vector of the devices, Arg2: button.
 std::string												CreateEvent_button(std::vector<std::string>, std::string);
+//														Create a generic luna event for the Session Manager. Arg1: vector of the devices, Arg2 : Luna URI, Arg3 : json payload.
+std::string												CreateEvent_luna_generic(std::vector<std::string> devices, std::string luna, std::string payload);
+
 std::string												ProcessEvent(EVENT&);
 nlohmann::json											CreateRequestJson(std::string, std::string = "");
-nlohmann::json											CreateLunaSystemSettingJson(std::string, std::string, std::string);
+nlohmann::json											CreateLunaSystemSettingJson(std::string, std::string, std::string, std::string = "");
 nlohmann::json											CreateRawLunaJson(std::string, nlohmann::json);
 nlohmann::json											PowerOnDevice(jpersson77::settings::DEVICE);
 nlohmann::json											SendRequest(jpersson77::settings::DEVICE, nlohmann::json, bool);

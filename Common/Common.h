@@ -24,7 +24,7 @@
 
 // common general application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"3.3.3"
+#define         APP_VERSION                     L"3.3.4"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"Log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
@@ -122,6 +122,7 @@
 #define EVENT_LUNA_SYSTEMSET_PAYLOAD					62	// valid members of EVENT: dwEvent, luna_system_setting_category, luna_payload_json, devices, log_message
 #define EVENT_BUTTON									63	// valid members of EVENT: dwEvent, button, devices, log_message
 #define EVENT_LUNA_DEVICEINFO							64	// valid members of EVENT: dwEvent, luna_device_info_input, luna_device_info_icon, luna_device_info_label, devices, log_message
+#define EVENT_LUNA_GENERIC								65	// valid members of EVENT: dwEvent, request_uri, luna_payload_json, devices, log_message
 
 // The EVENT struct contains information about an Event, i.e a global power event, a daemon event or a command line event.
 struct EVENT {
@@ -131,6 +132,7 @@ struct EVENT {
 	std::string											luna_system_setting_category;
 	std::string											luna_system_setting_setting;
 	std::string											luna_system_setting_value;
+	std::string											luna_system_setting_value_format;
 	std::string											luna_payload_json;
 	std::string											luna_device_info_input;
 	std::string											luna_device_info_icon;

@@ -265,6 +265,7 @@ R"(
     "Setting": "lowLevelAdjustment",
     "Max": 30,
     "Min": -30,
+    "ValFormat": "int",
     "LogMessage": "set Fine Tune Dark Areas [#ARG#]"
   },
   "blackstabilizer": {
@@ -272,6 +273,7 @@ R"(
     "Setting": "blackStabilizer",
     "Max": 30,
     "Min": -30,
+    "ValFormat": "int",
     "LogMessage": "set Black Stabilizer [#ARG#]"
   },
   "whitestabilizer": {
@@ -279,6 +281,7 @@ R"(
     "Setting": "whiteStabilizer",
     "Max": 30,
     "Min": -30,
+    "ValFormat": "int",
     "LogMessage": "set White Stabilizer [#ARG#]"
   },
   "bluelight": {
@@ -401,34 +404,6 @@ R"(
     "Argument": "off on",
     "LogMessage": "set PC-mode for HDMI-input 4 [#ARG#]"
   },
-  "adjustingluminance": {
-    "Category": "picture",
-    "Setting": "adjustingLuminance",
-    "Max": 50,
-    "Min": -50,
-    "LogMessage": "set luminance adjustment [#ARG#]"
-  },
-  "whitebalanceblue": {
-    "Category": "picture",
-    "Setting": "whiteBalanceBlue",
-    "Max": 50,
-    "Min": -50,
-    "LogMessage": "set white balance blue [#ARG#]"
-  },
-  "whitebalancegreen": {
-    "Category": "picture",
-    "Setting": "whiteBalanceGreen",
-    "Max": 50,
-    "Min": -50,
-    "LogMessage": "set white balance green [#ARG#]"
-  },
-  "whitebalancered": {
-    "Category": "picture",
-    "Setting": "whiteBalanceRed",
-    "Max": 50,
-    "Min": -50,
-    "LogMessage": "set white balance red [#ARG#]"
-  },
   "soundmode": {
     "Category": "sound",
     "Setting": "soundMode",
@@ -446,6 +421,58 @@ R"(
     "Setting": "autoVolume",
     "Argument": "off on",
     "LogMessage": "set automatic volume [#ARG#]"
+  },
+   "ambientlight": {
+    "Category": "other",
+    "Setting": "lightingEnable",
+    "Argument": "off on",
+    "LogMessage": "set ambient lighting [#ARG#]"
+  },
+   "ambientlight_mode": {
+    "Category": "other",
+    "Setting": "lightingMode",
+    "Argument": "dynamic peaceful videoSyncMode soundSyncMode staticMode1 staticMode2 staticMode3 staticMode4",
+    "LogMessage": "set ambient lighting mode [#ARG#]"
+  },  
+   "ambientlight_staticmodecolor1": {
+    "Category": "other",
+    "Setting": "staticModeColor1",
+    "Max": 42,
+    "Min": 0,
+    "ValFormat": "int",
+    "LogMessage": "set ambient lighting static mode color 1 [#ARG#]"
+  },
+   "ambientlight_staticmodecolor2": {
+    "Category": "other",
+    "Setting": "staticModeColor2",
+    "Max": 42,
+    "Min": 0,
+    "ValFormat": "int",
+    "LogMessage": "set ambient lighting static mode color 2 [#ARG#]"
+  },  
+   "ambientlight_staticmodecolor3": {
+    "Category": "other",
+    "Setting": "staticModeColor3",
+    "Max": 42,
+    "Min": 0,
+    "ValFormat": "int",
+    "LogMessage": "set ambient lighting static mode color 3 [#ARG#]"
+  },  
+   "ambientlight_staticmodecolor4": {
+    "Category": "other",
+    "Setting": "staticModeColor4",
+    "Max": 42,
+    "Min": 0,
+    "ValFormat": "int",
+    "LogMessage": "set ambient lighting static mode color 4 [#ARG#]"
+  },  
+   "ambientlight_brightness": {
+    "Category": "other",
+    "Setting": "lightingBrightness",
+    "Max": 10,
+    "Min": 1,
+    "ValFormat": "int",
+    "LogMessage": "set ambient lighting brightness [#ARG#]"
   }
 }
 )"

@@ -69,8 +69,8 @@ public:
 	//													Send a basic request to the device. Arg1: uri, Arg2: payload, Arg3: log message, Arg2: repeat until success 
 	void												SendRequest(std::string, std::string, std::string, bool = false);
 
-	//													Send a system setting luna request to the device. Arg1: Setting, Arg2: value, Arg3: category, Arg4: log message 
-	void												SendLunaSystemSettingRequest(std::string, std::string, std::string, std::string);
+	//													Send a system setting luna request to the device. Arg1: Setting, Arg2: value, Arg3: category, Arg4: Format of value, Arg5: log message 
+	void												SendLunaSystemSettingRequest(std::string, std::string, std::string, std::string, std::string);
 
 	//													Send a raw json luna request to the device. Arg1: luna uri, Arg2: payload json, Arg3: log message 
 	void												SendLunaRawRequest(std::string, std::string, std::string);
@@ -89,7 +89,7 @@ private:
 //														Arg1: URI, Arg2: Payload (optional)
 	nlohmann::json										CreateRequestJson(std::string, std::string = "");
 //														Arg1: setting, Arg2: value, Arg3: category
-	nlohmann::json										CreateLunaSystemSettingJson(std::string, std::string, std::string = "picture");
+	nlohmann::json										CreateLunaSystemSettingJson(std::string, std::string, std::string = "picture", std::string = "");
 //														Arg1: settings and values json, Arg2: category
 	nlohmann::json										CreateRawLunaJson(std::string, std::string);
 
@@ -192,14 +192,17 @@ void													CreateEvent_system(DWORD);
 void													CreateEvent_system(DWORD, std::vector<std::string>); 
 //														Create a URI event with optional payload for the Session Manager. Arg1: vector of the devices, Arg2: URI, Arg3: Json payload (optional), Arg4: Log message for the spawned thread (optional). 
 void													CreateEvent_request(std::vector<std::string>, std::string, std::string = "", std::string = "");
-//														Create a basic luna event for the Session Manager. Arg1: vector of the devices, Arg2: Category, Arg3: Setting, Arg4: Value, Arg5: Log message for the spawned thread (optional).
-void													CreateEvent_luna_set_system_setting_basic(std::vector<std::string>, std::string, std::string, std::string, std::string = "");
+//														Create a basic luna event for the Session Manager. Arg1: vector of the devices, Arg2: Category, Arg3: Setting, Arg4: Value, Arg5: Format of Value, Arg6: Log message for the spawned thread (optional).
+void													CreateEvent_luna_set_system_setting_basic(std::vector<std::string>, std::string, std::string, std::string, std::string = "", std::string = "");
 //														Create a luna event with generic payload for the Session Manager. Arg1: vector of the devices, Arg2: Category, Arg3: Json payload, Arg4: Log message for the spawned thread (optional).
 void													CreateEvent_luna_set_system_setting_payload(std::vector<std::string>, std::string, std::string, std::string = "");
 //														Create a luna set device info event for the Session Manager. Arg1: vector of the devices, Arg2: input, Arg3: icon, Arg4: label, Arg5: Log message for the spawned thread (optional).
 void													CreateEvent_luna_set_device_info(std::vector<std::string>, std::string, std::string, std::string, std::string = "");
 //														Create a button-press event for the Session Manager. Arg1: vector of the devices, Arg2: button, Arg3: Log message for the spawned thread (optional).
 void													CreateEvent_button(std::vector<std::string>, std::string, std::string = "");
+//														Create a luna generic event for the Session Manager. Arg1: vector of the devices, Arg2: Luna URI, Arg3: json payload Arg4: Log message for the spawned thread (optional).
+void													CreateEvent_luna_generic(std::vector<std::string>, std::string, std::string, std::string = "");
+
 std::vector<std::string>								_Devices(std::vector<std::string>, int);
 std::vector<std::string>								Extract_Commands(std::string);
 bool													IsScreenSaverActive(void);

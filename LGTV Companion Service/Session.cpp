@@ -162,7 +162,7 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		Session.SendRequest(Event.request_uri, Event.request_payload_json, Event.log_message);
 		break;
 	case EVENT_LUNA_SYSTEMSET_BASIC:
-		Session.SendLunaSystemSettingRequest(Event.luna_system_setting_setting, Event.luna_system_setting_value, Event.luna_system_setting_category, Event.log_message);
+		Session.SendLunaSystemSettingRequest(Event.luna_system_setting_setting, Event.luna_system_setting_value, Event.luna_system_setting_category, Event.luna_system_setting_value_format, Event.log_message);
 		break;
 	case EVENT_LUNA_SYSTEMSET_PAYLOAD:
 		try
@@ -190,7 +190,10 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		params["label"] = Event.luna_device_info_label;
 		Session.SendLunaRawRequest(LG_LUNA_SET_DEVICE_INFO, params.dump(), Event.log_message);
 		break;
-
+	case EVENT_LUNA_GENERIC:
+		params = nlohmann::json::parse(Event.luna_payload_json);
+		Session.SendLunaRawRequest(Event.request_uri, params.dump(), Event.log_message);
+		break;
 	default:break;
 	}
 
@@ -628,7 +631,7 @@ void CSession::SendRequest(std::string uri, std::string payload, std::string log
 	}
 	return;
 }
-void CSession::SendLunaSystemSettingRequest(std::string setting, std::string value, std::string category, std::string log_message)
+void CSession::SendLunaSystemSettingRequest(std::string setting, std::string value, std::string category, std::string format, std::string log_message)
 {
 	std::string logmsg = Parameters.DeviceId;
 	if (Thread_SendRequest_isRunning > 5 || Parameters.SessionKey == "")
@@ -642,7 +645,7 @@ void CSession::SendLunaSystemSettingRequest(std::string setting, std::string val
 	}
 	else
 	{
-		std::string luna_request = CreateLunaSystemSettingJson(setting, value, category).dump();
+		std::string luna_request = CreateLunaSystemSettingJson(setting, value, category, format).dump();
 
 		logmsg += ", spawning Thread_SendRequest().";
 		Log(logmsg);
@@ -731,10 +734,16 @@ json CSession::CreateRequestJson(std::string uri, std::string payload)
 	return j;
 
 }
-json CSession::CreateLunaSystemSettingJson(std::string setting, std::string value, std::string category)
+json CSession::CreateLunaSystemSettingJson(std::string setting, std::string value, std::string category, std::string format)
 {
 	nlohmann::json payload, params, settings, button, event;
-	settings[setting] = value;// json::parse(value);
+	if(format == "int")
+	{
+		int val = atoi(value.c_str());
+		settings[setting] = val;// json::parse(value);
+	}
+	else
+		settings[setting] = value;// json::parse(value);
 	params["settings"] = settings;
 	params["category"] = category;
 	button["label"] = "";

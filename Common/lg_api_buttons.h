@@ -68,6 +68,7 @@ R"(
         "UPDOWN",              
         "USP",                 
         "YANDEX",
+        "BENDABLE",
         "0",
         "1",
         "2",

@@ -341,9 +341,9 @@ std::string ProcessCommand(std::vector<std::string>& words)
 	{
 		if (nWords > 1)
 		{
-			std::string validated_button = words[1];
-			if (validated_button != "")
-				return CreateEvent_button(_Devices(words, 2), validated_button);
+			std::string non_validated_button = words[1];
+			if (non_validated_button != "")
+				return CreateEvent_button(_Devices(words, 2), non_validated_button);
 			iError = 3;
 			error = lg_api_buttons;
 		}
@@ -480,6 +480,116 @@ std::string ProcessCommand(std::vector<std::string>& words)
 			return CreateEvent_luna_set_device_info(_Devices(words, 4), words[1], words[2], words[3]);
 		iError = 1;
 	}
+	else if (command == "set_curve_preset")										// LUNA SET FLEX CURVE PRESET
+	{
+		if (nWords > 1)
+		{
+			std::string preset;
+			if (words[1] == "0" || words[1] == "flat" || words[1] == "Flat") preset = "flat";
+			else if (words[1] == "1" || words[1] == "2" || words[1] == "3")
+			{
+				preset = "curvature";
+				preset += words[1];
+			}
+			if (preset != "")
+			{
+				nlohmann::json payload;
+				payload["type"] = preset;
+				payload["reason"] = "com.pal.app.settings";
+				return CreateEvent_luna_generic(_Devices(words, 2), LG_LUNA_SET_CURVE_PRESET, payload.dump());
+			}
+			iError = 3;
+			error = "Flat 1 2 3";
+		}
+		else
+			iError = 1;
+	}
+	else if (command == "adjust_curve_preset")									// LUNA ADJUST PRESET CURVATURE
+	{
+		if (nWords > 2)
+		{
+			std::string preset;
+			if (words[1] == "1" || words[1] == "2" || words[1] == "3")
+			{
+				preset = "curvature";
+				preset += words[1];
+			}
+			if (preset != "")
+			{
+				int curve = atoi(words[2].c_str());
+				if (curve > 100) curve = 100;
+				else if (curve < 0) curve = 0;
+				nlohmann::json payload;
+				std::string argument;
+				argument = std::to_string(curve);
+				argument += "%";
+				payload["type"] = preset;
+				payload["value"] = argument;
+				return CreateEvent_luna_generic(_Devices(words, 3), LG_LUNA_ADJUST_CURVE_PRESET, payload.dump());
+			}
+			iError = 3;
+			error = "[1,2,3] [0-100]";
+		}
+		else
+			iError = 1;
+	}
+	else if (command == "set_curvature")										// LUNA SET CURVATURE
+	{
+		if (nWords > 1)
+		{
+			
+			std::string argument;
+			if (words[1] == "flat" || words[1] == "Flat")
+				argument = "flat";
+			else
+			{
+				int curve = atoi(words[1].c_str());
+				if (curve > 100) curve = 100;
+				else if (curve < 0) curve = 0;
+				argument = std::to_string(curve);
+			}
+			std::vector<std::string> devices = _Devices(words, 2);
+			std::vector<std::string> newCmdLine;
+
+			if (argument == "flat" || argument == "0")
+			{
+				newCmdLine.clear();
+				newCmdLine.push_back("-set_curve_preset");
+				newCmdLine.push_back("flat");
+				newCmdLine.insert(std::end(newCmdLine), std::begin(devices), std::end(devices));
+				return ProcessCommand(newCmdLine);
+			}
+			else
+			{
+				newCmdLine.push_back("-adjust_curve_preset");
+				newCmdLine.push_back("2");
+				newCmdLine.push_back(argument);
+				newCmdLine.insert(std::end(newCmdLine), std::begin(devices), std::end(devices));
+				ProcessCommand(newCmdLine);
+
+				newCmdLine.clear();
+				newCmdLine.push_back("-adjust_curve_preset");
+				newCmdLine.push_back("3");
+				newCmdLine.push_back(argument);
+				newCmdLine.insert(std::end(newCmdLine), std::begin(devices), std::end(devices));
+				ProcessCommand(newCmdLine);
+
+				newCmdLine.clear();
+				newCmdLine.push_back("-set_curve_preset");
+				newCmdLine.push_back("3");
+				newCmdLine.insert(std::end(newCmdLine), std::begin(devices), std::end(devices));
+				ProcessCommand(newCmdLine);
+
+				newCmdLine.clear();
+				newCmdLine.push_back("-set_curve_preset");
+				newCmdLine.push_back("2");
+				newCmdLine.insert(std::end(newCmdLine), std::begin(devices), std::end(devices));
+				return ProcessCommand(newCmdLine);
+			}
+		}
+		else
+			iError = 1;
+	}
 	else if (command == "get_system_settings")									// LUNA GET SYSTEM SETTINGS
 	{
 		nlohmann::json payload;
@@ -510,8 +620,9 @@ std::string ProcessCommand(std::vector<std::string>& words)
 				found = true;
 				if (nWords > 1)
 				{
-					std::string category, setting, argument, arguments;
-					int max, min = -1;
+					std::string category, setting, argument, arguments, format;
+					int max = -1;
+					int min = -1;
 					if (item.value()["Category"].is_string())
 						category = item.value()["Category"].get<std::string>();
 					if (item.value()["Setting"].is_string())
@@ -522,6 +633,8 @@ std::string ProcessCommand(std::vector<std::string>& words)
 						max = item.value()["Max"].get<int>();
 					if (item.value()["Min"].is_number())
 						min = item.value()["Min"].get<int>();
+					if (item.value()["ValFormat"].is_string())
+						format = item.value()["ValFormat"].get<std::string>();
 
 					if (min != -1)
 					{
@@ -543,16 +656,21 @@ std::string ProcessCommand(std::vector<std::string>& words)
 						size_t hdmi_type_command = setting.find("_hdmi");
 						if (hdmi_type_command != std::string::npos)
 						{
+							std::string payload;
 							std::string command_ex = setting.substr(0, hdmi_type_command);
 							std::string hdmi_input = setting.substr(hdmi_type_command + 5, 1);
-							std::string payload = "{\"#CMD#\":{\"hdmi#INPUT#\":\"#ARG#\"}}";
+							if (format == "int")
+								payload = "{\"#CMD#\":{\"hdmi#INPUT#\":#ARG#}}";
+							else
+								payload = "{\"#CMD#\":{\"hdmi#INPUT#\":\"#ARG#\"}}";
 							common::ReplaceAllInPlace(payload, "#CMD#", command_ex);
 							common::ReplaceAllInPlace(payload, "#INPUT#", hdmi_input);
 							common::ReplaceAllInPlace(payload, "#ARG#", argument);
 							return CreateEvent_luna_set_system_setting_payload(_Devices(words, 2), category, payload);
+							
 						}
 						else
-							return CreateEvent_luna_set_system_setting_basic(_Devices(words, 2), category, setting, argument);
+							return CreateEvent_luna_set_system_setting_basic(_Devices(words, 2), category, setting, argument, format);
 					}
 					else
 					{
@@ -640,13 +758,14 @@ std::string CreateEvent_request(std::vector<std::string> devices, std::string ur
 	event.devices = devices;
 	return ProcessEvent(event);
 }
-std::string CreateEvent_luna_set_system_setting_basic(std::vector<std::string> devices, std::string category, std::string setting, std::string value)
+std::string CreateEvent_luna_set_system_setting_basic(std::vector<std::string> devices, std::string category, std::string setting, std::string value, std::string format)
 {
 	EVENT event;
 	event.dwType = EVENT_LUNA_SYSTEMSET_BASIC;
 	event.luna_system_setting_category = category;
 	event.luna_system_setting_setting = setting;
 	event.luna_system_setting_value = value;
+	event.luna_system_setting_value_format = format;
 	event.devices = devices;
 	return ProcessEvent(event);
 }
@@ -674,6 +793,15 @@ std::string CreateEvent_luna_set_device_info(std::vector<std::string> devices, s
 	event.luna_device_info_input = input;
 	event.luna_device_info_icon = icon;
 	event.luna_device_info_label = label;
+	event.devices = devices;
+	return ProcessEvent(event);
+}
+std::string CreateEvent_luna_generic(std::vector<std::string> devices, std::string luna, std::string payload)
+{
+	EVENT event;
+	event.dwType = EVENT_LUNA_GENERIC;
+	event.request_uri = luna;
+	event.luna_payload_json = payload;
 	event.devices = devices;
 	return ProcessEvent(event);
 }
@@ -719,7 +847,7 @@ std::string	ProcessEvent(EVENT& event)
 				response[dev.DeviceId] = SendRequest(dev, CreateRequestJson(event.request_uri, event.request_payload_json), false);
 				break;
 			case EVENT_LUNA_SYSTEMSET_BASIC:
-				response[dev.DeviceId] = SendRequest(dev, CreateLunaSystemSettingJson(event.luna_system_setting_setting, event.luna_system_setting_value, event.luna_system_setting_category), true);
+				response[dev.DeviceId] = SendRequest(dev, CreateLunaSystemSettingJson(event.luna_system_setting_setting, event.luna_system_setting_value, event.luna_system_setting_category, event.luna_system_setting_value_format), true);
 				break;
 			case EVENT_LUNA_SYSTEMSET_PAYLOAD:
 				params["category"] = event.luna_system_setting_category;
@@ -737,6 +865,11 @@ std::string	ProcessEvent(EVENT& event)
 				params["label"] = event.luna_device_info_label;
 				response[dev.DeviceId] = SendRequest(dev, CreateRawLunaJson(LG_LUNA_SET_DEVICE_INFO, params), true);
 				break;
+			case EVENT_LUNA_GENERIC:
+				params = nlohmann::json::parse(event.luna_payload_json);
+				response[dev.DeviceId] = SendRequest(dev, CreateRawLunaJson(event.request_uri, params), true);
+				break;
+
 			default:break;
 			}
 		}
@@ -764,10 +897,16 @@ nlohmann::json CreateRequestJson(std::string uri, std::string payload)
 	}
 	return j;
 }
-nlohmann::json CreateLunaSystemSettingJson(std::string setting, std::string value, std::string category)
+nlohmann::json CreateLunaSystemSettingJson(std::string setting, std::string value, std::string category, std::string format)
 {
 	nlohmann::json payload, params, settings, button, event;
-	settings[setting] = value;
+	if(format == "int")
+	{
+		int val = atoi(value.c_str());
+		settings[setting] = val;
+	}
+	else
+		settings[setting] = value;
 	params["settings"] = settings;
 	params["category"] = category;
 	button["label"] = "";
