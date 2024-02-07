@@ -251,10 +251,6 @@ All other commands following the -output command will obey the formatting. Pleas
 - *-gameoptimization [off|on]* 	- set VRR and G-Sync
 - *-inputoptimization [auto|on|standard|boost]* 	- Prevent Input Delay
 - *-freesync [off|on]* 	- set AMD Freesync Premium 
-- *-adjustingluminance [-50 -> 50]* 	- set luminance adjustment 
-- *-whitebalanceblue [-50 -> 50]* 	- set white balance blue 
-- *-whitebalancegreen [-50 -> 50]* 	- set white balance green 
-- *-whitebalancered [-50 -> 50]* 	- set white balance red 
 
 #### Examples: 
 *Set the picture mode to "Normal" for device1 and device2*
@@ -265,7 +261,7 @@ All other commands following the -output command will obey the formatting. Pleas
 ```
 "LGTV Companion.exe" -contrast 80 device1
 ```
-## Network and misc other settings (LGTV Companion and LGTVcli)
+## Network settings (LGTV Companion and LGTVcli)
 - *-wol* [true|false] 	- enable or disable the Wake-On-Lan setting, a k a "On with Mobile" or "Turn on via Wi-Fi"
 - *-freesyncinfo* 	- show the freesync information panel (the 7 x tap on green button), i e current FPS in freesync/gsync mode
 #### Examples: 
@@ -277,7 +273,24 @@ All other commands following the -output command will obey the formatting. Pleas
 ```
 "LGTV Companion.exe" -freesyncinfo device1
 ```
+## Other settings (LGTV Companion and LGTVcli)
+- *set_curve_preset* [1 -> 3]	- Set the curve preset for compatible devices
+- *adjust_curve_preset* [preset] [0 -> 100]	- Adjust value of curve preset for compatible devices
+- *set_curvature* [0 -> 100]	 - Set the curvature for compatible devices.
+- *ambientlight* [off|on]	- Enable or disable the ambient light for compatible models
+- *ambientlight_mode* [value*]	- Set the ambient lighting mode
+- *ambientlight_brightness* [1 -> 10] - Set the ambient light brightness
+- *ambientlight_staticmodecolorX* [0 -> 42]	- Set the color for ambient static mode color X (1 -> 4)
 
+#### Examples: 
+*Set the curvature on device 1 for compatible devices (e.g.LG OLED Flex)*
+```
+"LGTV Companion.exe" -set_curvature 50 device1
+```
+*Enable the ambient lighting on all compatible devices (e.g. LG OLED Flex)*
+```
+"LGTV Companion.exe" -ambientlighting on
+```
 # Commands for sending generic requests to the device, for advanced users only (LGTV Companion and LGTVcli)
 In addition to the above commands it is also possible to send various arbitrary requests to WebOS devices. 
 - *-request [endpoint]* 	- Send a json request to an endpoint (with no params)
@@ -470,137 +483,139 @@ The following endpoints are used to query information from WebOS devices, using 
 
 - *-settings_other [payload]* 	- Send a generic JSON payload containing settings for the "other" system settings category (see examples of applicable settings below)  
 
-		{"activeArtisticDisplayScreenSaver":false}
-		{"amazonHotkeyIsActive":true}
-		{"appReturn":""}
-		{"battery25PercentMode":"off"}
-		{"batteryInstopProtect":"on"}
-		{"blackStabilizer":13}
-		{"blueLight":"off"}
-		{"care365":{"accountName":"","accountNumber":"","userAgreementLocation":"","userAgreementVersion":"","value":"off"}
-		{"colorimetry":"auto"}
-		{"colorimetryHDMI1":"auto"}
-		{"colorimetryHDMI2":"auto"}
-		{"colorimetryHDMI3":"auto"}
-		{"colorimetryHDMI4":"auto"}
-		{"cursorAutoRemover":"on"}
-		{"darkMode":"off"}
-		{"dolbyVSVDBVer":"v2"}
-		{"dolbyVSVDBVerHDMI1":"v2"}
-		{"dolbyVSVDBVerHDMI2":"v2"}
-		{"dolbyVSVDBVerHDMI3":"v2"}
-		{"dolbyVSVDBVerHDMI4":"v2"}
-		{"enableQuickGame":"on"}
-		{"eotf":"auto"}
-		{"eotfHDMI1":"auto"}
-		{"eotfHDMI2":"auto"}
-		{"eotfHDMI3":"auto"}
-		{"eotfHDMI4":"auto"}
-		{"epgRowCount":"1"}
-		{"fitLogUsbDump":"off"}
-		{"flickerPatternCtrl":false}
-		{"freesync":"off"}
-		{"freesyncLCDHDMI1":"off"}
-		{"freesyncLCDHDMI2":"off"}
-		{"freesyncLCDHDMI3":"off"}
-		{"freesyncLCDHDMI4":"off"}
-		{"freesyncOLEDHDMI1":"off"}
-		{"freesyncOLEDHDMI2":"off"}
-		{"freesyncOLEDHDMI3":"off"}
-		{"freesyncOLEDHDMI4":"off"}
-		{"freesyncSupport":"off"}
-		{"freeviewTnCPopup":"off"}
-		{"gameAdjustContrast":95}
-		{"gameBlackLevel":50}
-		{"gameColorDepth":55}
-		{"gameDashboardStatusList":["fps","vrr_aiGameSound_whiteStabilizer","blackStabilizer","lowLatency"]}
-		{"gameGenre":"Standard"}
-		{"gameMode":{"hdmi1":"off","hdmi2":"off","hdmi3":"off","hdmi4":"off"}}
-		{"gameOptimization":"on"}
-		{"gameOptimizationHDMI1":"on"}
-		{"gameOptimizationHDMI2":"on"}
-		{"gameOptimizationHDMI3":"on"}
-		{"gameOptimizationHDMI4":"on"}
-		{"gameScreenPosition":"middle"}
-		{"gameScreenRatio":"16:9"}
-		{"gameScreenSize":"full"}
-		{"gameSettingModified":{"FPS":false,"RPG":false,"RTS":false,"Sports":false,"Standard":false,"USER":false}}
-		{"gameSharpness":10}
-		{"gameUIColor":"violet"}
-		{"gameWallpaper":{"folderUpdateVersion":0,"imgSrc":""}}
-		{"hdmiPcMode":{"hdmi1":false,"hdmi2":false,"hdmi3":false,"hdmi4":false}}
-		{"homeAppLaunched":"off"}
-		{"homeEffectVersion":[{"id":"Christmas","version":1.0},{"id":"Halloween","version":1.0}]}
-		{"illuminanceThreshold":0}
-		{"inputOptimization":"auto"}
-		{"isFirstCapture":"true"}
-		{"isfUpdated":"false"}
-		{"lgLogoDisplay":"on"}
-		{"lightingBrightness":8}
-		{"lightingEnable":"off"}
-		{"lightingMode":"dynamic"}
-		{"lowLevelAdjustment":0}
-		{"lowPowerMode":"off"}
-		{"masterLuminanceLevel":"540nit"}
-		{"masteringColor":"auto"}
-		{"masteringColorHDMI1":"auto"}
-		{"masteringColorHDMI2":"auto"}
-		{"masteringColorHDMI3":"auto"}
-		{"masteringColorHDMI4":"auto"}
-		{"masteringPeak":"auto"}
-		{"masteringPeakHDMI1":"auto"}
-		{"masteringPeakHDMI2":"auto"}
-		{"masteringPeakHDMI3":"auto"}
-		{"masteringPeakHDMI4":"auto"}
-		{"maxCLL":"auto"}
-		{"maxCLLHDMI1":"auto"}
-		{"maxCLLHDMI2":"auto"}
-		{"maxCLLHDMI3":"auto"}
-		{"maxCLLHDMI4":"auto"}
-		{"maxFALL":"auto"}
-		{"maxFALLHDMI1":"auto"}
-		{"maxFALLHDMI2":"auto"}
-		{"maxFALLHDMI3":"auto"}
-		{"maxFALLHDMI4":"auto"}
-		{"netflixHotkeyIsActive":true}
-		{"newKey":"on"}
-		{"oledCareMode":"off"}
-		{"oledCareRecommendation":"off"}
-		{"playbackThreshold":200}
-		{"pseudoTouchMode":"on"}
-		{"quickSettingsMenuList":	{["QuickSettings_picture_button","QuickSettings_soundMode_button","QuickSettings_soundOut_button","QuickSettings_game_button","QuickSettings_multiview_button","QuickSettings_ocp_button","QuickSettings_network_button","QuickSettings_menu_button"]}}
-		{"screenRemoteAutoShow":"true"}
-		{"screenRemoteExpanded":"false"}
-		{"screenRemotePosition":"right"}
-		{"simplinkAutoPowerOn":"on"}
-		{"simplinkEnable":"off"}
-		{"soundSyncModeColor":"auto"}
-		{"soundSyncModeDisplayMode":"bar"}
-		{"soundSyncModeFrequency":"mid"}
-		{"soundSyncModeStaticColor":35}
-		{"staticModeColor1":35}
-		{"staticModeColor2":1}
-		{"staticModeColor3":12}
-		{"staticModeColor4":0}
-		{"supportAirplay":false}
-		{"supportBnoModel":false}
-		{"touchRemoteLaunchMode":"edgeSwipe"}
-		{"ueiEnable":"off"}
-		{"uhdDeepColor":"off"}
-		{"uhdDeepColor8kHDMI1":"off"}
-		{"uhdDeepColor8kHDMI2":"off"}
-		{"uhdDeepColor8kHDMI3":"off"}
-		{"uhdDeepColor8kHDMI4":"off"}
-		{"uhdDeepColorAutoStatusHDMI1":"none"}
-		{"uhdDeepColorAutoStatusHDMI2":"none"}
-		{"uhdDeepColorAutoStatusHDMI3":"none"}
-		{"uhdDeepColorAutoStatusHDMI4":"none"}
-		{"uhdDeepColorHDMI1":"off"}
-		{"uhdDeepColorHDMI2":"off"}
-		{"uhdDeepColorHDMI3":"off"}
-		{"uhdDeepColorHDMI4":"off"}
-		{"weatherAllowed":false}
-		{"whiteStabilizer":13}
+	"activeArtisticDisplayScreenSaver": false,
+    "amazonHotkeyIsActive": true,
+    "appReturn": "",
+    "battery25PercentMode": "off",
+    "batteryInstopProtect": "on",
+    "blackStabilizer": 13,
+    "blueLight": "off",
+    "care365": {"accountName":"","accountNumber":"","userAgreementLocation":"","userAgreementVersion":"","value":"off"},
+    "colorimetry": "auto",
+    "colorimetryHDMI1": "auto",
+    "colorimetryHDMI2": "auto",
+    "colorimetryHDMI3": "auto",
+    "colorimetryHDMI4": "auto",
+    "contentRecommendation": "on",
+    "cursorAutoRemover": "on",
+    "darkMode": "off",
+    "dolbyVSVDBVer": "v2",
+    "dolbyVSVDBVerHDMI1": "v2",
+    "dolbyVSVDBVerHDMI2": "v2",
+    "dolbyVSVDBVerHDMI3": "v2",
+    "dolbyVSVDBVerHDMI4": "v2",
+    "enableQuickGame": "on",
+    "eotf": "auto",
+    "eotfHDMI1": "auto",
+    "eotfHDMI2": "auto",
+    "eotfHDMI3": "auto",
+    "eotfHDMI4": "auto",
+    "epgRowCount": "1",
+    "fitLogUsbDump": "off",
+    "flickerPatternCtrl": false,
+    "freesync": "off",
+    "freesyncLCDHDMI1": "off",
+    "freesyncLCDHDMI2": "off",
+    "freesyncLCDHDMI3": "off",
+    "freesyncLCDHDMI4": "off",
+    "freesyncOLEDHDMI1": "off",
+    "freesyncOLEDHDMI2": "off",
+    "freesyncOLEDHDMI3": "off",
+    "freesyncOLEDHDMI4": "off",
+    "freesyncSupport": "off",
+    "freeviewTnCPopup": "off",
+    "gameAdjustContrast": 95,
+    "gameBlackLevel": 50,
+    "gameColorDepth": 55,
+    "gameDashboardStatusList": ["fps","vrr_aiGameSound_whiteStabilizer","blackStabilizer","lowLatency"],
+    "gameGenre": "Standard",
+    "gameMode": {"hdmi1":"off","hdmi2":"off","hdmi3":"off","hdmi4":"off"},
+    "gameOptimization": "on",
+    "gameOptimizationHDMI1": "on",
+    "gameOptimizationHDMI2": "on",
+    "gameOptimizationHDMI3": "on",
+    "gameOptimizationHDMI4": "on",
+    "gameScreenPosition": "middle",
+    "gameScreenRatio": "16:9",
+    "gameScreenSize": "full",
+    "gameSettingModified": {"FPS":false,"RPG":false,"RTS":false,"Sports":false,"Standard":false,"USER":false},
+    "gameSharpness": 10,
+    "gameUIColor": "violet",
+    "gameWallpaper": {"folderUpdateVersion":0,"imgSrc":""},
+    "hdmiPcMode": {"hdmi1":false,"hdmi2":false,"hdmi3":false,"hdmi4":false},
+    "homeAppLaunched": "off",
+    "homeEffectVersion": [{"id":"Christmas","version":1.0},{"id":"Halloween","version":1.0}],
+    "homelegalPopup": "on",
+    "illuminanceThreshold": 0,
+    "inputOptimization": "auto",
+    "isFirstCapture": "true",
+    "isfUpdated": "false",
+    "lgLogoDisplay": "on",
+    "lightingBrightness": 8,
+    "lightingEnable": "off",
+    "lightingMode": "dynamic",
+    "lowLevelAdjustment": 0,
+    "lowPowerMode": "off",
+    "masterLuminanceLevel": "540nit",
+    "masteringColor": "auto",
+    "masteringColorHDMI1": "auto",
+    "masteringColorHDMI2": "auto",
+    "masteringColorHDMI3": "auto",
+    "masteringColorHDMI4": "auto",
+    "masteringPeak": "auto",
+    "masteringPeakHDMI1": "auto",
+    "masteringPeakHDMI2": "auto",
+    "masteringPeakHDMI3": "auto",
+    "masteringPeakHDMI4": "auto",
+    "maxCLL": "auto",
+    "maxCLLHDMI1": "auto",
+    "maxCLLHDMI2": "auto",
+    "maxCLLHDMI3": "auto",
+    "maxCLLHDMI4": "auto",
+    "maxFALL": "auto",
+    "maxFALLHDMI1": "auto",
+    "maxFALLHDMI2": "auto",
+    "maxFALLHDMI3": "auto",
+    "maxFALLHDMI4": "auto",
+    "netflixHotkeyIsActive": true,
+    "newKey": "on",
+    "oledCareMode": "off",
+    "oledCareRecommendation": "off",
+    "playbackThreshold": 200,
+    "pseudoTouchMode": "on",
+    "quickSettingsMenuList": ["QuickSettings_picture_button","QuickSettings_soundMode_button","QuickSettings_soundOut_button","QuickSettings_game_button","QuickSettings_multiview_button","QuickSettings_ocp_button","QuickSettings_network_button","QuickSettings_menu_button"],
+    "screenRemoteAutoShow": "true",
+    "screenRemoteExpanded": "false",
+    "screenRemotePosition": "right",
+    "simplinkAutoPowerOn": "on",
+    "simplinkEnable": "off",
+    "soundSyncModeColor": "auto",
+    "soundSyncModeDisplayMode": "bar",
+    "soundSyncModeFrequency": "mid",
+    "soundSyncModeStaticColor": 35,
+    "staticModeColor1": 35,
+    "staticModeColor2": 1,
+    "staticModeColor3": 12,
+    "staticModeColor4": 0,
+    "supportAirplay": false,
+    "supportBnoModel": false,
+    "touchRemoteLaunchMode": "edgeSwipe",
+    "ueiEnable": "off",
+    "uhdDeepColor": "off",
+    "uhdDeepColor8kHDMI1": "off",
+    "uhdDeepColor8kHDMI2": "off",
+    "uhdDeepColor8kHDMI3": "off",
+    "uhdDeepColor8kHDMI4": "off",
+    "uhdDeepColorAutoStatusHDMI1": "none",
+    "uhdDeepColorAutoStatusHDMI2": "none",
+    "uhdDeepColorAutoStatusHDMI3": "none",
+    "uhdDeepColorAutoStatusHDMI4": "none",
+    "uhdDeepColorHDMI1": "off",
+    "uhdDeepColorHDMI2": "off",
+    "uhdDeepColorHDMI3": "off",
+    "uhdDeepColorHDMI4": "off",
+    "weatherAllowed": false,
+    "whiteStabilizer": 13
 
 #### Examples: 
 *Set black stabilizer to 13 for device1*
