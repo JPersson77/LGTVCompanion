@@ -98,13 +98,21 @@ Commands are case-insensitive, but JSON typically is case-sensitive.
 -gameOptimization [off|on]                      set VRR and G-Sync
 -inputOptimization [auto|on|standard|boost]     set Prevent Input Delay
 -freesync [off|on]                              set AMD Freesync Premium
--adjustingLuminance [-50 -> 50]                 set luminance adjustment
--whitebalanceBlue [-50 -> 50]                   set white balance blue
--whitebalanceGreen [-50 -> 50]                  set white balance green
--whitebalanceRed [-50 -> 50]                    set white balance red
 
 ## Network settings ##
 -wol [true|false]                               set Wake-On-Lan, a k a "On with Mobile" or "Turn on via Wi-Fi"
+
+## Other settings
+-set_curve_preset [preset]						Set the curve preset for compatible devices
+-adjust_curve_preset [preset] [0 -> 100]		Adjust value of curve preset for compatible devices
+-set_curvature									Set the curvature for compatible devices.
+-ambientlight [off|on]							Enable or disable the ambient light for compatible models
+-ambientlight_mode [value*]						Set the ambient lighting mode
+-ambientlight_brightness [1 -> 10]				Set the ambient light brightness
+-ambientlight_staticmodecolor1 [0 -> 42]		Set the color for ambient static mode color 1
+-ambientlight_staticmodecolor2 [0 -> 42]		Set the color for ambient static mode color 2
+-ambientlight_staticmodecolor3 [0 -> 42]		Set the color for ambient static mode color 3
+-ambientlight_staticmodecolor4 [0 -> 42]		Set the color for ambient static mode color 4
 
 ## Sending generic reguests ##
 -request [endpoint]                             send a request to an endpoint
