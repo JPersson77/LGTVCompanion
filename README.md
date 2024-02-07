@@ -6,10 +6,10 @@
 ## Overview
 This application (UI and service) controls LG WebOS TVs and displays.
 
-This application aim to be a set and forget application to:
-- provide automatic management for your WebOS device (TV), to shut off and turn on in reponse to the PC shutting down, rebooting, entering low power modes and when user is idle as well as in response to changes in the windows monitor topology, in a multi-monitor environment.
-- provide you with a powerful command line tool which can be used to control your WebOS device and change most of its settings.
-- provide you with an API, which external scripts and/or applications can use to facilitate automation.
+This application aim to be a set and forget application to provide:
+- automatic management for your WebOS device (TV), to shut off and turn on in reponse to the PC shutting down, rebooting, entering low power modes and when user is idle as well as in response to changes in the windows monitor topology, in a multi-monitor environment.
+- a powerful command line tool to control your WebOS device and change most of its settings.
+- an API, which external scripts and/or applications can use to facilitate automation.
 
 ## Background
 With the rise in popularity of using OLED TVs as PC monitors, it is apparent that standard functionality of PC-monitors is missing. Particularly turning the device on or off in response to power events in windows. With OLED monitors this is particularly important to prevent "burn-in", or more accurately pixel-wear.
@@ -23,7 +23,7 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 ## Installation and usage
 1. Important prerequisites:
    - Power ON all TVs and ensure they are connected to your local area network via Wi-Fi or cable.
-   - Ensure that the TV can be woken via the network. For the CX line of displays this is accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->Mobile Connection Management->TV On with Mobile, and then enable 'Turn On via Wi-Fi'. For C1 and C2 it's All Settings->General->Devices->External Devices->TV On With Mobile->Turn on via Wi-Fi. NOTE! This step is needed regardless of using WiFi or a cable.
+   - Ensure that the TV can be woken via the network. For the CX line of displays this is accomplished by navigating to Settings (cog button on remote)->All Settings->Connection->Mobile Connection Management->TV On with Mobile, and then enable 'Turn On via Wi-Fi'. For C1, C2 and C3 it's All Settings->General->Devices->External Devices->TV On With Mobile->Turn on via Wi-Fi. NOTE! This step is needed regardless of using WiFi or a cable.
    - Open the administrative interface of your router, and set a static DHCP lease for your WebOS devices, i.e. to ensure that your devices always have the same IP-addresses on your LAN.
 
 HOT TIP! While in the settings of the TV, ensure that the device automatic power off is set long enough to not interfere with your sessions with the PC, f e 8 hours. Note that for the C2 displays this setting can be found here: All settings->General->OLED Care->Device Self-Care->Energy Saving->Auto Power off. The LGTV Companion app will manage the power state of the display and the less interference the better.
@@ -93,7 +93,7 @@ HOT tip! Enable the built in logger and check the output, it can be very useful 
  'LGTV companion.exe" can accept hundreds of command line arguments for controlling the application and managed devices. Please see the documentation for all command line arguments here: [Command line documentation](https://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Commandline.md)
 
 ## License
-Copyright © 2021-2023 Jörgen Persson
+Copyright © 2021-2024 Jörgen Persson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -125,4 +125,4 @@ This is free software, but your support is appreciated and there is a donation p
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.me/jpersson77)
 
 ## Copyright
-Copyright © 2021-2023 Jörgen Persson
+Copyright © 2021-2024 Jörgen Persson

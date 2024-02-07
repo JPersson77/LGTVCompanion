@@ -105,7 +105,7 @@ Commands are case-insensitive, but JSON typically is case-sensitive.
 ## Other settings
 -set_curve_preset [preset]						Set the curve preset for compatible devices
 -adjust_curve_preset [preset] [0 -> 100]		Adjust value of curve preset for compatible devices
--set_curvature									Set the curvature for compatible devices.
+-set_curvature [0 -> 100]						Set the curvature for compatible devices.
 -ambientlight [off|on]							Enable or disable the ambient light for compatible models
 -ambientlight_mode [value*]						Set the ambient lighting mode
 -ambientlight_brightness [1 -> 10]				Set the ambient light brightness
