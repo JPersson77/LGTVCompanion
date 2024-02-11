@@ -930,9 +930,9 @@ void NamedPipeCallback(std::wstring message)
 			}
 			else if (daemon_command == "remote_connect")
 			{
-				log += "Remote streaming client connected. All managed devices will power off.";
+				log += Settings.Prefs.RemoteStreamingPowerOff ? "Remote streaming client connected. All managed devices will power off." : "Remote streaming client connected. All managed devices will be blanked.";
 				Log(log);
-				CreateEvent_system(EVENT_SYSTEM_DISPLAYOFF);
+				CreateEvent_system(Settings.Prefs.RemoteStreamingPowerOff ? EVENT_SYSTEM_DISPLAYOFF: EVENT_SYSTEM_BLANKSCREEN);
 				SessionManager.RemoteClientIsConnected(true);
 				continue;
 			}

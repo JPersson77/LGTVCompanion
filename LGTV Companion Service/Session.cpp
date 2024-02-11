@@ -249,10 +249,13 @@ void CSessionManager::ProcessEvent(EVENT& Event, CSession& Session)
 		break;
 	case EVENT_SYSTEM_DISPLAYOFF:
 		
-		if (bRemoteClientIsConnected)
+		if (bRemoteClientIsConnected && Prefs.RemoteStreamingPowerOff)
 			break;
 		if(GetWindowsPowerStatus() == true)
 			Session.PowerOffDisplay();
+		break;
+	case EVENT_SYSTEM_BLANKSCREEN:
+		Session.PowerOffDisplay(true, true);
 		break;
 	case EVENT_SYSTEM_USERIDLE:
 		if (bRemoteClientIsConnected)

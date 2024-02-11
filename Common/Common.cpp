@@ -197,18 +197,24 @@ bool settings::Preferences::Initialize() {
 				// The restart strings
 				Prefs.EventLogRestartString.clear();
 				j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS];
+				Prefs.EventLogRestartString.push_back("restart");
 				if (!j.empty() && j.size() > 0)
 				{
 					for (auto& str : j.items())
 					{
 						std::string temp = str.value().get<std::string>();
-						if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
-							Prefs.EventLogRestartString.push_back(temp);
+						if(temp != "power off" && temp != "shutdown")
+						{
+							if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
+								Prefs.EventLogRestartString.push_back(temp);
+						}
 					}
 				}
 				// The shutdown strings
 				Prefs.EventLogShutdownString.clear();
 				j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS];
+				Prefs.EventLogShutdownString.push_back("power off");
+				Prefs.EventLogShutdownString.push_back("shutdown");
 				if (!j.empty() && j.size() > 0)
 				{
 					for (auto& str : j.items())
@@ -273,9 +279,9 @@ bool settings::Preferences::Initialize() {
 				if (!j.empty() && j.is_boolean())
 					Prefs.RemoteStreamingCheck = j.get<bool>();
 				// Multi-monitor topology mode
-				j = jsonPrefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE];
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_MODE];
 				if (!j.empty() && j.is_boolean())
-					Prefs.TopologyPreferPowerEfficiency = j.get<bool>();
+					Prefs.RemoteStreamingPowerOff = j.get<bool>();
 				// External API
 				j = jsonPrefs[JSON_PREFS_NODE][JSON_EXTERNAL_API];
 				if (!j.empty() && j.is_boolean())
@@ -441,7 +447,7 @@ void settings::Preferences::WriteToDisk(void)
 	prefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN] = (bool)Prefs.bFullscreenCheckEnabled;
 	prefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE] = (bool)Prefs.bIdleFsExclusionsEnabled;
 	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM] = (bool)Prefs.RemoteStreamingCheck;
-	prefs[JSON_PREFS_NODE][JSON_TOPOLOGYMODE] = (bool)Prefs.TopologyPreferPowerEfficiency;
+	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_MODE] = (bool)Prefs.RemoteStreamingPowerOff;
 	prefs[JSON_PREFS_NODE][JSON_EXTERNAL_API] = (bool)Prefs.ExternalAPI;
 	prefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS] = (bool)Prefs.MuteSpeakers;
 	prefs[JSON_PREFS_NODE][JSON_TIMING_PRESHUTDOWN] = (bool)Prefs.TimingPreshutdown;

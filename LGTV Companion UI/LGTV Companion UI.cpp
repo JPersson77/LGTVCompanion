@@ -1376,13 +1376,15 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		for (auto& item : Settings.Prefs.EventLogRestartString)
 		{
-			if (std::find(str.begin(), str.end(), common::widen(item)) == str.end())
-				str.push_back(common::widen(item));
+			if(item != "restart" && item != "power off" && item != "shutdown")
+				if (std::find(str.begin(), str.end(), common::widen(item)) == str.end())
+					str.push_back(common::widen(item));
 		}
 		for (auto& item : Settings.Prefs.EventLogShutdownString)
 		{
-			if (std::find(str.begin(), str.end(), common::widen(item)) == str.end())
-				str.push_back(common::widen(item));
+			if (item != "restart" && item != "power off" && item != "shutdown")
+				if (std::find(str.begin(), str.end(), common::widen(item)) == str.end())
+					str.push_back(common::widen(item));
 		}
 
 		hResults = EvtQuery(NULL, path.c_str(), query.c_str(), EvtQueryChannelPath | EvtQueryReverseDirection);
@@ -1426,10 +1428,11 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 							if (e != std::wstring::npos)
 							{
 								std::wstring sub = s.substr(f + strfind.length(), e - (f + strfind.length()));
-								if (std::find(str.begin(), str.end(), sub) == str.end())
-								{
-									str.push_back(sub);
-								}
+								if (sub != L"restart" && sub != L"power off" && sub != L"shutdown")
+									if (std::find(str.begin(), str.end(), sub) == str.end())
+									{
+										str.push_back(sub);
+									}
 							}
 						}
 					}
@@ -1443,7 +1446,10 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		lvC.iSubItem = 0; lvC.cx = 140;	lvC.fmt = LVCFMT_LEFT;
 		lvC.pszText = (LPWSTR)L"Eventlog 1074";
 		ListView_InsertColumn(GetDlgItem(hWnd, IDC_LIST), 0, &lvC);
-		ListView_SetExtendedListViewStyle(GetDlgItem(hWnd, IDC_LIST), LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES | LVS_EX_DOUBLEBUFFER);
+		if(str.size() > 0)
+			ListView_SetExtendedListViewStyle(GetDlgItem(hWnd, IDC_LIST), LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES | LVS_EX_DOUBLEBUFFER);
+		else
+			ListView_SetExtendedListViewStyle(GetDlgItem(hWnd, IDC_LIST), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 		memset(&lvi, 0, sizeof(LVITEM));
 		lvi.mask = LVIF_TEXT | LVIF_PARAM | LVIF_STATE;
 		lvi.state = 0;
@@ -1453,16 +1459,27 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		lvi.lParam = (LPARAM)0;
 		int i = 0;
 
-		for (auto& item : str)
+		if(str.size() > 0)
 		{
-			lvi.iItem = i;
-			int row = ListView_InsertItem(GetDlgItem(hWnd, IDC_LIST), &lvi);
-			ListView_SetItemText(GetDlgItem(hWnd, IDC_LIST), row, 0, (LPWSTR)item.c_str());
-			if (std::find(Settings.Prefs.EventLogRestartString.begin(), Settings.Prefs.EventLogRestartString.end(), common::narrow(item)) != Settings.Prefs.EventLogRestartString.end())
+			for (auto& item : str)
 			{
-				ListView_SetCheckState(GetDlgItem(hWnd, IDC_LIST), row, true);
+				lvi.iItem = i;
+				int row = ListView_InsertItem(GetDlgItem(hWnd, IDC_LIST), &lvi);
+				ListView_SetItemText(GetDlgItem(hWnd, IDC_LIST), row, 0, (LPWSTR)item.c_str());
+				if (std::find(Settings.Prefs.EventLogRestartString.begin(), Settings.Prefs.EventLogRestartString.end(), common::narrow(item)) != Settings.Prefs.EventLogRestartString.end())
+				{
+					ListView_SetCheckState(GetDlgItem(hWnd, IDC_LIST), row, true);
+				}
+				i++;
 			}
-			i++;
+		}
+		else
+		{
+			lvi.iItem = 0;
+			std::wstring s = L"N/A";
+			int row = ListView_InsertItem(GetDlgItem(hWnd, IDC_LIST), &lvi);
+			ListView_SetItemText(GetDlgItem(hWnd, IDC_LIST), row, 0, (LPWSTR)s.c_str());
+			EnableWindow(GetDlgItem(hWnd, IDC_LIST), false);
 		}
 		CheckDlgButton(hWnd, IDC_LOGGING, Settings.Prefs.Logging ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_AUTOUPDATE, Settings.Prefs.AutoUpdate ? BST_CHECKED : BST_UNCHECKED);
@@ -1474,14 +1491,13 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		std::wstring ls;
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-		ls = L"Power efficiency (display off)";
+		ls = L"Display off";
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ls.c_str());
-		ls = L"Compatibility (display blanked)";
+		ls = L"Display blanked";
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ls.c_str());
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_SETCURSEL, (WPARAM)Settings.Prefs.TopologyPreferPowerEfficiency ? 0 : 1, (LPARAM)0);
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_SETCURSEL, (WPARAM)Settings.Prefs.RemoteStreamingPowerOff ? 0 : 1, (LPARAM)0);
 
-		//		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), Settings.Prefs.AdhereTopology ? true :  false);
-		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), false); //REMOVE
+		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), Settings.Prefs.RemoteStreamingCheck ? true :  false);
 		EnableWindow(GetDlgItem(hWnd, IDC_CHECK_TOPOLOGY_LOGON), Settings.Prefs.AdhereTopology ? true : false);
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
 	}break;
@@ -1568,6 +1584,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			case IDC_CHECK_TOPOLOGY_LOGON:
 
 			{
+				EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), IsDlgButtonChecked(hWnd, IDC_CHECK_REMOTE));
 				EnableWindow(GetDlgItem(hWnd, IDOK), true);
 			}break;
 
@@ -1594,9 +1611,9 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 					int sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_MODE), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 					if (sel == 1)
-						Settings.Prefs.TopologyPreferPowerEfficiency = false;
+						Settings.Prefs.RemoteStreamingPowerOff = false;
 					else
-						Settings.Prefs.TopologyPreferPowerEfficiency = true;
+						Settings.Prefs.RemoteStreamingPowerOff = true;
 
 					sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 					if (sel == 1)
@@ -1607,19 +1624,25 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					int count = ListView_GetItemCount(GetDlgItem(hWnd, IDC_LIST));
 					Settings.Prefs.EventLogRestartString.clear();
 					Settings.Prefs.EventLogShutdownString.clear();
+					Settings.Prefs.EventLogRestartString.push_back("restart");
+					Settings.Prefs.EventLogShutdownString.push_back("shutdown");
+					Settings.Prefs.EventLogShutdownString.push_back("power off");
 					for (int i = 0; i < count; i++)
 					{
 						std::vector<wchar_t> bufText(256);
 						std::wstring st;
 						ListView_GetItemText(GetDlgItem(hWnd, IDC_LIST), i, 0, &bufText[0], (int)bufText.size());
 						st = &bufText[0];
-						if (ListView_GetCheckState(GetDlgItem(hWnd, IDC_LIST), i))
+						if(st != L"N/A")
 						{
-							Settings.Prefs.EventLogRestartString.push_back(common::narrow(st));
-						}
-						else
-						{
-							Settings.Prefs.EventLogShutdownString.push_back(common::narrow(st));
+							if (ListView_GetCheckState(GetDlgItem(hWnd, IDC_LIST), i))
+							{
+								Settings.Prefs.EventLogRestartString.push_back(common::narrow(st));
+							}
+							else
+							{
+								Settings.Prefs.EventLogShutdownString.push_back(common::narrow(st));
+							}
 						}
 					}
 					EndDialog(hWnd, 0);
@@ -1685,7 +1708,7 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			else if (wParam == IDC_SYSLINK3)
 			{
 				MessageBox(hWnd, L"This application rely on events in the windows event log to determine whether a reboot or shutdown was initiated by the user."
-					"\n\nThese events are localised in the language of your operating system, and the user must therefore assist with manually indicating which "
+					"\n\nIn case your OS is localised in a non-english language these events are localised in the language of your operating system, and the user must therefore assist with manually indicating which "
 					"word or phrase that refers to the system restarting.\n\nPlease put a checkmark for every word or phrase that refers to 'restart'in the list and "
 					"make sure that all other checkboxes are cleared.\n\n"
 					"The timing option determine the timing of managing shutdown/restart. When set to \"Default\" the app will trigger the shutdown/restart routine "
@@ -1713,8 +1736,8 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"utilize more obscured variables for determining user idle / busy states, and which can also be programmatically overridden f.e. by games, "
 					"media players, production software or your web browser, In short, and simplified, this option is a more aggressively configured screen and "
 					"power saver. \n\n"
-					"The option to support remote streaming hosts will power off managed devices while the system is acting as streaming host or being remoted into. Supported "
-					"hosts include Nvidia gamestream, Moonlight, Steam Link and RDP. \n\nPlease note that the devices will remain powered off until the remote connection is disconnected. \n\n"
+					"The option to support remote streaming hosts will power off or blank the screen of managed devices while the system is acting as streaming host or being remoted into. Supported "
+					"hosts include Nvidia gamestream, Moonlight, Steam Link and RDP. \n\nPlease note that the devices will remain powered off / blanked until the remote connection is disconnected. \n\n"
 					"NOTE! Support for detecting Sunshine streaming host require Sunshine to be installed (i.e. not portable install) and Sunshine logging level be at minimum on level \"Info\" (default)",
 					L"Andvanced power options", MB_OK | MB_ICONINFORMATION);
 			}

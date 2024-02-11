@@ -24,7 +24,7 @@
 
 // common general application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"3.4.0"
+#define         APP_VERSION                     L"3.4.1"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"Log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
@@ -53,7 +53,7 @@
 #define         JSON_IDLE_FS_EXCLUSIONS_ENABLE	"IdleFsExclusionsEnabled"
 #define         JSON_IDLE_FS_EXCLUSIONS			"IdleFsExclusions"
 #define         JSON_REMOTESTREAM				"RemoteStream"
-#define         JSON_TOPOLOGYMODE				"TopologyPreferPowerEfficient"
+#define         JSON_REMOTESTREAM_MODE			"RemoteStreamPowerOff"
 #define         JSON_EXTERNAL_API				"ExternalAPI"
 #define			JSON_MUTE_SPEAKERS				"MuteSpeakers"
 #define			JSON_TIMING_PRESHUTDOWN			"TimingPreshutdown"
@@ -110,6 +110,7 @@
 #define EVENT_SYSTEM_USERIDLE							11	// valid members of EVENT: dwEvent
 #define EVENT_SYSTEM_BOOT								12	// valid members of EVENT: dwEvent
 #define EVENT_SYSTEM_TOPOLOGY							13	// valid members of EVENT: dwEvent
+#define EVENT_SYSTEM_BLANKSCREEN						14	// valid members of EVENT: dwEvent
 
 // user events define's
 #define EVENT_USER_DISPLAYON							30	// valid members of EVENT: dwEvent, devices
@@ -218,7 +219,7 @@ namespace jpersson77 {
 			bool								bIdleFsExclusionsEnabled = false;
 			std::vector<PROCESSLIST>			FsExclusions;
 			bool								RemoteStreamingCheck = false;
-			bool								TopologyPreferPowerEfficiency = true;
+			bool								RemoteStreamingPowerOff = true;
 			bool								ExternalAPI = false;
 			bool								MuteSpeakers = false;
 			bool								TimingPreshutdown = false;
