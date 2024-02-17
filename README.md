@@ -3,6 +3,8 @@
 ## Download instructions
 **The installer for the latest version can be downloaded from the [Releases](https://github.com/JPersson77/LGTVCompanion/releases) page.**
 
+Note: If the installer will not run you must "Unblock" the installer. Right click, properties, under general and at the bottom Security section check the "Unblock" box.
+
 ## Overview
 This application (UI and service) controls LG WebOS TVs and displays.
 
