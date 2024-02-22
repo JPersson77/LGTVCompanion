@@ -85,7 +85,7 @@ All other commands following the -output command will obey the formatting. Pleas
 - *-freesyncoled_hdmiX [off | on]* 	- set OLED freesync for HDMI-input X (X = 1, 2, 3 or 4) 
 - *-hdmipcmode_hdmiX [off | on]* 	- set PC-mode for HDMI-input X (X = 1, 2, 3 or 4) 
 #### Examples: 
-*Set active HDMI-input to 1 for Device2 and then set active HDMI-input to 2 for Device2*
+*Set active HDMI-input to 1 for Device1 and then set active HDMI-input to 2 for Device2*
 ```
 "LGTV Companion.exe" -sethdmi1 Device1 -sethdmi 2 Device2
 ```
