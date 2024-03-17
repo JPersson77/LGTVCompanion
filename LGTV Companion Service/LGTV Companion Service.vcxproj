@@ -164,6 +164,7 @@
     <ClInclude Include="..\Common\LgApi.h" />
     <ClInclude Include="..\Common\lg_api_buttons.h" />
     <ClInclude Include="..\Common\lg_api_commands.h" />
+    <ClInclude Include="..\Common\restart_strings.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Service.h" />
   </ItemGroup>

@@ -188,7 +188,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	try {
 		Settings.Initialize();
 	}
-
 	catch (std::exception const& e) {
 		std::wstring s = L"Error when reading configuration.";
 		s += common::widen(e.what());
@@ -1373,19 +1372,13 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(100, 1));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Settings.Prefs.PowerOnTimeout);
-
-		for (auto& item : Settings.Prefs.EventLogRestartString)
-		{
-			if(item != "restart" && item != "power off" && item != "shutdown")
-				if (std::find(str.begin(), str.end(), common::widen(item)) == str.end())
-					str.push_back(common::widen(item));
-		}
-		for (auto& item : Settings.Prefs.EventLogShutdownString)
-		{
-			if (item != "restart" && item != "power off" && item != "shutdown")
-				if (std::find(str.begin(), str.end(), common::widen(item)) == str.end())
-					str.push_back(common::widen(item));
-		}
+	
+		if (Settings.Prefs.EventLogCustomRestartString.size() > 0)
+			for (auto& item : Settings.Prefs.EventLogCustomRestartString)
+				str.push_back(common::widen(item));
+		if (Settings.Prefs.EventLogCustomShutdownString.size() > 0)
+			for (auto& item : Settings.Prefs.EventLogCustomShutdownString)
+				str.push_back(common::widen(item));
 
 		hResults = EvtQuery(NULL, path.c_str(), query.c_str(), EvtQueryChannelPath | EvtQueryReverseDirection);
 		if (hResults)
@@ -1428,11 +1421,10 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 							if (e != std::wstring::npos)
 							{
 								std::wstring sub = s.substr(f + strfind.length(), e - (f + strfind.length()));
-								if (sub != L"restart" && sub != L"power off" && sub != L"shutdown")
-									if (std::find(str.begin(), str.end(), sub) == str.end())
-									{
-										str.push_back(sub);
-									}
+								if (std::find(Settings.Prefs.EventLogDefaultShutdownString.begin(), Settings.Prefs.EventLogDefaultShutdownString.end(), common::narrow(sub)) == Settings.Prefs.EventLogDefaultShutdownString.end())
+									if (std::find(Settings.Prefs.EventLogDefaultRestartString.begin(), Settings.Prefs.EventLogDefaultRestartString.end(), common::narrow(sub)) == Settings.Prefs.EventLogDefaultRestartString.end())
+										if (std::find(str.begin(), str.end(), sub) == str.end())
+											str.push_back(sub);
 							}
 						}
 					}
@@ -1466,17 +1458,15 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				lvi.iItem = i;
 				int row = ListView_InsertItem(GetDlgItem(hWnd, IDC_LIST), &lvi);
 				ListView_SetItemText(GetDlgItem(hWnd, IDC_LIST), row, 0, (LPWSTR)item.c_str());
-				if (std::find(Settings.Prefs.EventLogRestartString.begin(), Settings.Prefs.EventLogRestartString.end(), common::narrow(item)) != Settings.Prefs.EventLogRestartString.end())
-				{
+				if (std::find(Settings.Prefs.EventLogCustomRestartString.begin(), Settings.Prefs.EventLogCustomRestartString.end(), common::narrow(item)) != Settings.Prefs.EventLogCustomRestartString.end())
 					ListView_SetCheckState(GetDlgItem(hWnd, IDC_LIST), row, true);
-				}
 				i++;
 			}
 		}
 		else
 		{
 			lvi.iItem = 0;
-			std::wstring s = L"N/A";
+			std::wstring s = L"Automatic";
 			int row = ListView_InsertItem(GetDlgItem(hWnd, IDC_LIST), &lvi);
 			ListView_SetItemText(GetDlgItem(hWnd, IDC_LIST), row, 0, (LPWSTR)s.c_str());
 			EnableWindow(GetDlgItem(hWnd, IDC_LIST), false);
@@ -1622,26 +1612,23 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 						Settings.Prefs.TimingPreshutdown = false;
 
 					int count = ListView_GetItemCount(GetDlgItem(hWnd, IDC_LIST));
-					Settings.Prefs.EventLogRestartString.clear();
-					Settings.Prefs.EventLogShutdownString.clear();
-					Settings.Prefs.EventLogRestartString.push_back("restart");
-					Settings.Prefs.EventLogShutdownString.push_back("shutdown");
-					Settings.Prefs.EventLogShutdownString.push_back("power off");
+					Settings.Prefs.EventLogCustomRestartString.clear();
+					Settings.Prefs.EventLogCustomShutdownString.clear();
 					for (int i = 0; i < count; i++)
 					{
 						std::vector<wchar_t> bufText(256);
 						std::wstring st;
 						ListView_GetItemText(GetDlgItem(hWnd, IDC_LIST), i, 0, &bufText[0], (int)bufText.size());
 						st = &bufText[0];
-						if(st != L"N/A")
+						if(st != L"Automatic")
 						{
 							if (ListView_GetCheckState(GetDlgItem(hWnd, IDC_LIST), i))
 							{
-								Settings.Prefs.EventLogRestartString.push_back(common::narrow(st));
+								Settings.Prefs.EventLogCustomRestartString.push_back(common::narrow(st));
 							}
 							else
 							{
-								Settings.Prefs.EventLogShutdownString.push_back(common::narrow(st));
+								Settings.Prefs.EventLogCustomShutdownString.push_back(common::narrow(st));
 							}
 						}
 					}
@@ -1707,17 +1694,46 @@ LRESULT CALLBACK OptionsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			// explain the restart words
 			else if (wParam == IDC_SYSLINK3)
 			{
-				MessageBox(hWnd, L"This application rely on events in the windows event log to determine whether a reboot or shutdown was initiated by the user."
-					"\n\nIn case your OS is localised in a non-english language these events are localised in the language of your operating system, and the user must therefore assist with manually indicating which "
-					"word or phrase that refers to the system restarting.\n\nPlease put a checkmark for every word or phrase that refers to 'restart'in the list and "
-					"make sure that all other checkboxes are cleared.\n\n"
-					"The timing option determine the timing of managing shutdown/restart. When set to \"Default\" the app will trigger the shutdown/restart routine "
-					"as late as possible during system shutdown. This will maximize the opportunity for detecting if the system is restarting or shutting down. \n\nIf "
-					"however the devices are not shutting down properly during system shutdown you may want to consider changing to the \"Early\" method. This option will "
-					"trigger the shutdown/restart routine earlier, which will leave more time during shutdown for properly shutting down the devices, but there is "
-					"instead a higher risk of not properly detecting restarts.",
+				bool bAuto = true;
+				int count = ListView_GetItemCount(GetDlgItem(hWnd, IDC_LIST));
+				if (count > 0)
+				{
+					std::vector<wchar_t> bufText(256);
+					std::wstring st;
+					ListView_GetItemText(GetDlgItem(hWnd, IDC_LIST), 0, 0, &bufText[0], (int)bufText.size());
+					st = &bufText[0];
+					if (st != L"Automatic")
+						bAuto = false;
+				}
+				if(bAuto)
+				{
+					MessageBox(hWnd, L"It is not necessary to manually configure localised restart strings on this system, as the application can automatically determine whether "
+						"a reboot or shutdown has been initiated on this system. Consequently the option to manually configure \"localised restart strings\" have been disabled."
+						"\n\nThe timing option determine the timing when managing shutdown or restart. When set to \"Default\" the app will trigger the shutdown/restart routine "
+						"as late as possible during system shutdown. The default option will maximize the opportunity for accurately detecting if the system is restarting or shutting down. \n\nIf "
+						"however devices are not powering off properly during system shutdown you may want to consider changing to the \"Early\" method. This option will "
+						"trigger the shutdown/restart routine earlier, which will leave more time during shutdown for properly shutting down the devices, but with an "
+						"increased risk of not properly detecting restarts.",
 
-					L"Restart words", MB_OK | MB_ICONINFORMATION);
+						L"Shutdown options", MB_OK | MB_ICONINFORMATION);
+				}
+				else
+					if (MessageBox(hWnd, L"This application depend on localised events in the windows event log to determine whether a reboot or shutdown was initiated by the user."
+						"\n\nIt seems the OS on this system is localised in a language not yet managed by the application and the user must therefore assist with manually indicating which "
+						"word or phrase that refers to the system restarting.\n\nPlease put a checkmark for every word or phrase that refers to 'restart' in the \"localised restart strings\" list and "
+						"make sure that the other checkboxes in the list are unchecked. You can contribute to the automatic detection of this language in a future release - please read below!"
+						"\n\nThe timing option determine the timing when managing shutdown or restart. When set to \"Default\" the app will trigger the shutdown/restart routine "
+						"as late as possible during system shutdown. The \"Default\" option will maximize the opportunity for accurately detecting if the system is restarting or shutting down. \n\nIf "
+						"however devices are not powering off properly during system shutdown you may want to consider changing to the \"Early\" method. This option will "
+						"trigger the shutdown/restart routine earlier, which will leave more time during shutdown for properly shutting down the devices, but with an "
+						"increased risk of not properly detecting when the system is restarting."
+						"\n\nDo you want to contribute to automatic detection of this language in a future release? Please press \"Yes\" to open a google sheet where you can submit your input or "
+						"click \"No\" to close this information dialog.",
+
+						L"Shutdown options", MB_YESNO | MB_ICONQUESTION) == IDYES)
+					{
+						ShellExecute(0, 0, RESTARTWORDSLINK, 0, 0, SW_SHOW);
+					}
 			}
 			// explain the power on timeout, logging etc
 			else if (wParam == IDC_SYSLINK7)

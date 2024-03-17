@@ -170,6 +170,13 @@ settings::Preferences::~Preferences() {
 }
 bool settings::Preferences::Initialize() {
 	TCHAR szPath[MAX_PATH];
+	nlohmann::json restart_strings;
+
+	std::string json_str =
+	#include "../Common/restart_strings.h"
+		;
+	restart_strings = nlohmann::json::parse(json_str);
+
 	if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, NULL, 0, szPath)))
 	{
 		std::wstring path = szPath;
@@ -194,38 +201,56 @@ bool settings::Preferences::Initialize() {
 			{
 				Prefs.version = j.get<int>();
 
-				// The restart strings
-				Prefs.EventLogRestartString.clear();
-				j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS];
-				Prefs.EventLogRestartString.push_back("restart");
+				// The shutdown and restart strings
+				Prefs.EventLogCustomRestartString.clear();
+				Prefs.EventLogCustomShutdownString.clear();
+				Prefs.EventLogDefaultRestartString.clear();
+				Prefs.EventLogDefaultShutdownString.clear();
+
+				j = restart_strings["Restart"];
 				if (!j.empty() && j.size() > 0)
 				{
 					for (auto& str : j.items())
 					{
 						std::string temp = str.value().get<std::string>();
-						if(temp != "power off" && temp != "shutdown")
-						{
-							if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
-								Prefs.EventLogRestartString.push_back(temp);
-						}
+						Prefs.EventLogDefaultRestartString.push_back(temp);
 					}
 				}
-				// The shutdown strings
-				Prefs.EventLogShutdownString.clear();
-				j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS];
-				Prefs.EventLogShutdownString.push_back("power off");
-				Prefs.EventLogShutdownString.push_back("shutdown");
+				j = restart_strings["Shutdown"];
 				if (!j.empty() && j.size() > 0)
 				{
 					for (auto& str : j.items())
 					{
 						std::string temp = str.value().get<std::string>();
-						if (std::find(Prefs.EventLogShutdownString.begin(), Prefs.EventLogShutdownString.end(), temp) == Prefs.EventLogShutdownString.end())
-							if (std::find(Prefs.EventLogRestartString.begin(), Prefs.EventLogRestartString.end(), temp) == Prefs.EventLogRestartString.end())
-								Prefs.EventLogShutdownString.push_back(temp);
+						Prefs.EventLogDefaultShutdownString.push_back(temp);
 					}
 				}
 
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS];
+				if (!j.empty() && j.size() > 0)
+				{
+					for (auto& str : j.items())
+					{
+						std::string temp = str.value().get<std::string>();
+						if (std::find(Prefs.EventLogDefaultRestartString.begin(), Prefs.EventLogDefaultRestartString.end(), temp) == Prefs.EventLogDefaultRestartString.end())
+							if (std::find(Prefs.EventLogDefaultShutdownString.begin(), Prefs.EventLogDefaultShutdownString.end(), temp) == Prefs.EventLogDefaultShutdownString.end())
+								if (std::find(Prefs.EventLogCustomRestartString.begin(), Prefs.EventLogCustomRestartString.end(), temp) == Prefs.EventLogCustomRestartString.end())
+									Prefs.EventLogCustomRestartString.push_back(temp);
+					}
+				}
+				j = jsonPrefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS];
+				if (!j.empty() && j.size() > 0)
+				{
+					for (auto& str : j.items())
+					{
+						std::string temp = str.value().get<std::string>();
+						if (std::find(Prefs.EventLogDefaultShutdownString.begin(), Prefs.EventLogDefaultShutdownString.end(), temp) == Prefs.EventLogDefaultShutdownString.end())
+							if (std::find(Prefs.EventLogDefaultRestartString.begin(), Prefs.EventLogDefaultRestartString.end(), temp) == Prefs.EventLogDefaultRestartString.end())
+								if (std::find(Prefs.EventLogCustomShutdownString.begin(), Prefs.EventLogCustomShutdownString.end(), temp) == Prefs.EventLogCustomShutdownString.end())
+									Prefs.EventLogCustomShutdownString.push_back(temp);
+					}
+				}
+	
 				// Power On timeout
 				j = jsonPrefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT];
 				if (!j.empty() && j.is_number())
@@ -387,10 +412,9 @@ bool settings::Preferences::Initialize() {
 					Devices.push_back(params);
 				}
 			}
-			return true;
 		}
 	}
-	return false;
+	return true;
 }
 void settings::Preferences::WriteToDisk(void)
 {
@@ -451,10 +475,12 @@ void settings::Preferences::WriteToDisk(void)
 	prefs[JSON_PREFS_NODE][JSON_EXTERNAL_API] = (bool)Prefs.ExternalAPI;
 	prefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS] = (bool)Prefs.MuteSpeakers;
 	prefs[JSON_PREFS_NODE][JSON_TIMING_PRESHUTDOWN] = (bool)Prefs.TimingPreshutdown;
-	for (auto& item : Prefs.EventLogRestartString)
-		prefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS].push_back(item);
-	for (auto& item : Prefs.EventLogShutdownString)
-		prefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS].push_back(item);
+	if(Prefs.EventLogCustomRestartString.size() > 0)
+		for (auto& item : Prefs.EventLogCustomRestartString)
+			prefs[JSON_PREFS_NODE][JSON_EVENT_RESTART_STRINGS].push_back(item);
+	if (Prefs.EventLogCustomShutdownString.size() > 0)
+		for (auto& item : Prefs.EventLogCustomShutdownString)
+			prefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS].push_back(item);
 	if (Prefs.WhiteList.size() > 0)
 		for (auto& w : Prefs.WhiteList)
 			prefs[JSON_PREFS_NODE][JSON_WHITELIST][common::narrow(w.Name)] = common::narrow(w.Application);

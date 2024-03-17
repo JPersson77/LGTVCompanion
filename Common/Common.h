@@ -24,7 +24,7 @@
 
 // common general application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"3.4.2"
+#define         APP_VERSION                     L"3.4.3"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"Log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
@@ -33,6 +33,7 @@
 #define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases"
 #define         DONATELINK                      L"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=jorgen.persson@gmail.com&lc=US&item_name=Friendly+gift+for+the+development+of+LGTV+Companion&no_note=0&cn=&currency_code=EUR&bn=PP-DonationsBF:btn_donateCC_LG.gif:NonHosted"
 #define         DISCORDLINK                     L"https://discord.gg/7KkTPrP3fq"
+#define			RESTARTWORDSLINK				L"https://docs.google.com/spreadsheets/d/1SNjYh7kt4aVhHg0ZjI3i96vCeOJZJS73o9Wl-OVEvzk/edit#gid=0"
 #define			MUTEX_WAIT          		    10   // thread wait in ms
 
 // common preferences definitions
@@ -70,8 +71,8 @@
 #define			JSON_DEVICE_NEWSOCK				"NewSockConnect"
 #define			JSON_DEVICE_SETHDMINO			"SetHDMIInputOnResumeToNumber"
 #define			JSON_DEVICE_MAC					"MAC"
-#define         DEFAULT_RESTART                 {"restart"}
-#define         DEFAULT_SHUTDOWN                {"shutdown","power off"}
+//#define         DEFAULT_RESTART                 {"restart"}
+//#define         DEFAULT_SHUTDOWN                {"shutdown","power off"}
 #define         WOL_NETWORKBROADCAST            1
 #define         WOL_IPSEND                      2
 #define         WOL_SUBNETBROADCAST             3
@@ -202,8 +203,10 @@ namespace jpersson77 {
 			bool								SSL = true;
 		};
 		struct PREFERENCES {					// Global preferences and settings
-			std::vector<std::string>			EventLogRestartString = DEFAULT_RESTART;
-			std::vector<std::string>			EventLogShutdownString = DEFAULT_SHUTDOWN;
+			std::vector<std::string>			EventLogCustomRestartString; //= DEFAULT_RESTART;
+			std::vector<std::string>			EventLogCustomShutdownString; // = DEFAULT_SHUTDOWN;
+			std::vector<std::string>			EventLogDefaultRestartString;
+			std::vector<std::string>			EventLogDefaultShutdownString; 
 			bool								Logging = false;
 			int									version = 2;
 			int									PowerOnTimeout = 40;

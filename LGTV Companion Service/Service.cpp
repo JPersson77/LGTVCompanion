@@ -721,7 +721,7 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 		}
 	}
 
-	for (auto& str : Settings.Prefs.EventLogShutdownString)
+	for (auto& str : Settings.Prefs.EventLogDefaultShutdownString)
 	{
 		if(str != "")
 		{
@@ -736,9 +736,24 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 			}
 		}
 	}
+	if (EventCallbackStatus == NULL && Settings.Prefs.EventLogCustomShutdownString.size() >0)
+		for (auto& str : Settings.Prefs.EventLogCustomShutdownString)
+		{
+			if (str != "")
+			{
+				std::wstring w = L">";
+				w += common::widen(str);
+				w += L"<";
+
+				if (s.find(w) != std::wstring::npos)
+				{
+					EventCallbackStatus = EVENT_SYSTEM_SHUTDOWN;
+					Log("Event subscription callback: system shut down detected.");
+				}
+			}
+		}
 	if (EventCallbackStatus == NULL)
-	{
-		for (auto& str : Settings.Prefs.EventLogRestartString)
+		for (auto& str : Settings.Prefs.EventLogDefaultRestartString)
 		{
 			if(str != "")
 			{
@@ -753,7 +768,22 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 				}
 			}
 		}
-	}
+	if (EventCallbackStatus == NULL && Settings.Prefs.EventLogCustomRestartString.size() > 0)
+		for (auto& str : Settings.Prefs.EventLogCustomRestartString)
+		{
+			if (str != "")
+			{
+				std::wstring w = L">";
+				w += common::widen(str);
+				w += L"<";
+
+				if (s.find(w) != std::wstring::npos)
+				{
+					EventCallbackStatus = EVENT_SYSTEM_REBOOT;
+					Log("Event subscription callback: System restart detected.");
+				}
+			}
+		}
 	if (EventCallbackStatus == NULL)
 	{
 		EventCallbackStatus = EVENT_SYSTEM_UNSURE;

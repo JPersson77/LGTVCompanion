@@ -150,6 +150,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\Common.h" />
+    <ClInclude Include="..\Common\restart_strings.h" />
     <ClInclude Include="LGTV Companion UI.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
