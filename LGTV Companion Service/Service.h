@@ -145,6 +145,9 @@ public:
 	//													Set Topology presence/status for CSession objects. Arg 1: pointer to a vector of device ID's
 	std::string											SetTopology(std::vector<std::string>&);
 
+	//													Set Topology presence/status for CSession objects. Arg 1: pointer to a vector of device ID's
+	void												DisableTopology();
+
 	//													Load the previously known topology configuration, if it exists. 
 	std::string											LoadSavedTopologyConfiguration(void);
 

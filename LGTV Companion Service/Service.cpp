@@ -1003,9 +1003,16 @@ void NamedPipeCallback(std::wstring message)
 				transform(topology_command.begin(), topology_command.end(), topology_command.begin(), ::tolower);
 				if (topology_command == "invalid")
 				{
-					log += "A recent change to the system has invalidated the monitor topology configuration. "
+					log += "A recent change to the system has invalidated the monitor topology configuration and the feature has been disabled. "
 						"Please run the configuration guide in the global options again to ensure correct operation.";
 					Log(log);
+
+					SessionManager.DisableTopology();
+
+					std::wstring file = Settings.Prefs.DataPath;
+					file += TOPOLOGY_CONFIGURATION_FILE;
+					DeleteFile(file.c_str());
+
 					continue;
 				}
 				else if (topology_command == "undetermined")
@@ -1024,6 +1031,9 @@ void NamedPipeCallback(std::wstring message)
 					else
 						log += device_state;
 					
+					if (Settings.Prefs.KeepTopologyOnBoot)
+						SessionManager.SaveTopologyConfiguration();
+
 					if (SessionManager.GetWindowsPowerStatus() == false)
 					{
 						log += " (Monitors globally requested OFF. Not enforcing monitor topology.)";
@@ -1031,8 +1041,7 @@ void NamedPipeCallback(std::wstring message)
 						continue;
 					}
 					Log(log);
-					if (Settings.Prefs.KeepTopologyOnBoot)
-						SessionManager.SaveTopologyConfiguration();
+
 					CreateEvent_system(EVENT_SYSTEM_TOPOLOGY);
 				}
 				else

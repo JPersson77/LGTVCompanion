@@ -478,6 +478,13 @@ void CSessionManager::RemoteClientIsConnected(bool bSet)
 {
 	bRemoteClientIsConnected = bSet;
 }
+void CSessionManager::DisableTopology(void)
+{
+	Prefs.AdhereTopology = false;
+	for (auto& Sess : Sessions)
+		Sess->TopologyEnabled = false;
+}
+
 std::string CSessionManager::SetTopology(std::vector<std::string>& Devices)
 {
 	if (Sessions.size() == 0)
