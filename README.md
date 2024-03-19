@@ -1,7 +1,11 @@
 # LGTV Companion
 
-## Download instructions
+## Download and install instructions
 **The installer for the latest version can be downloaded from the [Releases](https://github.com/JPersson77/LGTVCompanion/releases) page.**
+
+>Please note that Windows Defender SmartScreen may block the download. There is no way for developers to directly influence which apps will show up on SmartScreen. If the installer will not download you must therefore instruct your web browser to download it regardless and if the installer does not run you must unblock the installer. Unblocking is done by right clicking the downloaded installer, clicking on properties, under general and at the bottom security section check the "Unblock" checkbox. You can help prevent this in the future by reporting this application as safe to Microsoft when downloading the installer.
+
+Alternatively you can use Winget via Windows Terminal/PowerShell: `winget install LGTVCompanion`
 
 ## Overview
 This application (UI and service) controls LG WebOS TVs and displays.
