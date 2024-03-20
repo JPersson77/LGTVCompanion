@@ -731,8 +731,12 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 
 			if (s.find(w) != std::wstring::npos)
 			{
+				std::string log_msg;
+				log_msg = "Event subscription callback: system shut down detected (H - ";
+				log_msg += str;
+				log_msg += ")";
 				EventCallbackStatus = EVENT_SYSTEM_SHUTDOWN;
-				Log("Event subscription callback: system shut down detected.");
+				Log(log_msg);
 			}
 		}
 	}
@@ -747,8 +751,12 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 
 				if (s.find(w) != std::wstring::npos)
 				{
+					std::string log_msg;
+					log_msg = "Event subscription callback: system shut down detected (C - ";
+					log_msg += str;
+					log_msg += ")";
 					EventCallbackStatus = EVENT_SYSTEM_SHUTDOWN;
-					Log("Event subscription callback: system shut down detected.");
+					Log(log_msg);
 				}
 			}
 		}
@@ -763,8 +771,12 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 
 				if (s.find(w) != std::wstring::npos)
 				{
+					std::string log_msg;
+					log_msg = "Event subscription callback: system restart detected (H - ";
+					log_msg += str;
+					log_msg += ")";
 					EventCallbackStatus = EVENT_SYSTEM_REBOOT;
-					Log("Event subscription callback: System restart detected.");
+					Log(log_msg);
 				}
 			}
 		}
@@ -779,8 +791,12 @@ DWORD WINAPI SubCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, 
 
 				if (s.find(w) != std::wstring::npos)
 				{
+					std::string log_msg;
+					log_msg = "Event subscription callback: system restart detected (C - ";
+					log_msg += str;
+					log_msg += ")";
 					EventCallbackStatus = EVENT_SYSTEM_REBOOT;
-					Log("Event subscription callback: System restart detected.");
+					Log(log_msg);
 				}
 			}
 		}
