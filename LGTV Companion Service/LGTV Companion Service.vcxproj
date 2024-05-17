@@ -125,6 +125,7 @@
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -155,18 +156,33 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\Common\Common.cpp" />
-    <ClCompile Include="Service.cpp" />
-    <ClCompile Include="Session.cpp" />
+    <ClCompile Include="..\Common\event.cpp" />
+    <ClCompile Include="..\Common\ipc.cpp" />
+    <ClCompile Include="..\Common\log.cpp" />
+    <ClCompile Include="..\Common\preferences.cpp" />
+    <ClCompile Include="..\Common\tools.cpp" />
+    <ClCompile Include="companion.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="transient_arp.cpp" />
+    <ClCompile Include="web_os_client.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Common\Common.h" />
-    <ClInclude Include="..\Common\LgApi.h" />
+    <ClInclude Include="..\Common\common_app_define.h" />
+    <ClInclude Include="..\Common\device.h" />
+    <ClInclude Include="..\Common\event.h" />
+    <ClInclude Include="..\Common\ipc.h" />
+    <ClInclude Include="..\Common\lg_api.h" />
     <ClInclude Include="..\Common\lg_api_buttons.h" />
     <ClInclude Include="..\Common\lg_api_commands.h" />
+    <ClInclude Include="..\Common\log.h" />
+    <ClInclude Include="..\Common\preferences.h" />
     <ClInclude Include="..\Common\restart_strings.h" />
+    <ClInclude Include="..\Common\tools.h" />
+    <ClInclude Include="companion.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="Service.h" />
+    <ClInclude Include="main.h" />
+    <ClInclude Include="transient_arp.h" />
+    <ClInclude Include="web_os_client.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="LGTV Companion Service.rc" />

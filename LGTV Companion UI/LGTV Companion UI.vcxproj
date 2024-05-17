@@ -149,15 +149,20 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\Common\Common.h" />
+    <ClInclude Include="..\Common\common_app_define.h" />
+    <ClInclude Include="..\Common\ipc.h" />
+    <ClInclude Include="..\Common\preferences.h" />
     <ClInclude Include="..\Common\restart_strings.h" />
-    <ClInclude Include="LGTV Companion UI.h" />
+    <ClInclude Include="..\Common\tools.h" />
+    <ClInclude Include="lgtv_companion_ui.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Common\Common.cpp" />
-    <ClCompile Include="LGTV Companion UI.cpp" />
+    <ClCompile Include="..\Common\ipc.cpp" />
+    <ClCompile Include="..\Common\preferences.cpp" />
+    <ClCompile Include="..\Common\tools.cpp" />
+    <ClCompile Include="lgtv_companion_ui.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="LGTV Companion UI.rc" />

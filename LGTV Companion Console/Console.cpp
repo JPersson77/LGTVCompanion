@@ -1,10 +1,44 @@
-// Console.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+#define WIN32_LEAN_AND_MEAN
+#define WINVER 0x0603
+#define _WIN32_WINNT 0x0603
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
-#include "Console.h"
-namespace						common = jpersson77::common;
-namespace						settings = jpersson77::settings;
-namespace						ipc = jpersson77::ipc;
+#include "console.h"
+#include "../Common/lg_api.h"
+#include "../Common/ipc.h"
+#include "../Common/preferences.h"
+#include "../Common/common_app_define.h"
+#include "../Common/tools.h"
+#include "../Common/event.h"
+#include <iostream>
+#include <boost/asio.hpp>
+#include <boost/beast.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/ssl.hpp>
+#include <boost/beast/websocket/ssl.hpp>
+#include <boost/asio/connect.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl/stream.hpp>
+#include <WinSock2.h>
+#include <vector>
+#include <algorithm>
+#include <sstream>
+#include <netioapi.h>
+
+#pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "Iphlpapi.lib")
+
+#define			APPNAME_SHORT							"LGTVcli"
+#define			APPNAME_FULL							"LGTV Companion CLI"
+
+// connection port
+#define			PORT									"3000"
+#define			PORT_SSL								"3001"
+
+#define			JSON_OUTPUT_DEFAULT						"JSON_OUTPUT_DEFAULT"
+#define			JSON_OUTPUT_FRIENDLY					"JSON_OUTPUT_FRIENDLY"
+#define			JSON_OUTPUT_FIELD						"JSON_OUTPUT_FIELD"
+
 namespace						beast = boost::beast;					// from <boost/beast.hpp>
 namespace						http = beast::http;						// from <boost/beast/http.hpp>
 namespace						websocket = beast::websocket;			// from <boost/beast/websocket.hpp>
@@ -12,11 +46,8 @@ namespace						net = boost::asio;						// from <boost/asio.hpp>
 using							tcp = boost::asio::ip::tcp;				// from <boost/asio/ip/tcp.hpp>
 namespace						ssl = boost::asio::ssl;					// from <boost/asio/ssl.hpp>
 
-// Globals:
-// ipc::PipeClient* pPipeClient;
-settings::Preferences			Settings;
-nlohmann::json					lg_api_commands_json;
-std::string						lg_api_buttons;
+
+Preferences						Prefs(CONFIG_FILE);
 std::atomic_bool				bTerminateThread = { false };
 WSADATA							WSAData;
 bool							bOutputContainsManyResults = false;
@@ -29,7 +60,7 @@ int main(int argc, char* argv[])
 	// Output some info if no arguments
 	if (argc == 1)
 	{
-		std::cout << APPNAME_FULL << " v" << common::narrow(APP_VERSION) << "\n\nUsage is "<< argv[0] << " [-command] [[Argument 1] ... [Argument X]] [[Device1|Name]...[DeviceX|Name]]\n\n";
+		std::cout << APPNAME_FULL << " v" << tools::narrow(APP_VERSION) << "\n\nUsage is "<< argv[0] << " [-command] [[Argument 1] ... [Argument X]] [[Device1|Name]...[DeviceX|Name]]\n\n";
 		std::cout << "Use -help for an overview of commands, or for the full documentation please visit:\nhttps://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Commandline.md" << std::endl;
 		return 0;
 	}
@@ -67,44 +98,15 @@ int main(int argc, char* argv[])
 	}
 	
 	// load the configuration
-	try {
-		Settings.Initialize();
-	}
-	catch (...) {
+	if(!Prefs.isInitialised())
+	{ 
 		err["error"] = "Could not load the configuration file.";
 		std::cout << err.dump() << std::endl;
 		return 0;
 	}
-	try {
-		nlohmann::json lg_api_buttons_json;
-		std::string json_str =
-		#include "../Common/lg_api_commands.h"
-			;
-		lg_api_commands_json = nlohmann::json::parse(json_str);
-
-		json_str =
-		#include "../Common/lg_api_buttons.h"
-			;
-		lg_api_buttons_json = nlohmann::json::parse(json_str);
-		nlohmann::json j = lg_api_buttons_json["Buttons"];
-		if (!j.empty() && j.size() > 0)
-		{
-			for (auto& str : j.items())
-			{
-				lg_api_buttons += str.value().get<std::string>();
-				lg_api_buttons += " ";
-			}
-		}
-	}
-	catch (std::exception const& e)
-	{
-		err["error"] = "Failed to initialize LG API JSON: ";
-		std::cout << err.dump() << e.what() << std::endl;
-		return 0;
-	}
 
 	// check that devices are configured
-	if (Settings.Devices.size() == 0)
+	if (Prefs.devices_.size() == 0)
 	{
 		err["error"] = "No devices configured. Please start LGTV Companion UI to configure your devices.";
 		std::cout << err.dump() << std::endl;
@@ -125,7 +127,7 @@ int main(int argc, char* argv[])
 			json_output_type = JSON_OUTPUT_FRIENDLY;
 		else if (result.find(JSON_OUTPUT_FIELD) != std::string::npos)
 		{
-			std::vector<std::string> r = common::stringsplit(result, " ");
+			std::vector<std::string> r = tools::stringsplit(result, " ");
 			if (r.size() > 1)
 			{
 				field = r[1];
@@ -274,13 +276,13 @@ std::string ProcessCommand(std::vector<std::string>& words)
 			iError = 1;
 	}
 	else if (command == "poweron")												// POWER ON
-		return CreateEvent_system(EVENT_USER_DISPLAYON, _Devices(words, 1));
+		return CreateEvent_system(EVENT_FORCE_DISPLAYON, _Devices(words, 1));
 	else if (command == "poweroff")												// POWER OFF
-		return CreateEvent_system(EVENT_USER_DISPLAYOFF, _Devices(words, 1));
+		return CreateEvent_system(EVENT_FORCE_DISPLAYOFF, _Devices(words, 1));
 	else if (command == "screenon")												// UNBLANK SCREEN
-		return CreateEvent_system(EVENT_USER_DISPLAYON, _Devices(words, 1));
+		return CreateEvent_system(EVENT_FORCE_DISPLAYON, _Devices(words, 1));
 	else if (command == "screenoff")											// BLANK SCREEN
-		return CreateEvent_system(EVENT_USER_BLANKSCREEN, _Devices(words, 1));
+		return CreateEvent_system(EVENT_FORCE_BLANKSCREEN, _Devices(words, 1));
 	else if (command.find("sethdmi") == 0)										// SET HDMI INPUT
 	{
 		int cmd_offset = 1;
@@ -301,7 +303,7 @@ std::string ProcessCommand(std::vector<std::string>& words)
 			if (argument != "")
 			{
 				std::string payload = LG_URI_PAYLOAD_SETHDMI;
-				common::ReplaceAllInPlace(payload, "#ARG#", argument);
+				tools::replaceAllInPlace(payload, "#ARG#", argument);
 				return CreateEvent_request(_Devices(words, cmd_offset), LG_URI_LAUNCH, payload);
 			}
 			iError = 3;
@@ -328,11 +330,11 @@ std::string ProcessCommand(std::vector<std::string>& words)
 	{
 		if (nWords > 1)
 		{
-			std::string validated_button = ValidateArgument(words[1], lg_api_buttons);
+			std::string validated_button = ValidateArgument(words[1], Prefs.lg_api_buttons);
 			if (validated_button != "")
 				return CreateEvent_button(_Devices(words, 2), validated_button);
 			iError = 3;
-			error = lg_api_buttons;
+			error = Prefs.lg_api_buttons;
 		}
 		else
 			iError = 1;
@@ -342,10 +344,7 @@ std::string ProcessCommand(std::vector<std::string>& words)
 		if (nWords > 1)
 		{
 			std::string non_validated_button = words[1];
-			if (non_validated_button != "")
-				return CreateEvent_button(_Devices(words, 2), non_validated_button);
-			iError = 3;
-			error = lg_api_buttons;
+			return CreateEvent_button(_Devices(words, 2), non_validated_button);
 		}
 		else
 			iError = 1;
@@ -613,7 +612,7 @@ std::string ProcessCommand(std::vector<std::string>& words)
 	else
 	{
 		bool found = false;
-		for (const auto& item : lg_api_commands_json.items())
+		for (const auto& item : Prefs.lg_api_commands_json.items())
 		{
 			if (item.key() == command) 
 			{
@@ -663,9 +662,9 @@ std::string ProcessCommand(std::vector<std::string>& words)
 								payload = "{\"#CMD#\":{\"hdmi#INPUT#\":#ARG#}}";
 							else
 								payload = "{\"#CMD#\":{\"hdmi#INPUT#\":\"#ARG#\"}}";
-							common::ReplaceAllInPlace(payload, "#CMD#", command_ex);
-							common::ReplaceAllInPlace(payload, "#INPUT#", hdmi_input);
-							common::ReplaceAllInPlace(payload, "#ARG#", argument);
+							tools::replaceAllInPlace(payload, "#CMD#", command_ex);
+							tools::replaceAllInPlace(payload, "#INPUT#", hdmi_input);
+							tools::replaceAllInPlace(payload, "#ARG#", argument);
 							return CreateEvent_luna_set_system_setting_payload(_Devices(words, 2), category, payload);
 							
 						}
@@ -731,7 +730,7 @@ std::string ValidateArgument(std::string Argument, std::string ValidationList)
 	if (Argument == "")
 		return "";
 	transform(Argument.begin(), Argument.end(), Argument.begin(), ::tolower);
-	std::vector<std::string> list = common::stringsplit(ValidationList, " ");
+	std::vector<std::string> list = tools::stringsplit(ValidationList, " ");
 
 	for (auto& item : list)
 	{
@@ -809,15 +808,15 @@ std::string	ProcessEvent(EVENT& event)
 {
 	nlohmann::json response;
 
-	for (auto& dev : Settings.Devices)
+	for (auto& dev : Prefs.devices_)
 	{
 		bool bMatch = false;
 		if (event.devices.size() == 0)			// ALL DEVICES
 			bMatch = true;
 		else									// MATCHING DEVICES
 		{
-			std::string dev_id_lowercase = dev.DeviceId;
-			std::string dev_name_lowercase = dev.Name;
+			std::string dev_id_lowercase = dev.id;
+			std::string dev_name_lowercase = dev.name;
 			transform(dev_id_lowercase.begin(), dev_id_lowercase.end(), dev_id_lowercase.begin(), ::tolower);
 			transform(dev_name_lowercase.begin(), dev_name_lowercase.end(), dev_name_lowercase.begin(), ::tolower);
 			for (auto& ev : event.devices)
@@ -834,28 +833,28 @@ std::string	ProcessEvent(EVENT& event)
 			std::string png;
 			switch (event.dwType)
 			{
-			case EVENT_USER_DISPLAYON:
-				response[dev.DeviceId] = PowerOnDevice(dev);
+			case EVENT_FORCE_DISPLAYON:
+				response[dev.id] = PowerOnDevice(dev);
 				break;
-			case EVENT_USER_DISPLAYOFF:
-				response[dev.DeviceId] = SendRequest(dev, CreateRequestJson(LG_URI_POWEROFF), false);
+			case EVENT_FORCE_DISPLAYOFF:
+				response[dev.id] = SendRequest(dev, CreateRequestJson(LG_URI_POWEROFF), false);
 				break;
-			case EVENT_USER_BLANKSCREEN:
-				response[dev.DeviceId] = SendRequest(dev, CreateRequestJson(LG_URI_SCREENOFF), false);
+			case EVENT_FORCE_BLANKSCREEN:
+				response[dev.id] = SendRequest(dev, CreateRequestJson(LG_URI_SCREENOFF), false);
 				break;
 			case EVENT_REQUEST:
-				response[dev.DeviceId] = SendRequest(dev, CreateRequestJson(event.request_uri, event.request_payload_json), false);
+				response[dev.id] = SendRequest(dev, CreateRequestJson(event.request_uri, event.request_payload_json), false);
 				break;
 			case EVENT_LUNA_SYSTEMSET_BASIC:
-				response[dev.DeviceId] = SendRequest(dev, CreateLunaSystemSettingJson(event.luna_system_setting_setting, event.luna_system_setting_value, event.luna_system_setting_category, event.luna_system_setting_value_format), true);
+				response[dev.id] = SendRequest(dev, CreateLunaSystemSettingJson(event.luna_system_setting_setting, event.luna_system_setting_value, event.luna_system_setting_category, event.luna_system_setting_value_format), true);
 				break;
 			case EVENT_LUNA_SYSTEMSET_PAYLOAD:
 				params["category"] = event.luna_system_setting_category;
 				params["settings"] = nlohmann::json::parse(event.luna_payload_json);
-				response[dev.DeviceId] = SendRequest(dev, CreateRawLunaJson(LG_LUNA_SET_SYSTEM_SETT, params), true);
+				response[dev.id] = SendRequest(dev, CreateRawLunaJson(LG_LUNA_SET_SYSTEM_SETT, params), true);
 				break;
 			case EVENT_BUTTON:
-				response[dev.DeviceId] = SendButtonRequest(dev, event.button);
+				response[dev.id] = SendButtonRequest(dev, event.button);
 				break;
 			case EVENT_LUNA_DEVICEINFO:
 				png = event.luna_device_info_icon;
@@ -863,11 +862,11 @@ std::string	ProcessEvent(EVENT& event)
 				params["id"] = event.luna_device_info_input;
 				params["icon"] = png;
 				params["label"] = event.luna_device_info_label;
-				response[dev.DeviceId] = SendRequest(dev, CreateRawLunaJson(LG_LUNA_SET_DEVICE_INFO, params), true);
+				response[dev.id] = SendRequest(dev, CreateRawLunaJson(LG_LUNA_SET_DEVICE_INFO, params), true);
 				break;
 			case EVENT_LUNA_GENERIC:
 				params = nlohmann::json::parse(event.luna_payload_json);
-				response[dev.DeviceId] = SendRequest(dev, CreateRawLunaJson(event.request_uri, params), true);
+				response[dev.id] = SendRequest(dev, CreateRawLunaJson(event.request_uri, params), true);
 				break;
 
 			default:break;
@@ -936,10 +935,10 @@ nlohmann::json CreateRawLunaJson(std::string lunauri, nlohmann::json params)
 	payload["onfail"] = event;
 	return CreateRequestJson(LG_URI_CREATEALERT, payload.dump());
 }
-nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json request, bool isLuna)
+nlohmann::json SendRequest(Device device, nlohmann::json request, bool isLuna)
 {
 	nlohmann::json response;
-	if (device.SessionKey == "")
+	if (device.session_key == "")
 	{
 		response["error"] = "No pairing key. Check the device configuration in LGTV Companion UI";
 		return response;
@@ -948,11 +947,11 @@ nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json r
 	{
 		try
 		{
-			std::string host = device.IP;
+			std::string host = device.ip;
 
 			//build handshake
-			std::string sHandshake = common::narrow(LG_HANDSHAKE_PAIRED);
-			common::ReplaceAllInPlace(sHandshake, "#CLIENTKEY#", device.SessionKey);
+			std::string sHandshake = tools::narrow(LG_HANDSHAKE_PAIRED);
+			tools::replaceAllInPlace(sHandshake, "#CLIENTKEY#", device.session_key);
 
 			beast::flat_buffer buffer;
 			net::io_context ioc;
@@ -961,16 +960,16 @@ nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json r
 			//load_root_certificates(ctx);
 			websocket::stream<beast::ssl_stream<tcp::socket>> wss{ ioc, ctx };
 			websocket::stream<tcp::socket> ws{ ioc };
-			auto const results = resolver.resolve(host, device.SSL ? SERVICE_PORT_SSL : SERVICE_PORT);
-			auto ep = net::connect(device.SSL ? get_lowest_layer(wss) : ws.next_layer(), results);
-			if (device.SSL)
+			auto const results = resolver.resolve(host, device.ssl ? PORT_SSL : PORT);
+			auto ep = net::connect(device.ssl ? get_lowest_layer(wss) : ws.next_layer(), results);
+			if (device.ssl)
 				SSL_set_tlsext_host_name(wss.next_layer().native_handle(), host.c_str()); //SSL set SNI Hostname	
 			host += ':' + std::to_string(ep.port()); //build the host string for the decorator	
-			if (device.SSL)
+			if (device.ssl)
 				wss.next_layer().handshake(ssl::stream_base::client); //SSL handshake
 
 			// Set a decorator to change the User-Agent of the handshake
-			if (device.SSL)
+			if (device.ssl)
 			{
 				wss.set_option(websocket::stream_base::decorator(
 					[](websocket::request_type& req)
@@ -992,7 +991,7 @@ nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json r
 					}));
 				ws.handshake(host, "/");
 			}
-			if (device.SSL)
+			if (device.ssl)
 			{
 				wss.write(net::buffer(std::string(sHandshake)));
 				wss.read(buffer); // read the response
@@ -1010,7 +1009,7 @@ nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json r
 			if (std::string(type) != "registered")
 			{
 				response["error"] = "Invalid pairing key.";
-				if (device.SSL)
+				if (device.ssl)
 					wss.close(websocket::close_code::normal);
 				else
 					ws.close(websocket::close_code::normal);
@@ -1018,7 +1017,7 @@ nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json r
 			}
 
 			// send the json request
-			if (device.SSL)
+			if (device.ssl)
 			{
 				wss.write(net::buffer(request.dump()));
 				wss.read(buffer);
@@ -1051,8 +1050,8 @@ nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json r
 							if (id.size() > 0)
 							{
 								std::string close_alert_request = CreateRequestJson(LG_URI_CLOSEALERT, LG_URI_PAYLOAD_CLOSEALERT).dump();
-								common::ReplaceAllInPlace(close_alert_request, "#ARG#", id);
-								if (device.SSL)
+								tools::replaceAllInPlace(close_alert_request, "#ARG#", id);
+								if (device.ssl)
 								{
 									wss.write(net::buffer(close_alert_request));
 									wss.read(buffer);
@@ -1087,7 +1086,7 @@ nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json r
 			}
 			else
 				response["error"] = "Invalid response from device.";
-			if (device.SSL)
+			if (device.ssl)
 				wss.close(websocket::close_code::normal);
 			else
 				ws.close(websocket::close_code::normal);
@@ -1102,10 +1101,10 @@ nlohmann::json SendRequest(jpersson77::settings::DEVICE device, nlohmann::json r
 fn_end:
 	return response;
 }
-nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::string button)
+nlohmann::json SendButtonRequest(Device device, std::string button)
 {
 	nlohmann::json response;
-	if (device.SessionKey == "")
+	if (device.session_key == "")
 	{
 		response["error"] = "No pairing key. Check the device configuration in LGTV Companion UI";
 		return response;
@@ -1114,11 +1113,11 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 	{
 		try
 		{
-			std::string host = device.IP;
+			std::string host = device.ip;
 
 			//build handshake
-			std::string sHandshake = common::narrow(LG_HANDSHAKE_PAIRED);
-			common::ReplaceAllInPlace(sHandshake, "#CLIENTKEY#", device.SessionKey);
+			std::string sHandshake = tools::narrow(LG_HANDSHAKE_PAIRED);
+			tools::replaceAllInPlace(sHandshake, "#CLIENTKEY#", device.session_key);
 
 			beast::flat_buffer buffer;
 			net::io_context ioc;
@@ -1127,16 +1126,16 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 			//load_root_certificates(ctx);
 			websocket::stream<beast::ssl_stream<tcp::socket>> wss{ ioc, ctx };
 			websocket::stream<tcp::socket> ws{ ioc };
-			auto const results = resolver.resolve(host, device.SSL ? SERVICE_PORT_SSL : SERVICE_PORT);
-			auto ep = net::connect(device.SSL ? get_lowest_layer(wss) : ws.next_layer(), results);
-			if (device.SSL)
+			auto const results = resolver.resolve(host, device.ssl ? PORT_SSL : PORT);
+			auto ep = net::connect(device.ssl ? get_lowest_layer(wss) : ws.next_layer(), results);
+			if (device.ssl)
 				SSL_set_tlsext_host_name(wss.next_layer().native_handle(), host.c_str()); //SSL set SNI Hostname	
 			host += ':' + std::to_string(ep.port()); //build the host string for the decorator	
-			if (device.SSL)
+			if (device.ssl)
 				wss.next_layer().handshake(ssl::stream_base::client); //SSL handshake
 
 			// Set a decorator to change the User-Agent of the handshake
-			if (device.SSL)
+			if (device.ssl)
 			{
 				wss.set_option(websocket::stream_base::decorator(
 					[](websocket::request_type& req)
@@ -1158,7 +1157,7 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 					}));
 				ws.handshake(host, "/");
 			}
-			if (device.SSL)
+			if (device.ssl)
 			{
 				wss.write(net::buffer(std::string(sHandshake)));
 				wss.read(buffer); // read the response
@@ -1174,7 +1173,7 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 			if (std::string(type) != "registered")
 			{
 				response["error"] = "Invalid pairing key.";
-				if (device.SSL)
+				if (device.ssl)
 					wss.close(websocket::close_code::normal);
 				else
 					ws.close(websocket::close_code::normal);
@@ -1182,7 +1181,7 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 			}
 			// request endpoint
 			std::string input_socket_request = CreateRequestJson(LG_URI_GETINPUTSOCKET).dump();
-			if (device.SSL)
+			if (device.ssl)
 			{
 				wss.write(net::buffer(input_socket_request));
 				wss.read(buffer);
@@ -1219,7 +1218,7 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 						else
 						{
 							response["error"] = "Invalid resource path.";
-							if (device.SSL)
+							if (device.ssl)
 								wss.close(websocket::close_code::normal);
 							else
 								ws.close(websocket::close_code::normal);
@@ -1233,16 +1232,16 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 						websocket::stream<beast::ssl_stream<tcp::socket>> wssx{ iocx, ctxx };
 						websocket::stream<tcp::socket> wsx{ iocx };
 
-						auto const resultsx = resolverx.resolve(device.IP, device.SSL ? SERVICE_PORT_SSL : SERVICE_PORT);
-						auto epx = net::connect(device.SSL ? get_lowest_layer(wssx) : wsx.next_layer(), resultsx);
-						if (device.SSL)
-							SSL_set_tlsext_host_name(wssx.next_layer().native_handle(), device.IP.c_str()); //SSL set SNI Hostname	
+						auto const resultsx = resolverx.resolve(device.ip, device.ssl ? PORT_SSL : PORT);
+						auto epx = net::connect(device.ssl ? get_lowest_layer(wssx) : wsx.next_layer(), resultsx);
+						if (device.ssl)
+							SSL_set_tlsext_host_name(wssx.next_layer().native_handle(), device.ip.c_str()); //SSL set SNI Hostname	
 						//		host += ':' + std::to_string(ep.port()); //build the host string for the decorator	
-						if (device.SSL)
+						if (device.ssl)
 							wssx.next_layer().handshake(ssl::stream_base::client); //SSL handshake
 
 						// Set a decorator to change the User-Agent of the handshake
-						if (device.SSL)
+						if (device.ssl)
 						{
 							wssx.set_option(websocket::stream_base::decorator(
 								[](websocket::request_type& reqx)
@@ -1268,14 +1267,14 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 						button_command = "type:button\nname:";
 						button_command += button;
 						button_command += "\n\n";
-						if (device.SSL)
+						if (device.ssl)
 							wssx.write(net::buffer(std::string(button_command)));
 						else
 							wsx.write(net::buffer(std::string(button_command)));
 
 						response["button"] = button;
 
-						if (device.SSL)
+						if (device.ssl)
 							wssx.close(websocket::close_code::normal);
 						else
 							wsx.close(websocket::close_code::normal);
@@ -1289,7 +1288,7 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 			else
 				response["error"] = "Invalid response from device.";
 
-			if (device.SSL)
+			if (device.ssl)
 				wss.close(websocket::close_code::normal);
 			else
 				ws.close(websocket::close_code::normal);
@@ -1304,10 +1303,10 @@ nlohmann::json SendButtonRequest(jpersson77::settings::DEVICE device, std::strin
 fn_end:
 	return response;
 }
-nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
+nlohmann::json PowerOnDevice(Device device)
 {
 	nlohmann::json response;
-	if (device.SessionKey == "")
+	if (device.session_key == "")
 	{
 		response["error"] = "No pairing key. Check the device configuration in LGTV Companion UI";
 		return response;
@@ -1315,8 +1314,8 @@ nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
 	else
 	{
 		//build handshake
-		std::string sHandshake = common::narrow(LG_HANDSHAKE_PAIRED);
-		common::ReplaceAllInPlace(sHandshake, "#CLIENTKEY#", device.SessionKey);
+		std::string sHandshake = tools::narrow(LG_HANDSHAKE_PAIRED);
+		tools::replaceAllInPlace(sHandshake, "#CLIENTKEY#", device.session_key);
 
 		std::string host;
 		time_t origtim = time(0);
@@ -1329,12 +1328,12 @@ nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
 		wolthread.detach();
 
 		//try waking up the display, but not longer than timeout user preference
-		while (time(0) - origtim < (Settings.Prefs.PowerOnTimeout + 1))
+		while (time(0) - origtim < (Prefs.power_on_timeout_ + 1))
 		{
 			time_t looptim = time(0);
 			try
 			{
-				host = device.IP;
+				host = device.ip;
 				bool bScreenWasBlanked = false;
 				beast::flat_buffer buffer;
 				net::io_context ioc;
@@ -1343,14 +1342,14 @@ nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
 				//load_root_certificates(ctx);
 				websocket::stream<beast::ssl_stream<tcp::socket>> wss{ ioc, ctx };
 				websocket::stream<tcp::socket> ws{ ioc };
-				auto const results = resolver.resolve(host, device.SSL ? SERVICE_PORT_SSL : SERVICE_PORT);
-				auto ep = net::connect(device.SSL ? get_lowest_layer(wss) : ws.next_layer(), results);
-				if (device.SSL)
+				auto const results = resolver.resolve(host, device.ssl ? PORT_SSL : PORT);
+				auto ep = net::connect(device.ssl ? get_lowest_layer(wss) : ws.next_layer(), results);
+				if (device.ssl)
 					SSL_set_tlsext_host_name(wss.next_layer().native_handle(), host.c_str()); 	//SSL set SNI Hostname
 				host += ':' + std::to_string(ep.port()); //build the host string for the decorator		
-				if (device.SSL)
+				if (device.ssl)
 					wss.next_layer().handshake(ssl::stream_base::client); //SSL handshake
-				if (device.SSL)
+				if (device.ssl)
 				{
 					wss.set_option(websocket::stream_base::decorator(
 						[](websocket::request_type& req)
@@ -1383,7 +1382,7 @@ nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
 				if (std::string(check) != "registered") // Device is unregistered.
 				{
 					response["error"] = "Invalid pairing key.";
-					if (device.SSL)
+					if (device.ssl)
 						wss.close(websocket::close_code::normal);
 					else
 						ws.close(websocket::close_code::normal);
@@ -1391,7 +1390,7 @@ nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
 				}
 				// unblank the screen
 				std::string unblank_request = CreateRequestJson(LG_URI_SCREENON).dump();
-				if (device.SSL)
+				if (device.ssl)
 				{
 					wss.write(net::buffer(std::string(unblank_request)));
 					wss.read(buffer);
@@ -1405,7 +1404,7 @@ nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
 				buffer.consume(buffer.size());
 				//retreive power state from device to determine if the device is powered on
 				std::string get_powerstate_request = CreateRequestJson(LG_URI_GETPOWERSTATE).dump();
-				if (device.SSL)
+				if (device.ssl)
 				{
 					wss.write(net::buffer(std::string(get_powerstate_request)));
 					wss.read(buffer);
@@ -1428,7 +1427,7 @@ nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
 						response["payload"] = j["payload"];
 						bPoweredOn = true;
 
-						if (device.SSL)
+						if (device.ssl)
 							wss.close(websocket::close_code::normal);
 						else
 							ws.close(websocket::close_code::normal);
@@ -1436,7 +1435,7 @@ nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
 					}
 				}
 				buffer.consume(buffer.size());
-				if (device.SSL)
+				if (device.ssl)
 					wss.close(websocket::close_code::normal);
 				else
 					ws.close(websocket::close_code::normal);
@@ -1453,7 +1452,7 @@ nlohmann::json PowerOnDevice(jpersson77::settings::DEVICE device)
 		if(!bPoweredOn)
 		{
 			response["error"] = "Could not power on device.";
-			response["timeOut"] = Settings.Prefs.PowerOnTimeout;
+			response["timeOut"] = Prefs.power_on_timeout_;
 		}
 	}
 	
@@ -1512,16 +1511,16 @@ namespace {
 		return std::make_unique<NetEntryDeleter>(*luid, destination);
 	}
 }
-void Thread_WOL(jpersson77::settings::DEVICE device)
+void Thread_WOL(Device device)
 {
-	if (device.MAC.size() < 1)
+	if (device.mac_addresses.size() < 1)
 		return;
 
 	SOCKET WOLsocket = INVALID_SOCKET;
 	time_t origtim = time(0);
 	
 	//send WOL packet every second until timeout, or until the calling thread has ended
-	while (!bTerminateThread && (time(0) - origtim < (Settings.Prefs.PowerOnTimeout + 1)))
+	while (!bTerminateThread && (time(0) - origtim < (Prefs.power_on_timeout_ + 1)))
 	{
 		time_t looptim = time(0);
 		try
@@ -1529,10 +1528,10 @@ void Thread_WOL(jpersson77::settings::DEVICE device)
 			struct sockaddr_in LANDestination {};
 			LANDestination.sin_family = AF_INET;
 			LANDestination.sin_port = htons(9);
-			if (device.WOLtype == WOL_SUBNETBROADCAST && device.Subnet != "")
+			if (device.wake_method == WOL_TYPE_SUBNETBROADCAST && device.subnet != "")
 			{
-				std::vector<std::string> vIP = common::stringsplit(device.IP, ".");
-				std::vector<std::string> vSubnet = common::stringsplit(device.Subnet, ".");
+				std::vector<std::string> vIP = tools::stringsplit(device.ip, ".");
+				std::vector<std::string> vSubnet = tools::stringsplit(device.subnet, ".");
 				std::stringstream broadcastaddress;
 
 				if (vIP.size() == 4 && vSubnet.size() == 4)
@@ -1552,8 +1551,8 @@ void Thread_WOL(jpersson77::settings::DEVICE device)
 				else
 					return;
 			}
-			else if (device.WOLtype == WOL_IPSEND)
-				LANDestination.sin_addr.s_addr = inet_addr(device.IP.c_str());
+			else if (device.wake_method == WOL_TYPE_IP || device.wake_method == WOL_TYPE_AUTO)
+				LANDestination.sin_addr.s_addr = inet_addr(device.ip.c_str());
 			else
 				LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
 
@@ -1565,7 +1564,7 @@ void Thread_WOL(jpersson77::settings::DEVICE device)
 					closesocket(WOLsocket);
 				else
 				{
-					for (auto& MAC : device.MAC)
+					for (auto& MAC : device.mac_addresses)
 					{
 						//remove filling from MAC
 						char CharsToRemove[] = ".:- ";
@@ -1585,7 +1584,7 @@ void Thread_WOL(jpersson77::settings::DEVICE device)
 								memcpy(&Message[i * 6], &MACstr, 6 * sizeof(unsigned char));
 							
 							std::unique_ptr<NetEntryDeleter> netEntryDeleter;
-							if (device.WOLtype == WOL_IPSEND)
+							if (device.wake_method == WOL_TYPE_IP)
 								netEntryDeleter = CreateTransientLocalNetEntry(reinterpret_cast<const SOCKADDR_INET&>(LANDestination), MACstr);
 
 							// Send Wake On LAN packet
@@ -1620,7 +1619,7 @@ std::string helpText(void)
 #include "../Common/help_commands.h"
 			;
 	std::string ver = "v ";
-	ver += common::narrow(APP_VERSION);
-	common::ReplaceAllInPlace(response, "%%VER%%", ver);
+	ver += tools::narrow(APP_VERSION);
+	tools::replaceAllInPlace(response, "%%VER%%", ver);
 	return response;
 }

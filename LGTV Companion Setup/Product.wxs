@@ -3,7 +3,7 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" 
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <?define LGTV Companion Service_TargetDir=$(var.LGTV Companion Service.TargetDir)?><?define LGTV Companion UI_TargetDir=$(var.LGTV Companion UI.TargetDir)?>
-	<Product Id="D52F474B-0963-46D8-ADA5-BFFF08F17115" Name="LGTV Companion" Language="1033" Version="3.5.0" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A">
+	<Product Id="908D76BB-50F0-42F4-940A-10FD1ECCF9B3" Name="LGTV Companion" Language="1033" Version="4.0.0" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A">
 		<Package Id="*" InstallerVersion="301" Compressed="yes" InstallScope="perMachine" Platform='x64' Description="LGTV Companion installer" InstallPrivileges="elevated" AdminImage="yes"/>
     <Media Id="1" Cabinet="LGTVapp.cab" EmbedCab="yes" />
 

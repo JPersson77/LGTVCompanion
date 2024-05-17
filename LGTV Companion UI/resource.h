@@ -63,7 +63,6 @@
 #define IDC_CHECK_TOPOLOGY              1030
 #define IDC_SET_HDMI_INPUT_SPIN         1031
 #define IDC_GO                          1031
-#define IDC_CHECK_TOPOLOGY2             1031
 #define IDC_CHECK_TOPOLOGY_LOGON        1031
 #define IDC_STATIC_NO_1                 1032
 #define IDC_SYSLINK8                    1032
@@ -109,7 +108,11 @@
 #define IDC_SYSLINK_EDIR2               1062
 #define IDC_COMBO_SSL                   1063
 #define IDC_SYSLINK_DELETE2             1063
+#define IDC_COMBO_LOG                   1063
 #define IDC_CHECK_API                   1064
+#define IDC_COMBO_WOL                   1064
+#define IDC_COMBO_SSL2                  1065
+#define IDC_COMBO_PERSISTENCE           1065
 #define IDC_CHECK1                      1066
 #define IDC_CHECK_MUTE                  1066
 #define IDC_COMBO_TIMING                1067

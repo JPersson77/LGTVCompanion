@@ -146,16 +146,23 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\Common\Common.cpp" />
-    <ClCompile Include="Console.cpp" />
+    <ClCompile Include="..\Common\event.cpp" />
+    <ClCompile Include="..\Common\ipc.cpp" />
+    <ClCompile Include="..\Common\preferences.cpp" />
+    <ClCompile Include="..\Common\tools.cpp" />
+    <ClCompile Include="console.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Common\Common.h" />
+    <ClInclude Include="..\Common\common_app_define.h" />
+    <ClInclude Include="..\Common\event.h" />
     <ClInclude Include="..\Common\help_commands.h" />
+    <ClInclude Include="..\Common\ipc.h" />
     <ClInclude Include="..\Common\LgApi.h" />
     <ClInclude Include="..\Common\lg_api_buttons.h" />
     <ClInclude Include="..\Common\lg_api_commands.h" />
-    <ClInclude Include="Console.h" />
+    <ClInclude Include="..\Common\preferences.h" />
+    <ClInclude Include="..\Common\tools.h" />
+    <ClInclude Include="console.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

@@ -5,7 +5,6 @@
   "dependencies": [
     "nlohmann-json",
 	"boost-asio",
-	"boost-optional",
 	"boost-utility",
 	"boost-beast",
 	"openssl",

@@ -10,7 +10,6 @@ Alternatively, You can manually install the dependencies, with the following com
 
 		vcpkg install nlohmann-json:x64-windows-static
 		vcpkg install boost-asio:x64-windows-static
-		vcpkg install boost-optional:x64-windows-static
 		vcpkg install boost-utility:x64-windows-static
 		vcpkg install boost-date-time:x64-windows-static
 		vcpkg install boost-beast:x64-windows-static

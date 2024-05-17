@@ -164,13 +164,18 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\Common\Common.h" />
+    <ClInclude Include="..\Common\common_app_define.h" />
+    <ClInclude Include="..\Common\ipc.h" />
+    <ClInclude Include="..\Common\preferences.h" />
+    <ClInclude Include="..\Common\tools.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="Daemon.h" />
+    <ClInclude Include="daemon.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Common\Common.cpp" />
-    <ClCompile Include="Daemon.cpp" />
+    <ClCompile Include="..\Common\ipc.cpp" />
+    <ClCompile Include="..\Common\preferences.cpp" />
+    <ClCompile Include="..\Common\tools.cpp" />
+    <ClCompile Include="daemon.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="LGTV Companion User.rc" />
