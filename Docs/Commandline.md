@@ -117,9 +117,16 @@ All other commands following the -output command will obey the formatting. Pleas
 ```
 "LGTV Companion.exe" -button INFO device1
 ```
-*Display the service menu on device 1. Enter defautl code 0413 if you are certain you want to enter the srvice menu. Please use caution in the service menu!*
+## Accessing the service menu (LGTV Companion and LGTVcli)
+It is possible to display the Service Menu. Please use caution in the service menu! 
+#### Examples: 
+*Display the service menu on device 1. Enter default code 0413 when prompted.*
 ```
-"LGTV Companion.exe" -button IN_START device1
+"LGTVcli.exe" -button IN_START device1
+```
+*Please note that WebOS 23 displays an updated service menu. To toggle the older version of the service menu please use the following command*
+```
+"LGTVcli.exe" -settings_other "{"svcMenuFlag": false}" device1
 ```
 ## Retrieving system settings (LGTVcli only)
 - *-get_system_settings [category] [Json-array of keys]* 	- get one or many system settings in a specified category. Supported values below:
