@@ -38,7 +38,7 @@ class SessionWrapper {
 public:
 	WebOsClient client_;
 	Device device_;
-	bool topologyEnabled_ = false;
+	bool topology_enabled_ = false;
 	SessionWrapper(boost::asio::io_context& ioc, boost::asio::ssl::context& ctx, Device& dev, Logging& log) 
 		: client_(ioc, ctx, dev, log)
 	{
@@ -100,6 +100,7 @@ public:
 Companion::Impl::Impl(Preferences& settings) 
 	: prefs_(settings)
 {
+	prefs_.topology_support_ = false; //disable initially
 	std::wstring file = tools::widen(prefs_.data_path_);
 	file += LOG_FILE;
 	log_ = std::make_shared<Logging>(settings.log_level_, file);
@@ -120,7 +121,7 @@ Companion::Impl::Impl(Preferences& settings)
 		else
 			DEBUG_(tools::narrow(CONFIG_FILE), "Default configuration loaded");
 
-		if (prefs_.topology_support_)
+		if (settings.topology_support_)
 		{
 			if (prefs_.topology_keep_on_boot_)
 			{
@@ -184,22 +185,22 @@ std::string	Companion::Impl::setTopology(std::vector<std::string> device_names_o
 	std::string return_string;
 	for (auto& session : sessions_)
 	{
-		session->topologyEnabled_ = false;
+		session->topology_enabled_ = false;
 		for (auto& name_or_id : device_names_or_ids)
 		{
 			if (tools::tolower(session->device_.name) == tools::tolower(name_or_id) || tools::tolower(session->device_.id) == tools::tolower(name_or_id))
-				session->topologyEnabled_ = true;
+				session->topology_enabled_ = true;
 		}
 		return_string += session->device_.name;
 		return_string += ":";
-		return_string += session->topologyEnabled_ ? "ON " : "OFF ";
+		return_string += session->topology_enabled_ ? "ON " : "OFF ";
 	}
 	return return_string;
 }
 void Companion::Impl::clearTopology(void){
 	prefs_.topology_support_ = false;
 	for (auto& session : sessions_)
-		session->topologyEnabled_ = false;
+		session->topology_enabled_ = false;
 }
 std::string	 Companion::Impl::loadSavedTopologyConfiguration(void){
 	std::wstring file = tools::widen(prefs_.data_path_);
@@ -246,7 +247,7 @@ void Companion::Impl::saveTopologyConfiguration(void){
 	file += TOPOLOGY_CONFIG_FILE;
 	topology_json[PREFS_JSON_NODE][PREFS_JSON_VERSION] = (int)prefs_.version_;
 	for (auto& session : sessions_)
-		if (session->topologyEnabled_)
+		if (session->topology_enabled_)
 			topology_json[PREFS_JSON_NODE][PREFS_JSON_TOPOLOGY_NODE].push_back(tools::tolower(session->device_.id));
 	if (!topology_json.empty())
 	{
@@ -439,7 +440,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				break;
 
 			case EVENT_SYSTEM_RESUMEAUTO:
-				if (prefs_.topology_support_ && !session.topologyEnabled_)
+				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
 				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_power_on < 10)
 					work_was_enqueued = setHdmiInput(event, session);
@@ -448,7 +449,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			case EVENT_SYSTEM_DISPLAYON:
 				if (remote_client_connected_)
 					break;
-				if (prefs_.topology_support_ && !session.topologyEnabled_)
+				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
 				work_was_enqueued = session.client_.powerOn();
 				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_resume_or_boot_time < 10)
@@ -497,7 +498,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			case EVENT_SYSTEM_USERIDLE:
 				if (remote_client_connected_)
 					break;
-				if (prefs_.topology_support_ && !session.topologyEnabled_)
+				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
 				if (prefs_.user_idle_mode_ && windows_power_status_on_)
 					work_was_enqueued = session.client_.blankScreen();
@@ -506,14 +507,14 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			case EVENT_SYSTEM_USERBUSY:
 				if (remote_client_connected_)
 					break;
-				if (prefs_.topology_support_ && !session.topologyEnabled_)
+				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
 				if (prefs_.user_idle_mode_)
 					work_was_enqueued = session.client_.powerOn();
 				break;
 
 			case EVENT_SYSTEM_BOOT:
-				if (prefs_.topology_support_ && !session.topologyEnabled_)
+				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
 				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_power_on < 10)
 					work_was_enqueued = setHdmiInput(event, session);
@@ -522,7 +523,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				if (remote_client_connected_)
 					break;
 				if (prefs_.topology_support_)
-					if (session.topologyEnabled_)
+					if (session.topology_enabled_)
 						work_was_enqueued = session.client_.powerOn();
 					else
 						work_was_enqueued = session.client_.powerOff();
@@ -548,6 +549,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			thread_pool.emplace_back(
 				[self_ = shared_from_this()]
 				{
+					SetThreadUILanguage(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US));
 					self_->ioc_.run();
 				});
 			thread_pool[i].detach();
@@ -1424,7 +1426,7 @@ void Companion::Impl::systemEvent(int e, std::string data) {
 		else
 		{
 			//This does happen sometimes, probably for timing reasons when shutting down the system.
-			ERR_("PWR", "Did not receive the expected event eubscription callback prior to shutting down. Unable to determine if system is shutting down or restarting!");
+			ERR_("PWR", "Did not receive the anticipated event subscription callback prior to shutting down. Unable to determine if system is shutting down or restarting!");
 			dispatched_event_type = EVENT_SYSTEM_UNSURE;
 		}
 		break;
