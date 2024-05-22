@@ -658,7 +658,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 				}
 				else
 				{
-					INFO("Power state is %1%. Screen will not be blanked", payload["state"]);
+					INFO("Power state is ON (screen is blanked)");
 					workIsFinished();
 				}
 			}
@@ -696,13 +696,13 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 				}
 				else
 				{
-					INFO("Power state is ON (blanked screen)");
+					INFO("Power state is ON (screen is blanked)");
 					workIsFinished();
 				}
 			}
 			else if (response_id == "mute")
 			{
-				INFO("Power state is ON (blanked screen)");
+				INFO("Power state is ON (screen is blanked)");
 				workIsFinished();
 			}
 			else
