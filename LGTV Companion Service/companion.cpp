@@ -329,6 +329,7 @@ void Companion::Impl::dispatchEvent(Event& event) {
 	case EVENT_SYSTEM_RESUME:
 		remote_client_connected_ = false;
 		windows_power_status_on_ = true;
+		user_idle_mode_log_ = true;
 		break;
 	case EVENT_SYSTEM_DISPLAYON:
 		windows_power_status_on_ = true;
@@ -338,6 +339,7 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		remote_client_connected_ = false;
 		windows_power_status_on_ = true;
 		time_last_resume_or_boot_time = time(0);
+		user_idle_mode_log_ = true;
 		break;
 	case EVENT_SYSTEM_BOOT:
 		time_last_resume_or_boot_time = time(0);

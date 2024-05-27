@@ -1097,8 +1097,8 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 }
 bool checkDisplayTopology(void)
 {
-	std::stringstream s;
-	s << "topology state ";
+	std::string top;
+	top = "topology state ";
 	if (Prefs.devices_.size() == 0)
 		return false;
 	std::vector<DisplayInfo> displays = queryDisplays();
@@ -1109,21 +1109,20 @@ bool checkDisplayTopology(void)
 		{
 			for (auto& dev : Prefs.devices_)
 			{
-				std::string ActiveDisplay = tools::narrow(disp.target.monitorDevicePath);
-				std::string DeviceString = dev.uniqueDeviceKey;
+				std::string ActiveDisplay = tools::tolower(tools::narrow(disp.target.monitorDevicePath));
+				std::string DeviceString = tools::tolower(dev.uniqueDeviceKey);
 				if(DeviceString != "")
 				{
-					transform(ActiveDisplay.begin(), ActiveDisplay.end(), ActiveDisplay.begin(), ::tolower);
-					transform(DeviceString.begin(), DeviceString.end(), DeviceString.begin(), ::tolower);
 					if (ActiveDisplay == DeviceString)
 					{
-						s << dev.id << " ";
+						top += dev.id;
+						top += " ";
 					}
 				}
 			}
 		}
 	}
-	communicateWithService(s.str());
+	communicateWithService(top);
 	return true;
 }
 

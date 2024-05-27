@@ -102,7 +102,7 @@ private:
 	std::string host_;
 	int socket_status_ = SOCKET_DISCONNECTED;
 	bool isPoweredOn_ = false;
-	std::queue<Work> workQueue_;
+	std::list<Work> workQueue_;
 	std::shared_ptr<Logging> log_;
 
 	//functions running on strand
@@ -171,7 +171,22 @@ void WebOsClient::Impl::enqueueWork(Work& work)
 	work.timestamp_enqueue_ = time(0);
 	net::dispatch(resolver_.get_executor(), [unit = work, self = shared_from_this()]() mutable
 		{
-			self->workQueue_.emplace(std::move(unit));
+			if (unit.type_ == WORK_POWER_ON ) //&& !unit.forced_)
+			{
+				// dequeue all currently queued WORK_POWER_OFF
+				self->workQueue_.erase(std::remove_if(self->workQueue_.begin(), self->workQueue_.end(), [](Work a) {
+					return a.type_ == WORK_POWER_OFF; // && !a.forced_;
+					}), self->workQueue_.end());
+				
+				//don't add WORK_POWER_ON twice in a row
+				if (!self->workQueue_.empty() && self->workQueue_.back().type_ == WORK_POWER_ON ) //&& !self->workQueue_.back().forced_)
+				{
+					self->startNextWork();
+					return;
+				}
+			}
+
+			self->workQueue_.emplace_back(std::move(unit));
 			self->startNextWork();
 		});
 }
@@ -230,7 +245,7 @@ void WebOsClient::Impl::startNextWork(void)
 	
 	else if (!workQueue_.empty()) {
 		work_ = std::move(workQueue_.front());
-		workQueue_.pop();
+		workQueue_.pop_front();
 		work_.timestamp_start_ = time(0);
 		switch (work_.type_)
 		{

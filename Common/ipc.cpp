@@ -270,7 +270,7 @@ void IpcServer::Impl::workerThread()
 						else
 							onEvent(PIPE_EVENT_ERROR, L"ReadFile() failed. DisconnectAndReconnect() success.", dwPipe);
 					}
-					else if (bytes_transferred_ >= sizeof(TCHAR))
+					else if (bytes_transferred_ >= 2 * sizeof(TCHAR))
 					{					
 						onEvent(PIPE_EVENT_READ, std::wstring(buffer_[dwPipe]), dwPipe);
 					}
@@ -393,8 +393,8 @@ bool IpcClient::Impl::init()
 	if (isRunning())
 		if (!terminate())
 			return false;
-
-	buffer_[0] = '\0';
+	ZeroMemory(buffer_, PIPE_BUF_SIZE * sizeof(TCHAR));
+//	buffer_[0] = '\0';
 
 	while (1)
 	{

@@ -38,11 +38,15 @@ std::string tools::narrow(std::wstring input) {
 }
 std::string tools::tolower(std::string input)
 {
+	if (input.length() == 0)
+		return "";
 	transform(input.begin(), input.end(), input.begin(), ::tolower);
 	return input;
 }
 std::wstring tools::tolower(std::wstring input)
 {
+	if (input.length() == 0)
+		return L"";
 	transform(input.begin(), input.end(), input.begin(), ::tolower);
 	return input;
 }
