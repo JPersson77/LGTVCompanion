@@ -562,9 +562,14 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 			{
 				if (payload["state"] == "Active" && payload["processing"].empty()) // Device is ON
 				{
-					INFO("Power state is ON");
-					isPoweredOn_ = true;
-					workIsFinished();
+					if (device_settings_.extra.user_idle_mode_mute_speakers)
+						send(JSON_GETAUDIOSTATUS);
+					else
+					{
+						INFO("Power state is ON");
+						isPoweredOn_ = true;
+						workIsFinished();
+					}
 				}
 				else if (payload["state"] == "Screen Off") // Device is ON, but screen is blanked
 					send(JSON_UNBLANK);
@@ -579,7 +584,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 			else if (response_id == "unblankScreen")
 			{
 				if (device_settings_.extra.user_idle_mode_mute_speakers && !payload["returnValue"].empty() && payload["returnValue"].is_boolean() && payload["returnValue"].get<bool>())
-					send(JSON_UNMUTE);
+					send(JSON_GETAUDIOSTATUS);
 				else
 				{
 					INFO("Power state is ON");
@@ -597,6 +602,17 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 				INFO("Power state is ON");
 				isPoweredOn_ = true;
 				workIsFinished();
+			}
+			else if (response_id == "getAudioStatus")
+			{
+				if (!payload["mute"].empty() && payload["mute"].is_boolean() && payload["mute"].get<bool>())
+					send(JSON_UNMUTE);
+				else
+				{
+					INFO("Power state is ON");
+					isPoweredOn_ = true;
+					workIsFinished();
+				}
 			}
 			else
 			{
@@ -1039,7 +1055,7 @@ void WebOsClient::Impl::runWOL(void) {
 		udp_socket_.set_option(boost::asio::socket_base::broadcast(true), error);
 		if (error)
 			DEBUG("Failed to set options for UDP socket");
-		wol_timer_.expires_from_now(boost::posix_time::milliseconds(100));
+		wol_timer_.expires_from_now(boost::posix_time::milliseconds(200));
 		wol_timer_.async_wait(beast::bind_front_handler(&Impl::onWOL, shared_from_this()));
 	}
 	else

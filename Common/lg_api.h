@@ -32,6 +32,7 @@
 #define	JSON_POWERTOGGLE			"{\"type\":\"request\",\"id\":\"powerToggle\",\"uri\":\"ssap://system/turnOff\",\"payload\":{}}"
 #define	JSON_MUTE					"{\"type\":\"request\",\"id\":\"mute\",\"uri\":\"ssap://audio/setMute\",\"payload\":{\"mute\":\"true\"}}"
 #define	JSON_UNMUTE					"{\"type\":\"request\",\"id\":\"unmute\",\"uri\":\"ssap://audio/setMute\",\"payload\":{}}"
+#define	JSON_GETAUDIOSTATUS			"{\"type\":\"request\",\"id\":\"getAudioStatus\",\"uri\":\"ssap://audio/getStatus\",\"payload\":{}}"
 #define	JSON_GETFOREGROUNDAPP		"{\"type\":\"request\",\"id\":\"getForegroundApp\",\"uri\":\"ssap://com.webos.applicationManager/getForegroundAppInfo\",\"payload\":{}}"
 #define	JSON_GETBUTTONSOCKET		"{\"type\":\"request\",\"id\":\"getButtonSocket\",\"uri\":\"ssap://com.webos.service.networkinput/getPointerInputSocket\",\"payload\":{}}"
 #define	JSON_LUNA_CLOSE_ALERT		"{\"type\":\"request\",\"id\":\"closeLunaAlert\",\"uri\":\"ssap://system.notifications/closeAlert\",\"payload\":{\"alertId\":\"com.webos.service.apiadapter-#ARG#\"}}"
