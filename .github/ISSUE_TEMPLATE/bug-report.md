@@ -21,8 +21,7 @@ Enter a description of what you expected to happen.
 
 ### What OS are you using?
 
-e.g. Win 11, build 26100.712
-LG OLED C2
+e.g. Win 11, build 26100.712, LG OLED C2
 
 ### Log file and screenshots
 
