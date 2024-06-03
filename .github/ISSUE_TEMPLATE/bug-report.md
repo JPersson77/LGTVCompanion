@@ -1,7 +1,7 @@
 ---
 name: Bug report
 about: Create a bug report
-title: "[BUG] Enter your title here"
+title: "[BUG] Enter your title here..."
 labels: ''
 assignees: ''
 
@@ -19,7 +19,7 @@ Enter the steps to reproduce the behavior
 
 Enter a description of what you expected to happen.
 
-### What OS are you using?
+### What is your system?
 
 e.g. Win 11, build 26100.712, LG OLED C2
 
