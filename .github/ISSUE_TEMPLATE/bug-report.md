@@ -25,4 +25,4 @@ e.g. Win 11, build 26100.712, LG OLED C2
 
 ### Log file and screenshots
 
-Please enable "debug level logging" to capture the issue, upload the log to pastebin or similar and add the link here along with the time the issue occured. Add screenshots to further help explain your problem, as applicable.
+Please enable "debug level logging" in global options of the app to capture the issue, upload the log to pastebin or similar and add the link here along with the time the issue occured. Add screenshots to further help explain your problem, as applicable.
