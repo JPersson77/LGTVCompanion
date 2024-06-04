@@ -11,7 +11,7 @@ jobs:
       - uses: microsoft/setup-msbuild@v1.1
       - name: vcpkg build
         id: vcpkg
-        uses: johnwason/vcpkg-action@v4
+        uses: johnwason/vcpkg-action@v6
         with:
           manifest-dir: ${{ github.workspace }} # Set to directory containing vcpkg.json
 #         pkgs: nlohmann-json boost-asio boost-optional boost-utility boost-date-time boost-beast wintoast openssl
