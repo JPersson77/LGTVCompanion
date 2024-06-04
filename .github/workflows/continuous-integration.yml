@@ -17,6 +17,7 @@ jobs:
 #         pkgs: nlohmann-json boost-asio boost-optional boost-utility boost-date-time boost-beast wintoast openssl
           triplet: x64-windows-static
           token: ${{ github.token }}
+          github-binarycache: true
       - run: vcpkg integrate install
       - run: msbuild LGTVCompanion.sln /p:VcpkgEnableManifest=true 
         env:
