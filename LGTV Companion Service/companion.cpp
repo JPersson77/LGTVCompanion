@@ -289,7 +289,8 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		if(screensaver_active_)
 			DEBUG("Screensaver is active during DIMMED event");
 	}
-	// process event for all devices
+
+	// process event for ALL devices
 	if (event.getDevices().size() == 0)
 		for (auto& session : sessions_)
 			processEvent(event,  *session);
@@ -302,6 +303,12 @@ void Companion::Impl::dispatchEvent(Event& event) {
 	//post processing stuff
 	switch (event.getType())
 	{
+	case EVENT_SYSTEM_REMOTE_CONNECT:
+		remote_client_connected_ = true;
+		break;
+	case EVENT_SYSTEM_REMOTE_DISCONNECT:
+		remote_client_connected_ = false;
+		break;
 	case EVENT_SYSTEM_SHUTDOWN:
 	case EVENT_SYSTEM_UNSURE:
 		remote_client_connected_ = false;
@@ -432,6 +439,23 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			// Process system events
 			switch (event.getType())
 			{
+			case EVENT_SYSTEM_REMOTE_CONNECT:
+				if (remote_client_connected_)
+					break;
+				if (windows_power_status_on_ == true)
+				{
+					if (prefs_.remote_streaming_host_prefer_power_off_)
+						work_was_enqueued = session.client_.powerOff();
+					else
+						work_was_enqueued = session.client_.blankScreen();
+				}
+				break;
+			case EVENT_SYSTEM_REMOTE_DISCONNECT:
+				if (!remote_client_connected_)
+					break;
+				if (windows_power_status_on_ == true)
+					work_was_enqueued = session.client_.powerOn();
+				break;
 			case EVENT_SYSTEM_REBOOT:
 			case EVENT_SYSTEM_RESUME:
 				break;
@@ -464,7 +488,6 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 					work_was_enqueued = session.client_.powerOff();
 
 				}					
-//				work_was_enqueued = session.client_.close(true);
 				break;
 
 			case EVENT_SYSTEM_DISPLAYDIMMED:
@@ -476,8 +499,6 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 					if (windows_power_status_on_ == true)
 					{
 						work_was_enqueued = session.client_.powerOff();
-//						if (time(0) - time_last_suspend < 10)
-//							work_was_enqueued = session.client_.close(true);
 					}
 				}
 				break;
@@ -488,8 +509,6 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				if (windows_power_status_on_ == true)
 				{
 					work_was_enqueued = session.client_.powerOff();
-//					if (time(0) - time_last_suspend < 10)
-//						work_was_enqueued = session.client_.close(true);
 				}
 				break;
 
@@ -710,25 +729,21 @@ void Companion::Impl::ipcCallback(std::wstring message)
 			}
 			else if (daemon_command == "remote_connect")
 			{
-				INFO_(daemon_number, "Remote streaming client connected. All managed devices will %1%", prefs_.remote_streaming_host_prefer_power_off_ ? "power off" : "be blanked");
-				event(prefs_.remote_streaming_host_prefer_power_off_ ? EVENT_SYSTEM_DISPLAYOFF : EVENT_SYSTEM_BLANKSCREEN);
-				remote_client_connected_ = true;
+				if (windows_power_status_on_)
+					INFO_(daemon_number, "Remote streaming client connected. All managed devices will %1%", prefs_.remote_streaming_host_prefer_power_off_ ? "power OFF" : "be blanked");
+				else
+					INFO_(daemon_number, "Remote streaming client connected. Global power status is OFF.");
+				event(EVENT_SYSTEM_REMOTE_CONNECT);
 				continue;
 			}
 			else if (daemon_command == "remote_disconnect")
 			{
-				remote_client_connected_ = false;
 				if (windows_power_status_on_)
-				{
-					INFO_(daemon_number, "Remote streaming client disconnected. All managed devices will power on");
-					event(EVENT_SYSTEM_DISPLAYON);
-					continue;
-				}
+					INFO_(daemon_number, "Remote streaming client disconnected. All managed devices will power ON");
 				else
-				{
-					INFO_(daemon_number, "Remote streaming client disconnected. All managed devices will remained power off");
-					continue;
-				}
+					INFO_(daemon_number, "Remote streaming client disconnected. Global power status is OFF.");
+				event(EVENT_SYSTEM_REMOTE_DISCONNECT);
+				continue;
 			}
 			else if (daemon_command == "newversion")
 			{

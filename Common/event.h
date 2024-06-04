@@ -18,6 +18,8 @@
 #define EVENT_SYSTEM_BOOT								12	
 #define EVENT_SYSTEM_TOPOLOGY							13	
 #define EVENT_SYSTEM_BLANKSCREEN						14	
+#define EVENT_SYSTEM_REMOTE_CONNECT						15
+#define EVENT_SYSTEM_REMOTE_DISCONNECT					16
 
 // user (forced) events 
 #define EVENT_FORCE_DISPLAYON							30	
