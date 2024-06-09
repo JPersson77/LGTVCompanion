@@ -7,26 +7,25 @@ jobs:
       matrix:
         configuration: [Release, Debug]
     steps:
-#      - uses: actions/checkout@v4
-      - uses: microsoft/setup-msbuild@v2
+      - uses: actions/checkout@v3
+      - uses: microsoft/setup-msbuild@v1.1
       - name: vcpkg build
         id: vcpkg
-        uses: johnwason/vcpkg-action@v6
+        uses: johnwason/vcpkg-action@v4
         with:
           manifest-dir: ${{ github.workspace }} # Set to directory containing vcpkg.json
 #         pkgs: nlohmann-json boost-asio boost-optional boost-utility boost-date-time boost-beast wintoast openssl
           triplet: x64-windows-static
           token: ${{ github.token }}
-          github-binarycache: true
       - run: vcpkg integrate install
       - run: msbuild LGTVCompanion.sln /p:VcpkgEnableManifest=true 
         env:
           Configuration: ${{ matrix.configuration }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v3
         with:
           name: LGTVCompanion-${{ matrix.configuration }}
           path: x64/${{ matrix.configuration }}/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v3
         with:
           name: LGTVCompanion-Setup-${{ matrix.configuration }}
           path: LGTV Companion Setup/bin/${{ matrix.configuration }}/
