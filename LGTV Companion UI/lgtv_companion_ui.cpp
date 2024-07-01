@@ -1795,11 +1795,12 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				{
 					MessageBox(hWnd, L"It is not necessary to manually configure localised restart strings on this system, as the application can automatically determine whether "
 						"a reboot or shutdown has been initiated on this system. Consequently the option to manually configure \"localised restart strings\" have been disabled."
-						"\n\nThe timing option determine the timing when managing shutdown or restart. When set to \"Default\" the app will trigger the shutdown/restart routine "
-						"as late as possible during system shutdown. The default option will maximize the opportunity for accurately detecting if the system is restarting or shutting down. \n\nIf "
-						"however devices are not powering off properly during system shutdown you may want to consider changing to the \"Early\" method. This option will "
-						"trigger the shutdown/restart routine earlier, which will leave more time during shutdown for properly shutting down the devices, but with an "
-						"increased risk of not properly detecting restarts.",
+						"\n\nThe timing option determine the timing when managing system shutdown or restart. Depending on specifics of your system you may need to change this option.\n\n"
+						"When set to \"Default\" the app will trigger the shutdown/restart routine "
+						"as late as possible during system shutdown which for most systems will work fine. The \"Early\" method will "
+						"trigger the shutdown/restart routine a bit earlier, which will consequently leave more time during shutdown for communicating with the devices, but with an "
+						"increased risk of not properly detecting restarts. On the other hand, if the system has issues with detecting restarts properly then please consider changing to "
+						"\"Delayed\" which will add a slight delay to the shutdown, thus allowing more time for the system to properly communicate with the app. ",
 
 						L"Shutdown options", MB_OK | MB_ICONINFORMATION);
 				}
@@ -1808,11 +1809,12 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 						"\n\nIt seems the OS on this system is localised in a language not yet managed by the application and the user must therefore assist with manually indicating which "
 						"word or phrase that refers to the system restarting.\n\nPlease put a checkmark for every word or phrase that refers to 'restart' in the \"localised restart strings\" list and "
 						"make sure that the other checkboxes in the list are unchecked. You can contribute to the automatic detection of this language in a future release - please read below!"
-						"\n\nThe timing option determine the timing when managing shutdown or restart. When set to \"Default\" the app will trigger the shutdown/restart routine "
-						"as late as possible during system shutdown. The \"Default\" option will maximize the opportunity for accurately detecting if the system is restarting or shutting down. \n\nIf "
-						"however devices are not powering off properly during system shutdown you may want to consider changing to the \"Early\" method. This option will "
-						"trigger the shutdown/restart routine earlier, which will leave more time during shutdown for properly shutting down the devices, but with an "
-						"increased risk of not properly detecting when the system is restarting."
+						"\n\nThe timing option determine the timing when managing system shutdown or restart. Depending on specifics of your system you may need to change this option.\n\n"
+						"When set to \"Default\" the app will trigger the shutdown/restart routine "
+						"as late as possible during system shutdown which for most systems will work fine. The \"Early\" method will "
+						"trigger the shutdown/restart routine a bit earlier, which will consequently leave more time during shutdown for communicating with the devices, but with an "
+						"increased risk of not properly detecting restarts. On the other hand, if the system has issues with detecting restarts properly then please consider changing to "
+						"\"Delayed\" which will add a slight delay to the shutdown, thus allowing more time for the system to properly communicate with the app. "
 						"\n\nDo you want to contribute to automatic detection of this language in a future release? Please press \"Yes\" to open a google sheet where you can submit your input or "
 						"click \"No\" to close this information dialog.",
 
