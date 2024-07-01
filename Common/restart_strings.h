@@ -2,6 +2,7 @@ R"(
 {
   "Restart" : [
     "restart",
+    "Redémarrer",
     "redémarrer",
     "starta om",
     "reiniciar",
@@ -40,6 +41,7 @@ R"(
     "shutdown",
     "power off",
     "arrêter",
+    "s’arrêter.",
     "se mettre hors tension",
     "se mettre hors tension.",
     "stäng av",

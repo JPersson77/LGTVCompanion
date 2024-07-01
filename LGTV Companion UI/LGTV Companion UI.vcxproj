@@ -160,6 +160,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Common\ipc.cpp" />
+    <ClCompile Include="..\Common\log.cpp" />
     <ClCompile Include="..\Common\preferences.cpp" />
     <ClCompile Include="..\Common\tools.cpp" />
     <ClCompile Include="lgtv_companion_ui.cpp" />

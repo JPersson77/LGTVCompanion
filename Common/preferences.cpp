@@ -34,6 +34,7 @@ using			json = nlohmann::json;
 #define         JSON_EXTERNAL_API				"ExternalAPI"
 #define			JSON_MUTE_SPEAKERS				"MuteSpeakers"
 #define			JSON_TIMING_PRESHUTDOWN			"TimingPreshutdown"
+#define			JSON_TIMING_SHUTDOWN			"TimingShutdown"
 #define			JSON_DEVICE_NAME				"Name"
 #define			JSON_DEVICE_IP					"IP"
 #define			JSON_DEVICE_UNIQUEKEY			"UniqueDeviceKey"
@@ -224,7 +225,10 @@ Preferences::Preferences(std::wstring configuration_file_name)
 					// Shutdown timing
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_TIMING_PRESHUTDOWN];
 					if (!j.empty() && j.is_boolean())
-						preshutdown_timing_ = j.get<bool>();
+						shutdown_timing_ = j.get<bool>() ? 1 : 0;
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_TIMING_SHUTDOWN];
+					if (!j.empty() && j.is_number())
+						shutdown_timing_ = j.get<int>();
 					// User idle mode whitelist
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
 					if (!j.empty() && j.size() > 0)
@@ -412,7 +416,7 @@ bool Preferences::Preferences::writeToDisk(void)
 	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_MODE] = (bool)remote_streaming_host_prefer_power_off_;
 	prefs[JSON_PREFS_NODE][JSON_EXTERNAL_API] = (bool)external_api_support_;
 	prefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS] = (bool)user_idle_mode_mute_speakers_;
-	prefs[JSON_PREFS_NODE][JSON_TIMING_PRESHUTDOWN] = (bool)preshutdown_timing_;
+	prefs[JSON_PREFS_NODE][JSON_TIMING_SHUTDOWN] = (int)shutdown_timing_;
 	
 	if (event_log_restart_strings_custom_.size() > 0)
 		for (auto& item : event_log_restart_strings_custom_)

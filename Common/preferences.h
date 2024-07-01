@@ -5,6 +5,10 @@
 #include <nlohmann/json.hpp>
 #include "../Common/device.h"
 
+#define PREFS_SHUTDOWN_TIMING_DEFAULT		0
+#define PREFS_SHUTDOWN_TIMING_EARLY			1
+#define PREFS_SHUTDOWN_TIMING_DELAYED		2
+
 // Preferences management
 class Preferences : public std::enable_shared_from_this<Preferences>
 {
@@ -42,7 +46,7 @@ public:
 	bool								remote_streaming_host_support_ = false;
 	bool								remote_streaming_host_prefer_power_off_ = true;
 	bool								external_api_support_ = false;
-	bool								preshutdown_timing_ = false;
+	int									shutdown_timing_ = PREFS_SHUTDOWN_TIMING_DEFAULT;
 	std::string							data_path_;
 	std::vector<Device>					devices_;
 	nlohmann::json						lg_api_commands_json;

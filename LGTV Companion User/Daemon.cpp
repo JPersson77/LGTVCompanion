@@ -667,6 +667,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		default:break;
 		}
 	}break;
+	case WM_QUERYENDSESSION:
+	{
+		if(Prefs.shutdown_timing_ == PREFS_SHUTDOWN_TIMING_DELAYED)
+			Sleep(1500);
+		return false; // because it is a dialog
+	}break;
 	case WM_POWERBROADCAST:
 	{
 		switch (wParam)

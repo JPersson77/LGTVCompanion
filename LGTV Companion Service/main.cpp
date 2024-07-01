@@ -353,7 +353,7 @@ VOID SvcReportStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHi
 	context.service_status.dwWaitHint = dwWaitHint;
 	if (dwCurrentState == SERVICE_START_PENDING)
 		context.service_status.dwControlsAccepted = 0;
-	else context.service_status.dwControlsAccepted = context.prefs->preshutdown_timing_ ? SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_PRESHUTDOWN | SERVICE_ACCEPT_POWEREVENT : SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_POWEREVENT;
+	else context.service_status.dwControlsAccepted = context.prefs->shutdown_timing_ == PREFS_SHUTDOWN_TIMING_EARLY ? SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_PRESHUTDOWN | SERVICE_ACCEPT_POWEREVENT : SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_POWEREVENT;
 	if ((dwCurrentState == SERVICE_RUNNING) ||
 		(dwCurrentState == SERVICE_STOPPED))
 		context.service_status.dwCheckPoint = 0;
@@ -399,7 +399,7 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 		&context,                                           //Context
 		(EVT_SUBSCRIBE_CALLBACK)SvcEventLogSubscribeCallback,            //callback
 		EvtSubscribeToFutureEvents);
-	SetProcessShutdownParameters(prefs.preshutdown_timing_ ? 0x100 : 0x3FF, SHUTDOWN_NORETRY);
+	SetProcessShutdownParameters(prefs.shutdown_timing_ == PREFS_SHUTDOWN_TIMING_EARLY? 0x100 : 0x3FF, SHUTDOWN_NORETRY);
 	SvcReportStatus(SERVICE_RUNNING, NO_ERROR, 0, context);
 	SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has started.");
 	lgtv_companion.systemEvent(EVENT_SYSTEM_BOOT);

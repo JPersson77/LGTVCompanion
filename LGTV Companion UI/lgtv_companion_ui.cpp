@@ -97,6 +97,7 @@ COPYRIGHT
 #include <Iphlpapi.h>
 #include <ws2tcpip.h>
 #include "resource.h"
+#include "../Common/log.h"
 
 #pragma comment(lib, "Comctl32.lib")
 #pragma comment(lib, "wevtapi.lib")
@@ -161,6 +162,7 @@ bool									ResetAPIkeys = false;
 std::vector<Preferences::ProcessList>	WhitelistTemp;
 std::vector<Preferences::ProcessList>	ExclusionsTemp;
 std::shared_ptr<IpcClient>				pPipeClient;
+std::shared_ptr<Logging>				logger;
 
 Preferences								Prefs(CONFIG_FILE);
 
@@ -208,6 +210,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			bTop = true;
 	}
 	Prefs.topology_support_ = bTop ? Prefs.topology_support_ : false;
+
+	std::wstring file = tools::widen(Prefs.data_path_);
+	file += L"ui_log.txt";
+	logger = std::make_shared<Logging>(0, file);
 
 	// Initiate PipeClient IPC
 	pPipeClient = std::make_shared<IpcClient>(PIPENAME, ipcCallback, (LPVOID)NULL);
@@ -1429,7 +1435,9 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
 		s = L"Early";
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_SETCURSEL, (WPARAM)Prefs.preshutdown_timing_ ? 1 : 0, (LPARAM)0);
+		s = L"Delayed";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_SETCURSEL, (WPARAM)Prefs.shutdown_timing_, (LPARAM)0);
 
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
 		s = L"Off";
@@ -1681,10 +1689,12 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 						Prefs.remote_streaming_host_prefer_power_off_ = true;
 
 					int selection_timing = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
-					if (selection_timing == 1)
-						Prefs.preshutdown_timing_ = true;
+					if (selection_timing == 2)
+						Prefs.shutdown_timing_ = PREFS_SHUTDOWN_TIMING_DELAYED; 
+					else if (selection_timing == 1)
+						Prefs.shutdown_timing_ = PREFS_SHUTDOWN_TIMING_EARLY;
 					else
-						Prefs.preshutdown_timing_ = false;
+						Prefs.shutdown_timing_ = PREFS_SHUTDOWN_TIMING_DEFAULT;
 
 					int count = ListView_GetItemCount(GetDlgItem(hWnd, IDC_LIST));
 					Prefs.event_log_restart_strings_custom_.clear();
@@ -3060,6 +3070,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 	ZeroMemory(&mi, sizeof(mi));
 	mi.cbSize = sizeof(mi);
 	GetMonitorInfo(hMonitor, &mi);
+	logger->debug("Topology", "callback...");
 	isError = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &requiredPaths, &requiredModes);
 	if (isError)
 	{
@@ -3069,6 +3080,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 	paths.resize(requiredPaths);
 	modes.resize(requiredModes);
 
+	logger->debug("Topology", "QueryDisplayConfig");
 	isError = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &requiredPaths, paths.data(), &requiredModes, modes.data(), NULL);
 	if (isError)
 	{
@@ -3077,6 +3089,7 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 	}
 	paths.resize(requiredPaths);
 	modes.resize(requiredModes);
+	logger->debug("Topology", "Iterate paths");
 
 	for (auto& p : paths)
 	{
@@ -3088,6 +3101,12 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 		sourceName.header.id = p.sourceInfo.id;
 
 		DisplayConfigGetDeviceInfo(&sourceName.header);
+		std::wstring logmessage = L"monitorinfo: ";
+		logmessage += mi.szDevice;
+		logger->debug("Topology", tools::narrow(logmessage));
+		logmessage = L"source: ";
+		logmessage += sourceName.viewGdiDeviceName;
+		logger->debug("Topology", tools::narrow(logmessage));
 		if (wcscmp(mi.szDevice, sourceName.viewGdiDeviceName) == 0)
 		{
 			DISPLAYCONFIG_TARGET_DEVICE_NAME name;
@@ -3096,11 +3115,13 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 			name.header.adapterId = p.sourceInfo.adapterId;
 			name.header.id = p.targetInfo.id;
 			DisplayConfigGetDeviceInfo(&name.header);
-
 			std::wstring FriendlyName = tools::tolower(name.monitorFriendlyDeviceName);
-//			transform(FriendlyName.begin(), FriendlyName.end(), FriendlyName.begin(), ::tolower);
+			logmessage = L"friendly name: ";
+			logmessage += FriendlyName;
+			logger->debug("Topology", tools::narrow(logmessage));
 			if (FriendlyName.find(L"lg tv") != std::wstring::npos)
 			{
+				logger->debug("Topology", "Match!");
 				DisplayInfo di;
 				di.monitorinfo = mi;
 				di.hMonitor = hMonitor;
