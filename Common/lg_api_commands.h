@@ -147,7 +147,7 @@ R"(
   "arcperapp": {
     "Category": "aspectRatio",
     "Setting": "arcPerApp",
-    "Argument": "_21x9 _16x9 _4x3 _14x9 _32x9 _32x12 just_scan original full_wide limited zoom zoom2 cinema_zoom vertZoom allDirZoom twinZoom",
+    "Argument": "21x9 16x9 4x3 14x9 32x9 32x12 just_scan original full_wide limited zoom zoom2 cinema_zoom vertZoom allDirZoom twinZoom",
     "LogMessage": "set aspect ratio [#ARG#]"
   },
   "justscan": {
