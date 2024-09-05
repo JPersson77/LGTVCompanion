@@ -186,10 +186,13 @@ std::string	Companion::Impl::setTopology(std::vector<std::string> device_names_o
 	for (auto& session : sessions_)
 	{
 		session->topology_enabled_ = false;
-		for (auto& name_or_id : device_names_or_ids)
+		if (device_names_or_ids.size() > 0)
 		{
-			if (tools::tolower(session->device_.name) == tools::tolower(name_or_id) || tools::tolower(session->device_.id) == tools::tolower(name_or_id))
-				session->topology_enabled_ = true;
+			for (auto& name_or_id : device_names_or_ids)
+			{
+				if (tools::tolower(session->device_.name) == tools::tolower(name_or_id) || tools::tolower(session->device_.id) == tools::tolower(name_or_id))
+					session->topology_enabled_ = true;
+			}
 		}
 		return_string += session->device_.name;
 		return_string += ":";
@@ -215,14 +218,16 @@ std::string	 Companion::Impl::loadSavedTopologyConfiguration(void){
 			i >> topology_json;		
 			// Read version of the preferences file. If this key is found it is assumed the config file has been populated
 			if (!topology_json[PREFS_JSON_NODE][PREFS_JSON_VERSION].empty() 
-				&& topology_json[PREFS_JSON_NODE][PREFS_JSON_VERSION].is_number()
-				&& !topology_json[PREFS_JSON_NODE][PREFS_JSON_TOPOLOGY_NODE].empty()
-				&& topology_json[PREFS_JSON_NODE][PREFS_JSON_TOPOLOGY_NODE].size() > 0 )
+				&& topology_json[PREFS_JSON_NODE][PREFS_JSON_VERSION].is_number())
 			{
-				for (auto& device : topology_json[PREFS_JSON_NODE][PREFS_JSON_TOPOLOGY_NODE].items())
+				if (!topology_json[PREFS_JSON_NODE][PREFS_JSON_TOPOLOGY_NODE].empty()
+					&& topology_json[PREFS_JSON_NODE][PREFS_JSON_TOPOLOGY_NODE].size() > 0)
 				{
-					if (device.value().is_string())
-						devices.push_back(device.value().get<std::string>());
+					for (auto& device : topology_json[PREFS_JSON_NODE][PREFS_JSON_TOPOLOGY_NODE].items())
+					{
+						if (device.value().is_string())
+							devices.push_back(device.value().get<std::string>());
+					}				
 				}
 				return setTopology(devices);
 			}
