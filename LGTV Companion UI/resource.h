@@ -54,14 +54,11 @@
 #define IDC_RADIO3                      1024
 #define IDC_SYSLINK4                    1025
 #define IDC_SYSLINK11                   1025
-#define IDC_HDMI_INPUT_NUMBER_CHECKBOX  1026
-#define IDC_HDMI_INPUT_NUMBER           1027
-#define IDC_HDMI_INPUT_NUMBER_SPIN      1028
+#define IDC_CHECK_HDMI_INPUT_CHECKBOX   1026
 #define IDC_SET_HDMI_INPUT_CHECKBOX     1029
 #define IDC_TEST                        1029
-#define IDC_SET_HDMI_INPUT_NUMBER       1030
 #define IDC_CHECK_TOPOLOGY              1030
-#define IDC_SET_HDMI_INPUT_SPIN         1031
+#define IDC_SET_HDMI_DELAY              1030
 #define IDC_GO                          1031
 #define IDC_CHECK_TOPOLOGY_LOGON        1031
 #define IDC_STATIC_NO_1                 1032
@@ -75,6 +72,7 @@
 #define IDC_STATIC_T_11                 1036
 #define IDC_STATIC_T_2                  1037
 #define IDC_STATIC_T_12                 1037
+#define IDC_SET_HDMI_DELAY_SPIN         1037
 #define IDC_STATIC_T_3                  1038
 #define IDC_STATIC_T_14                 1038
 #define IDC_STATIC_T_4                  1039
@@ -111,10 +109,10 @@
 #define IDC_COMBO_LOG                   1063
 #define IDC_CHECK_API                   1064
 #define IDC_COMBO_WOL                   1064
-#define IDC_COMBO_SSL2                  1065
 #define IDC_COMBO_PERSISTENCE           1065
 #define IDC_CHECK1                      1066
 #define IDC_CHECK_MUTE                  1066
+#define IDC_COMBO_SOURCE                1066
 #define IDC_COMBO_TIMING                1067
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772

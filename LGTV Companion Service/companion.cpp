@@ -391,10 +391,10 @@ bool Companion::Impl::setHdmiInput(Event& event, SessionWrapper& session)
 	Event change_hdmi_input_event;
 	std::string payload = LG_URI_PAYLOAD_SETHDMI;
 	std::string log = "set hdmi-input [#ARG#]";
-	tools::replaceAllInPlace(payload, "#ARG#", std::to_string(session.device_.set_hdmi_input_on_power_on_number));
-	tools::replaceAllInPlace(log, "#ARG#", std::to_string(session.device_.set_hdmi_input_on_power_on_number));
+	tools::replaceAllInPlace(payload, "#ARG#", std::to_string(session.device_.sourceHdmiInput));
+	tools::replaceAllInPlace(log, "#ARG#", std::to_string(session.device_.sourceHdmiInput));
 	change_hdmi_input_event.set(EVENT_REQUEST, event.getDevices(), LG_URI_LAUNCH, payload, log);
-	session.client_.sendRequest(change_hdmi_input_event.getData(), log);
+	session.client_.sendRequest(change_hdmi_input_event.getData(), log, session.device_.set_hdmi_input_on_power_on_delay);
 	return true;
 }
 void Companion::Impl::processEvent(Event& event, SessionWrapper& session) 
@@ -473,8 +473,8 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			case EVENT_SYSTEM_RESUMEAUTO:
 				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
-				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_power_on < 10)
-					work_was_enqueued = setHdmiInput(event, session);
+//				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_power_on < 10)
+//					work_was_enqueued = setHdmiInput(event, session);
 				break;
 
 			case EVENT_SYSTEM_DISPLAYON:
@@ -542,8 +542,8 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			case EVENT_SYSTEM_BOOT:
 				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
-				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_power_on < 10)
-					work_was_enqueued = setHdmiInput(event, session);
+//				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_power_on < 10)
+//					work_was_enqueued = setHdmiInput(event, session);
 				break;
 			case EVENT_SYSTEM_TOPOLOGY:
 				if (remote_client_connected_)

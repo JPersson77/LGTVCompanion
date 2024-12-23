@@ -71,7 +71,7 @@ BEGIN
             VALUE "FileDescription", "This service manages LG WebOS TV's"
             VALUE "FileVersion", "1.0.0.1"
             VALUE "InternalName", "LGTVsvc.exe"
-            VALUE "LegalCopyright", "Copyright (C) 2021-2024 Jörgen Persson"
+            VALUE "LegalCopyright", "Copyright (C) 2021-2025 Jörgen Persson"
             VALUE "OriginalFilename", "LGTVsvc.exe"
             VALUE "ProductName", "LGTV Service"
             VALUE "ProductVersion", "1.0.0.1"

@@ -47,6 +47,10 @@ using			json = nlohmann::json;
 #define			JSON_DEVICE_SETHDMI				"SetHDMIInputOnResume"
 #define			JSON_DEVICE_NEWSOCK				"NewSockConnect"
 #define			JSON_DEVICE_SETHDMINO			"SetHDMIInputOnResumeToNumber"
+#define			JSON_DEVICE_SOURCEINPUT			"SourceHdmiInput"
+#define			JSON_DEVICE_CHECKINPUT			"CheckHdmiInputWhenPoweringOff"
+#define			JSON_DEVICE_SETINPUT			"SetHdmiInput"
+#define			JSON_DEVICE_SETINPUTDELAY		"SetHdmiInputDelay"
 #define			JSON_DEVICE_MAC					"MAC"
 #define			JSON_DEVICE_PERSISTENT			"PersistentConnectionLevel"
 
@@ -287,14 +291,9 @@ Preferences::Preferences(std::wstring configuration_file_name)
 							device.uniqueDeviceKey = item.value()[JSON_DEVICE_UNIQUEKEY].get<std::string>();
 
 						if (item.value()[JSON_DEVICE_HDMICTRL].is_boolean())
-							device.input_control_hdmi = item.value()[JSON_DEVICE_HDMICTRL].get<bool>();
-
-						if (item.value()[JSON_DEVICE_HDMICTRLNO].is_number())
-							device.input_control_hdmi_number = item.value()[JSON_DEVICE_HDMICTRLNO].get<int>();
-						if (device.input_control_hdmi_number < 1)
-							device.input_control_hdmi_number = 1;
-						else if (device.input_control_hdmi_number > 4)
-							device.input_control_hdmi_number = 4;
+							device.check_hdmi_input_when_power_off = item.value()[JSON_DEVICE_HDMICTRL].get<bool>();
+						if (item.value()[JSON_DEVICE_CHECKINPUT].is_boolean())
+							device.check_hdmi_input_when_power_off = item.value()[JSON_DEVICE_CHECKINPUT].get<bool>();
 
 						if (item.value()[JSON_DEVICE_ENABLED].is_boolean())
 							device.enabled = item.value()[JSON_DEVICE_ENABLED].get<bool>();
@@ -304,6 +303,14 @@ Preferences::Preferences(std::wstring configuration_file_name)
 
 						if (item.value()[JSON_DEVICE_SETHDMI].is_boolean())
 							device.set_hdmi_input_on_power_on = item.value()[JSON_DEVICE_SETHDMI].get<bool>();
+						if (item.value()[JSON_DEVICE_SETINPUT].is_boolean())
+							device.set_hdmi_input_on_power_on = item.value()[JSON_DEVICE_SETINPUT].get<bool>();
+						if (item.value()[JSON_DEVICE_SETINPUTDELAY].is_number())
+							device.set_hdmi_input_on_power_on_delay = item.value()[JSON_DEVICE_SETINPUTDELAY].get<int>();
+						if (device.set_hdmi_input_on_power_on_delay < 0)
+							device.set_hdmi_input_on_power_on_delay = 0;
+						else if (device.set_hdmi_input_on_power_on_delay > 30)
+							device.set_hdmi_input_on_power_on_delay = 30;
 
 						if (item.value()[JSON_DEVICE_NEWSOCK].is_boolean())
 							device.ssl = item.value()[JSON_DEVICE_NEWSOCK].get<bool>();
@@ -312,11 +319,14 @@ Preferences::Preferences(std::wstring configuration_file_name)
 							device.persistent_connection_level = item.value()[JSON_DEVICE_PERSISTENT].get<int>();
 
 						if (item.value()[JSON_DEVICE_SETHDMINO].is_number())
-							device.set_hdmi_input_on_power_on_number = item.value()[JSON_DEVICE_SETHDMINO].get<int>();
-						if (device.set_hdmi_input_on_power_on_number < 1)
-							device.set_hdmi_input_on_power_on_number = 1;
-						else if (device.set_hdmi_input_on_power_on_number > 4)
-							device.set_hdmi_input_on_power_on_number = 4;
+							device.sourceHdmiInput = item.value()[JSON_DEVICE_SETHDMINO].get<int>();
+						if (item.value()[JSON_DEVICE_SOURCEINPUT].is_number())
+							device.sourceHdmiInput = item.value()[JSON_DEVICE_SOURCEINPUT].get<int>();
+
+						if (device.sourceHdmiInput < 1)
+							device.sourceHdmiInput = 1;
+						else if (device.sourceHdmiInput > 4)
+							device.sourceHdmiInput = 4;
 
 						j = item.value()[JSON_DEVICE_MAC];
 						if (!j.empty() && j.size() > 0)
@@ -334,6 +344,7 @@ Preferences::Preferences(std::wstring configuration_file_name)
 					}
 				}
 			}
+			i.close();
 		}
 		initialised_ = true;
 	}
@@ -376,8 +387,6 @@ bool Preferences::Preferences::writeToDisk(void)
 			if (i.is_open())
 			{
 				i >> p;
-				i.close();
-
 				for (const auto& item : p.items())
 				{
 					if (item.key() == JSON_PREFS_NODE)
@@ -395,6 +404,7 @@ bool Preferences::Preferences::writeToDisk(void)
 										device.session_key = key;
 				}
 			}
+			i.close();
 		}
 		catch (std::exception const&)
 		{
@@ -450,11 +460,11 @@ bool Preferences::Preferences::writeToDisk(void)
 		if (item.uniqueDeviceKey != "")
 			prefs[id][JSON_DEVICE_UNIQUEKEY] = item.uniqueDeviceKey;
 
-		prefs[id][JSON_DEVICE_HDMICTRL] = (bool)item.input_control_hdmi;
-		prefs[id][JSON_DEVICE_HDMICTRLNO] = item.input_control_hdmi_number;
+		prefs[id][JSON_DEVICE_CHECKINPUT] = (bool)item.check_hdmi_input_when_power_off;
+		prefs[id][JSON_DEVICE_SOURCEINPUT] = item.sourceHdmiInput;
 
-		prefs[id][JSON_DEVICE_SETHDMI] = (bool)item.set_hdmi_input_on_power_on;
-		prefs[id][JSON_DEVICE_SETHDMINO] = item.set_hdmi_input_on_power_on_number;
+		prefs[id][JSON_DEVICE_SETINPUT] = (bool)item.set_hdmi_input_on_power_on;
+		prefs[id][JSON_DEVICE_SETINPUTDELAY] = item.set_hdmi_input_on_power_on_delay;
 
 		prefs[id][JSON_DEVICE_NEWSOCK] = (bool)item.ssl;
 
@@ -477,8 +487,8 @@ bool Preferences::Preferences::writeToDisk(void)
 		if (i.is_open())
 		{
 			i << std::setw(4) << prefs << std::endl;
-			i.close();
 		}
+		i.close();
 	}
 	return true;
 }

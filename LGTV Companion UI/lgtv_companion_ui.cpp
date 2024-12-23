@@ -353,16 +353,16 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), false);
 		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SUBNET), tools::widen(WOL_DEFAULT_SUBNET).c_str());
 
-		CheckDlgButton(hDeviceWindow, IDC_HDMI_INPUT_NUMBER_CHECKBOX, BST_UNCHECKED);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), false);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), L"1");
+		CheckDlgButton(hDeviceWindow, IDC_CHECK_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
 
 		CheckDlgButton(hDeviceWindow, IDC_SET_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_INPUT_NUMBER), false);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_INPUT_NUMBER), L"1");
+		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_DELAY), false);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_DELAY), L"1");
 		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_PERSISTENCE), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_WOL), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SOURCE), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+
 		EnableWindow(GetDlgItem(hDeviceWindow, IDC_RADIO1), false);
 		EnableWindow(GetDlgItem(hDeviceWindow, IDC_RADIO2), false);
 		EnableWindow(GetDlgItem(hDeviceWindow, IDC_RADIO3), false);
@@ -385,15 +385,14 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		SetWindowText(GetDlgItem(hDeviceWindow, IDC_DEVICENAME), tools::widen(Prefs.devices_[sel].name).c_str());
 		SetWindowText(GetDlgItem(hDeviceWindow, IDC_DEVICEIP), tools::widen(Prefs.devices_[sel].ip).c_str());
 
-		CheckDlgButton(hDeviceWindow, IDC_HDMI_INPUT_NUMBER_CHECKBOX, Prefs.devices_[sel].input_control_hdmi);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), Prefs.devices_[sel].input_control_hdmi ? true : false);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_HDMI_INPUT_NUMBER), tools::widen(std::to_string(Prefs.devices_[sel].input_control_hdmi_number)).c_str());
-		SendDlgItemMessage(hDeviceWindow, IDC_HDMI_INPUT_NUMBER_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.devices_[sel].input_control_hdmi_number);
+		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SOURCE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.devices_[sel].sourceHdmiInput -1, (LPARAM)0);
 
+		CheckDlgButton(hDeviceWindow, IDC_CHECK_HDMI_INPUT_CHECKBOX, Prefs.devices_[sel].check_hdmi_input_when_power_off);
+	
 		CheckDlgButton(hDeviceWindow, IDC_SET_HDMI_INPUT_CHECKBOX, Prefs.devices_[sel].set_hdmi_input_on_power_on);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_INPUT_NUMBER), Prefs.devices_[sel].set_hdmi_input_on_power_on ? true : false);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_INPUT_NUMBER), tools::widen(std::to_string(Prefs.devices_[sel].set_hdmi_input_on_power_on_number)).c_str());
-		SendDlgItemMessage(hDeviceWindow, IDC_SET_HDMI_INPUT_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.devices_[sel].set_hdmi_input_on_power_on_number);
+		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_DELAY), Prefs.devices_[sel].set_hdmi_input_on_power_on ? true : false);
+		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_DELAY), tools::widen(std::to_string(Prefs.devices_[sel].set_hdmi_input_on_power_on_delay)).c_str());
+		SendDlgItemMessage(hDeviceWindow, IDC_SET_HDMI_DELAY_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.devices_[sel].set_hdmi_input_on_power_on_delay);
 
 		str = L"";
 		for (const auto& item : Prefs.devices_[sel].mac_addresses)
@@ -735,7 +734,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			case IDC_OPTIONS:
 			{
 				hOptionsWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_OPTIONS), hWnd, (DLGPROC)WndOptionsProc);
-				SetWindowText(hOptionsWindow, L"Global options");
+				SetWindowText(hOptionsWindow, L"Global settings");
 				EnableWindow(hWnd, false);
 				ShowWindow(hOptionsWindow, SW_SHOW);
 			}break;
@@ -1002,15 +1001,14 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 	{
 		SendDlgItemMessage(hWnd, IDC_DEVICENAME, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_DEVICEIP, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_HDMI_INPUT_NUMBER, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_HDMI_INPUT_NUMBER_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(4, 1));
+		SendDlgItemMessage(hWnd, IDC_SET_HDMI_DELAY, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_SET_HDMI_DELAY_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(30, 0));
 		SendDlgItemMessage(hWnd, IDC_DEVICEMACS, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SUBNET, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_SET_HDMI_INPUT_NUMBER, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_SET_HDMI_INPUT_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(4, 1));
 		SendDlgItemMessage(hWnd, IDC_COMBO_PERSISTENCE, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_COMBO_SSL, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_COMBO_WOL, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_SOURCE, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
 		std::wstring s;
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_WOL), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
 		s = L"Automatic";
@@ -1029,6 +1027,15 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_PERSISTENCE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
 		s = L"Persistent + Keep Alive";
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_PERSISTENCE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		s = L"HDMI 1";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		s = L"HDMI 2";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		s = L"HDMI 3";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		s = L"HDMI 4";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
 	}break;
 	case WM_NOTIFY:
 	{
@@ -1036,7 +1043,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		{
 		case NM_CLICK:
 		{
-			// explain the WOL options
+			// explain the device settings
 			if (wParam == IDC_SYSLINK8)
 			{
 				MessageBox(hWnd,
@@ -1047,28 +1054,29 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 					"Please note that both MAC address and IP are mandatory to set.",
 					L"Device information", MB_OK | MB_ICONINFORMATION);
 			}
-			// explain the WOL options
+			// explain the network settings
 			else if (wParam == IDC_SYSLINK4)
 			{
 				MessageBox(hWnd,
-					L"Devices are powered on by means of sending wake-on lan (WOL) magic packets. The \"Automatic\" mode should work well on most systems, but depending on your network environment, device firmware and operating system you may need to "
+					L"Devices are powered on by means of wake-on lan (WOL) magic packets. The \"Automatic\" mode should work well on most systems, but depending on your network environment, device firmware and operating system you may need to "
 					"go to \"Manual\" mode and adjust the settings.\n\n"
 					"The manual method \"Send to device IP-address\" method (no 2) sends unicast packets directly to the device IP, while the other two send to the network broadcast address or subnet broadcast address respectively.\n\n"
 					"Between the two broadcast options, the subnet approach is the most likely to work. The global network broadcast approach is prone to issues when multiple network interfaces are present (VPN, etc.), because the packet might be sent using the wrong interface.\n\n"
 					"The current subnet mask of the subnet(s) of your PC can be found by using the \"IPCONFIG /all\" command in the command prompt if it is not correctly detected automatically.",
 					L"Network options", MB_OK | MB_ICONINFORMATION);
 			}
-			// explain the WOL options
+			// explain the source input settings
 			else if (wParam == IDC_SYSLINK9)
 			{
 				MessageBox(hWnd,
-					L"The option to process power and screen off events only when the HDMI display input is set to a specific input should be used to prevent the "
-					"WebOS-device from powering off while you are not using it for your PC, i e when you are busy watching Netflix or gaming on your console.\n\n"
-					"The option to set an HDMI input on startup or resume can be used to force the device to automatically switch to the input "
-					" the PC is connected to when powering on.",
+					L"Please select the source input of the PC, i.e. the HDMI-input that the PC is "
+					"connected to. \n\nThe option to prevent powering off the device during non-PC use will ensure that the device is not accidentally powered off or that the screen is turned off "
+					"while you are using the device for watching other things, i.e. when you are busy watching Netflix or gaming on your console.\n\n"
+					"The setting to switch to the HDMI input the PC is connected to when powering on can be used with a configurable delay to "
+					"ensure that the HDMI input of the PC is switched to timely. Please note that this feature does not work when resuming from 'modern standby' power mode.",
 					L"Information", MB_OK | MB_ICONINFORMATION);
 			}
-			// explain the firmware options
+			// explain the connection settings
 			else if (wParam == IDC_SYSLINK10)
 			{
 				MessageBox(hWnd,
@@ -1092,14 +1100,13 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		{
 			switch (LOWORD(wParam))
 			{
-			case IDC_HDMI_INPUT_NUMBER_CHECKBOX:
+			case IDC_CHECK_HDMI_INPUT_CHECKBOX:
 			{
-				EnableWindow(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER), IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED);
 				EnableWindow(GetDlgItem(hWnd, IDOK), true);
 			}break;
 			case IDC_SET_HDMI_INPUT_CHECKBOX:
 			{
-				EnableWindow(GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_NUMBER), IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED);
+				EnableWindow(GetDlgItem(hWnd, IDC_SET_HDMI_DELAY), IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED);
 				EnableWindow(GetDlgItem(hWnd, IDOK), true);
 			}break;
 			case IDC_RADIO1:
@@ -1171,11 +1178,13 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							Prefs.devices_[sel].name = tools::narrow(getWndText(GetDlgItem(hWnd, IDC_DEVICENAME)));
 							Prefs.devices_[sel].ip = tools::narrow(getWndText(GetDlgItem(hWnd, IDC_DEVICEIP)));
 
-							Prefs.devices_[sel].input_control_hdmi = IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED;
-							Prefs.devices_[sel].input_control_hdmi_number = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER))).c_str());
+							int source = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+							if (source != CB_ERR)
+								Prefs.devices_[sel].sourceHdmiInput = source + 1;
+							Prefs.devices_[sel].check_hdmi_input_when_power_off = IsDlgButtonChecked(hWnd, IDC_CHECK_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
 
 							Prefs.devices_[sel].set_hdmi_input_on_power_on = IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
-							Prefs.devices_[sel].set_hdmi_input_on_power_on_number = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_NUMBER))).c_str());
+							Prefs.devices_[sel].set_hdmi_input_on_power_on_delay = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_SET_HDMI_DELAY))).c_str());
 
 							int wol_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_WOL), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 
@@ -1232,10 +1241,13 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							else
 								sess.subnet = tools::narrow(getWndText(GetDlgItem(hWnd, IDC_SUBNET)));
 
-							sess.input_control_hdmi = IsDlgButtonChecked(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX) == BST_CHECKED;
-							sess.input_control_hdmi_number = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER))).c_str());
+							int source = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+							if (source != CB_ERR)
+								sess.sourceHdmiInput = source + 1;
+
+							sess.check_hdmi_input_when_power_off = IsDlgButtonChecked(hWnd, IDC_CHECK_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
 							sess.set_hdmi_input_on_power_on = IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
-							sess.set_hdmi_input_on_power_on_number = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_NUMBER))).c_str());
+							sess.set_hdmi_input_on_power_on_delay = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_SET_HDMI_DELAY))).c_str());
 
 							int SSL_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_SSL), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 							if (SSL_selection != CB_ERR)
@@ -1298,8 +1310,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 			{
 			case IDC_DEVICENAME:
 			case IDC_DEVICEIP:
-			case IDC_HDMI_INPUT_NUMBER:
-			case IDC_SET_HDMI_INPUT_NUMBER:
+			case IDC_SET_HDMI_DELAY:
 			case IDC_DEVICEMACS:
 			case IDC_SUBNET:
 
@@ -1348,7 +1359,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 	case WM_CTLCOLORSTATIC:
 	{
 		HDC hdcStatic = (HDC)wParam;
-		if ((HWND)lParam == GetDlgItem(hWnd, IDC_HDMI_INPUT_NUMBER_CHECKBOX)
+		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_HDMI_INPUT_CHECKBOX)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_RADIO1)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_RADIO2)

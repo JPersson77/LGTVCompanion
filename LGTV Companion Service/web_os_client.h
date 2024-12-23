@@ -19,7 +19,7 @@ public:
 	bool powerOn(void);
 	bool powerOff(bool = false);
 	bool blankScreen(bool = false);
-	bool sendRequest(std::string data, std::string log_message);
+	bool sendRequest(std::string data, std::string log_message, int delay = 0);
 	bool sendButton(std::string button);
 	bool close(bool = false);
 };

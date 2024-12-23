@@ -43,6 +43,7 @@
 #define			WORK_BUTTON							5
 #define			WORK_CLOSE							6
 #define			WORK_KEEPALIVE						7
+#define			WORK_REQUEST_DELAYED				8
 
 #define			LOG_KEEPALIVE						false
 
@@ -72,6 +73,7 @@ public:
 	std::string							status_arp_override_for_wol_;
 	bool								forced_ = false;
 	std::string							log_message = "";
+	int									delay_ = 0;
 	void clear(void)
 	{
 		type_ = WORK_UNDEFINED;
@@ -83,6 +85,7 @@ public:
 		status_arp_override_for_wol_ = "";
 		forced_ = false;
 		log_message = "";
+		delay_ = 0;
 	}
 };
 class WebOsClient::Impl : public std::enable_shared_from_this<WebOsClient::Impl> {
@@ -92,6 +95,7 @@ private:
 	net::deadline_timer keep_alive_timer_;
 	net::deadline_timer async_timer_;
 	net::deadline_timer wol_timer_;
+	net::deadline_timer delayed_request_timer_;
 	ssl::context* ctx_;
 	udp::socket udp_socket_;
 	tcp::resolver resolver_;
@@ -125,6 +129,7 @@ private:
 	void onRead(boost::beast::error_code, std::size_t);
 	void onClose(boost::beast::error_code);
 	void onWait(boost::beast::error_code);
+	void onDelayedRequest(boost::beast::error_code);
 	void onError(boost::beast::error_code&, std::string);
 	void onRetryConnection(boost::beast::error_code);
 	void onWOL(boost::beast::error_code);
@@ -141,6 +146,7 @@ WebOsClient::Impl::Impl(net::io_context& ioc, ssl::context& ctx, Device& setting
 	, async_timer_(net::make_strand(ioc))
 	, wol_timer_(net::make_strand(ioc))
 	, keep_alive_timer_(net::make_strand(ioc))
+	, delayed_request_timer_(net::make_strand(ioc))
 	, udp_socket_(net::make_strand(ioc))
 {
 	ctx_ = &ctx;
@@ -226,7 +232,7 @@ void WebOsClient::Impl::startNextWork(void)
 	{
 		time_t time_diff = time(0) - work_.timestamp_start_;
 		if (work_.type_ == WORK_POWER_ON && time_diff > (device_settings_.extra.timeout + 10)
-			|| (work_.type_ != WORK_POWER_ON && time_diff > 10))
+			|| (work_.type_ != WORK_POWER_ON && time_diff > 10 + work_.delay_))
 		{
 			ERR("Lingering work of type %1% detected. Closing connection and aborting work!", std::to_string(work_.type_));
 			doClose();
@@ -266,7 +272,12 @@ void WebOsClient::Impl::startNextWork(void)
 			else
 				this->run();
 			break;
-
+	
+		case WORK_REQUEST_DELAYED:		
+			DEBUG("---  Starting work: REQUEST (Delayed %1% seconds) -----------------", std::to_string(work_.delay_));
+			delayed_request_timer_.expires_from_now(boost::posix_time::seconds(work_.delay_));
+			delayed_request_timer_.async_wait(beast::bind_front_handler(&Impl::onDelayedRequest, shared_from_this()));
+			break;
 		case WORK_BUTTON:
 			DEBUG("---  Starting work: BUTTON  -----------------");
 			if (socket_status_ == SOCKET_CONNECTED)
@@ -633,7 +644,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 				}
 				else
 				{
-					if(device_settings_.input_control_hdmi && !work_.forced_)
+					if(device_settings_.check_hdmi_input_when_power_off && !work_.forced_)
 						send(JSON_GETFOREGROUNDAPP);
 					else
 						send(JSON_POWERTOGGLE);
@@ -647,7 +658,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 				if (foregroundApp.starts_with(prefix))
 				{
 					foregroundApp.remove_prefix(prefix.size());
-					if (std::to_string(device_settings_.input_control_hdmi_number) == foregroundApp)
+					if (std::to_string(device_settings_.sourceHdmiInput) == foregroundApp)
 					{
 						INFO("HDMI input %1% is active. Device will be turned off", std::string(foregroundApp));
 						send(JSON_POWERTOGGLE);
@@ -682,7 +693,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 			{
 				if (payload["state"] == "Active") // Device is ON and not blanked
 				{
-					if (device_settings_.input_control_hdmi && !work_.forced_)
+					if (device_settings_.check_hdmi_input_when_power_off && !work_.forced_)
 						send(JSON_GETFOREGROUNDAPP);
 					else
 						send(JSON_BLANK);
@@ -701,7 +712,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 				if (foregroundApp.starts_with(prefix))
 				{
 					foregroundApp.remove_prefix(prefix.size());
-					if (std::to_string(device_settings_.input_control_hdmi_number) == foregroundApp)
+					if (std::to_string(device_settings_.sourceHdmiInput) == foregroundApp)
 					{
 						INFO("HDMI input %1% is active. Screen will be blanked", std::string(foregroundApp));
 						send(JSON_BLANK);
@@ -940,6 +951,15 @@ void WebOsClient::Impl::onWait(beast::error_code ec) {
 	if (ec)
 		return onError(ec, "onWait");
 	send(JSON_GETPOWERSTATE);
+}
+void WebOsClient::Impl::onDelayedRequest(beast::error_code ec) {
+	if (ec)
+		return onError(ec, "onDelayedRequest");
+	work_.type_ = WORK_REQUEST;
+	if (socket_status_ == SOCKET_CONNECTED)
+		send(work_.data_);
+	else
+		this->run();
 }
 void WebOsClient::Impl::onClose(beast::error_code ec) {
 	if (ec) 
@@ -1250,11 +1270,12 @@ bool WebOsClient::blankScreen(bool forced) {
 	pimpl->enqueueWork(work);
 	return true;
 }
-bool WebOsClient::sendRequest(std::string data, std::string log_message) {
+bool WebOsClient::sendRequest(std::string data, std::string log_message, int delay) {
 	Work work;
 	work.data_ = data;
-	work.type_ = WORK_REQUEST;
+	work.type_ = delay == 0 ? WORK_REQUEST : WORK_REQUEST_DELAYED;
 	work.log_message = log_message;
+	work.delay_ = delay;
 	pimpl->enqueueWork(work);
 	return true;
 }

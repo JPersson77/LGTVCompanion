@@ -36,7 +36,10 @@ R"(
     "újrakezd",
     "újraindítás",
     "Genstart",
-    "genstart"
+    "genstart",
+    "Omstart",
+    "omstart",
+    "reštartovanie"
   ],
   "Shutdown" : [
     "shutdown",
@@ -94,7 +97,12 @@ R"(
     "oprire",
     "inchide",
     "leallitas",
-    "Leállitás"
+    "Slå av",
+    "slå av",
+    "Avslutt",
+    "avslutt",
+    "vypnúť napáj...",
+    "vypnúť napájanie"
   ]
 }
 )"

@@ -129,4 +129,4 @@ This is free software, but your support is appreciated and there is a donation p
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.me/jpersson77)
 
 ## Copyright
-Copyright © 2021-2024 Jörgen Persson
+Copyright © 2021-2025 Jörgen Persson
