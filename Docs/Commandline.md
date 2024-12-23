@@ -39,11 +39,11 @@ All other commands following the -output command will obey the formatting. Pleas
 #### Examples:
 *Power on the device with id Device1 and apply friendly formatting to the output.*
 ```
-"LGTVcli.exe" -of -poweron Device1 "OLED 42"
+LGTVcli.exe -of -poweron Device1 "OLED 42"
 ```
 *Get the value of the backlight for Device1 and filter the output for the backlight key (the below will output only the value, f e 100)*
 ```
-"LGTVcli.exe" -ok backlight -get_system_settings picture [\"backlight\"]
+LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 ```
 
 ## Power commands (LGTV Companion and LGTVcli)
@@ -122,11 +122,11 @@ It is possible to display the Service Menu. Please use caution in the service me
 #### Examples: 
 *Display the service menu on device 1. Enter default code 0413 when prompted.*
 ```
-"LGTVcli.exe" -button IN_START device1
+LGTVcli.exe -button IN_START device1
 ```
-*Please note that WebOS 23 displays an updated service menu. To toggle the older version of the service menu please use the following command*
+*Please note that WebOS 23 (and later) displays an updated service menu. Use the below to toggle the older version of the service menu that is more feature complete*
 ```
-"LGTVcli.exe" -settings_other "{"svcMenuFlag": false}" device1
+LGTVcli.exe -settings_other "{\"svcMenuFlag\": false}" device1
 ```
 ## Retrieving system settings (LGTVcli only)
 - *-get_system_settings [category] [Json-array of keys]* 	- get one or many system settings in a specified category. Supported values below:
@@ -208,7 +208,7 @@ It is possible to display the Service Menu. Please use caution in the service me
 #### Examples: 
 *Get the current values for contrast, color and backlight for device 1*
 ```
-"LGTVcli.exe" -get_system_settings picture [\"color\",\"contrast\",\"backlight\"] device1
+LGTVcli.exe -get_system_settings picture [\"color\",\"contrast\",\"backlight\"] device1
 ```
 
 ## Picture commands (LGTV Companion and LGTVcli)
@@ -377,7 +377,7 @@ The following endpoints are used to query information from WebOS devices, using 
 ```
 *Open the built in web brower and go to the github page for this app on device 1*
 ```
-"LGTV Companion.exe" -request_with_params system.launcher/open {"target":"https://github.com/JPersson77/LGTVCompanion"} device1
+"LGTV Companion.exe" -request_with_params system.launcher/open {\"target\":\"https://github.com/JPersson77/LGTVCompanion\"} device1
 ```
 *launch the screensaver on device1*
 ```
@@ -480,11 +480,11 @@ The following endpoints are used to query information from WebOS devices, using 
 #### Examples: 
 *turn on Real Cinema for device1 
 ```
-"LGTV Companion.exe" -settings_picture {"realCinema":"on"} device1
+"LGTV Companion.exe" -settings_picture {\"realCinema\":\"on\"} device1
 ```
 *set contrast to 50, brightness to 50 and contrast to 85 for device 2*
 ```
-"LGTV Companion.exe" -settings_picture {"color":"50","brightness":"50","contrast":"85"} device2
+"LGTV Companion.exe" -settings_picture {\"color\":\"50\",\"brightness\":\"50\",\"contrast\":\"85\"} device2
 ```
 ## Other system settings (LGTV Companion and LGTVcli)
 
@@ -627,7 +627,7 @@ The following endpoints are used to query information from WebOS devices, using 
 #### Examples: 
 *Set black stabilizer to 13 for device1*
 ```
-"LGTV Companion.exe" -settings_other {"blackStabilizer":13} device1
+"LGTV Companion.exe" -settings_other {\"blackStabilizer\":13} device1
 ```
 
 ## Option system settings (LGTV Companion and LGTVcli)
@@ -790,5 +790,5 @@ The following endpoints are used to query information from WebOS devices, using 
 #### Examples: 
 *Enable quickstart+ for device1*
 ```
-"LGTV Companion.exe" -settings_options {"quickStartMode":"on"} device1
+"LGTV Companion.exe" -settings_options {\"quickStartMode\":\"on\"} device1
 ```
