@@ -318,10 +318,15 @@ Preferences::Preferences(std::wstring configuration_file_name)
 						if (item.value()[JSON_DEVICE_PERSISTENT].is_number())
 							device.persistent_connection_level = item.value()[JSON_DEVICE_PERSISTENT].get<int>();
 
-						if (item.value()[JSON_DEVICE_SETHDMINO].is_number())
-							device.sourceHdmiInput = item.value()[JSON_DEVICE_SETHDMINO].get<int>();
 						if (item.value()[JSON_DEVICE_SOURCEINPUT].is_number())
 							device.sourceHdmiInput = item.value()[JSON_DEVICE_SOURCEINPUT].get<int>();
+						else
+						{
+							if (device.set_hdmi_input_on_power_on && item.value()[JSON_DEVICE_SETHDMINO].is_number())
+								device.sourceHdmiInput = item.value()[JSON_DEVICE_SETHDMINO].get<int>();
+							else if (device.check_hdmi_input_when_power_off && item.value()[JSON_DEVICE_HDMICTRLNO].is_number())
+								device.sourceHdmiInput = item.value()[JSON_DEVICE_HDMICTRLNO].get<int>();
+						}
 
 						if (device.sourceHdmiInput < 1)
 							device.sourceHdmiInput = 1;
