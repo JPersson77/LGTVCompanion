@@ -31,7 +31,6 @@ jobs:
           echo "hash-${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
           echo "hash-${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )"
           sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi'
-          echo "${{ steps.hash.outputs.hash-Release }}"
       - uses: actions/upload-artifact@v4
         with:
           name: LGTVCompanion-Output-${{ matrix.configuration }}
@@ -39,7 +38,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: LGTVCompanion-Setup-${{ matrix.configuration }}
-          path: LGTV Companion Setup/bin/${{ matrix.configuration }}/          
+          path: LGTV Companion Setup/bin/${{ matrix.configuration }}/  
+  testing:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test passing output
+        id: output-test
+        run: echo "${{ needs.build.outputs.hash-Release }}"
   provenance:
     needs: [build]
     if: startsWith(github.ref, 'refs/tags/')
