@@ -27,7 +27,7 @@ jobs:
           Configuration: ${{ matrix.configuration }}
       - name: Generate subject
         id: hash
-        run: echo "hash-${{ matrix.configuration }}=$( sha256sum LGTVCompanion-Setup-${{ matrix.configuration }} | base64 -w0 )" >> "$GITHUB_OUTPUT"
+        run: echo "hash-${{ matrix.configuration }}=$( sha256sum LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi | base64 -w0 )" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: LGTVCompanion-Output-${{ matrix.configuration }}
@@ -61,6 +61,6 @@ jobs:
       - name: Upload assets
         uses: softprops/action-gh-release@v2
         with:
-          files: LGTV.Companion.Setup.msi
+          files: LGTV Companion Setup.msi
           draft: true
           generate_release_notes: true
