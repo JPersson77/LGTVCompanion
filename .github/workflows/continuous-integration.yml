@@ -25,7 +25,7 @@ jobs:
       - run: msbuild LGTVCompanion.sln /p:VcpkgEnableManifest=true 
         env:
           Configuration: ${{ matrix.configuration }}
-      - name: Generate subject
+      - name: Generate hash
         id: hash
         run: echo "hash-${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
@@ -46,6 +46,7 @@ jobs:
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
     with:
       base64-subjects: "${{ needs.build.outputs.hash-Release }}"
+      draft-release: true
       upload-assets: true # Optional: Upload to a new release
   release:
     needs: [build, provenance]
