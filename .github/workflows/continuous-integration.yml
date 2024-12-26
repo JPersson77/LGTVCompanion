@@ -31,7 +31,7 @@ jobs:
           echo "hash-${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
           echo "hash-${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )"
           sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi'
-          echo "${{ build.outputs.hash-Release }}"
+          echo "${{ steps.hash.outputs.hash-Release }}"
       - uses: actions/upload-artifact@v4
         with:
           name: LGTVCompanion-Output-${{ matrix.configuration }}
@@ -42,16 +42,19 @@ jobs:
           path: LGTV Companion Setup/bin/${{ matrix.configuration }}/          
   provenance:
     needs: [build]
+    runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       actions: read # To read the workflow path.
       id-token: write # To sign the provenance.
       contents: write # To add assets to a release.
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
-    with:
-      base64-subjects: "${{ needs.build.outputs.hash-Release }}"
-      draft-release: true
-      upload-assets: true # Optional: Upload to a new release
+    steps:
+      - run: echo "${{ needs.build.outputs.hash-Release }}"
+      - uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+        with:
+          base64-subjects: "${{ needs.build.outputs.hash-Release }}"
+          draft-release: true
+          upload-assets: true # Optional: Upload to a new release
   release:
     needs: [build, provenance]
     runs-on: ubuntu-latest
