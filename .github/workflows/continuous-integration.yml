@@ -30,8 +30,6 @@ jobs:
         shell: bash
         run: |
           echo "hash${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
-          echo "hash${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )"
-          sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi'
       - uses: actions/upload-artifact@v4
         with:
           name: LGTVCompanion-Output-${{ matrix.configuration }}
@@ -40,13 +38,6 @@ jobs:
         with:
           name: LGTVCompanion-Setup-${{ matrix.configuration }}
           path: LGTV Companion Setup/bin/${{ matrix.configuration }}/  
-  testing:
-    needs: [build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Test passing output
-        id: output-test
-        run: echo "${{ needs.build.outputs.hashReleaseInstaller }}"
   provenance:
     needs: [build]
     if: startsWith(github.ref, 'refs/tags/')
@@ -57,8 +48,8 @@ jobs:
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
     with:
       base64-subjects: "${{ needs.build.outputs.hashReleaseInstaller }}"
-      draft-release: true
-      upload-assets: true # Optional: Upload to a new release
+      draft-release: false
+      upload-assets: false # Optional: Upload to a new release
   release:
     needs: [build, provenance]
     runs-on: ubuntu-latest
@@ -70,9 +61,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: LGTVCompanion-Setup-Release
+      - name: Download Provenance
+        uses: actions/download-artifact@v4
+        with:
+          name: LGTV Companion Setup.msi.intoto.jsonl
       - name: Upload assets
         uses: softprops/action-gh-release@v2
         with:
-          files: LGTV Companion Setup.msi
+          files: |
+            LGTV Companion Setup.msi
+            LGTV Companion Setup.msi.intoto.jsonl
           draft: true
           generate_release_notes: true
