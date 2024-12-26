@@ -8,5 +8,5 @@ jobs:
     steps:
       - uses: vedantmgoyal9/winget-releaser@main
         with:
-          identifier: Package.Identifier
+          identifier: JPersson77.LGTVCompanion
           token: ${{ secrets.WINGET_PAT }}
