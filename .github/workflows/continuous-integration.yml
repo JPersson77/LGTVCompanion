@@ -7,8 +7,8 @@ jobs:
       matrix:
         configuration: [Release, Debug]
     outputs:
-      hash-Release: ${{ steps.hash.outputs.hash-Release }}
-      hash-Debug: ${{ steps.hash.outputs.hash-Debug }}
+      hashReleaseInstaller: ${{ steps.hash.outputs.hashRelease }}
+      hashDebugInstaller: ${{ steps.hash.outputs.hashDebug }}
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
@@ -27,9 +27,10 @@ jobs:
           Configuration: ${{ matrix.configuration }}
       - name: Generate hash
         id: hash
+        shell: bash
         run: |
-          echo "hash-${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
-          echo "hash-${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )"
+          echo "hash${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
+          echo "hash${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )"
           sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi'
       - uses: actions/upload-artifact@v4
         with:
