@@ -3,9 +3,12 @@ jobs:
   build:
     runs-on: windows-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         configuration: [Release, Debug]
+    outputs:
+      hash-Release: ${{ steps.hash.outputs.hash-Release }}
+      hash-Debug: ${{ steps.hash.outputs.hash-Debug }}
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
@@ -22,11 +25,45 @@ jobs:
       - run: msbuild LGTVCompanion.sln /p:VcpkgEnableManifest=true 
         env:
           Configuration: ${{ matrix.configuration }}
+      - name: Generate subject
+        id: hash
+        run: |
+          echo "hash-${{ matrix.configuration }}=$( \
+            sha256sum LGTVCompanion-Setup-${{ matrix.configuration }} | base64 -w0 \
+          )" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: LGTVCompanion-${{ matrix.configuration }}
+          name: LGTVCompanion-Output-${{ matrix.configuration }}
           path: x64/${{ matrix.configuration }}/
       - uses: actions/upload-artifact@v4
         with:
           name: LGTVCompanion-Setup-${{ matrix.configuration }}
-          path: LGTV Companion Setup/bin/${{ matrix.configuration }}/
+          path: LGTV Companion Setup/bin/${{ matrix.configuration }}/          
+  provenance:
+    needs: [build]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      actions: read # To read the workflow path.
+      id-token: write # To sign the provenance.
+      contents: write # To add assets to a release.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: "${{ needs.build.outputs.hash-Release }}"
+      upload-assets: true # Optional: Upload to a new release
+  release:
+    needs: [build, provenance]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write # To add assets to a release.
+    steps:
+      - name: Download Installer
+        uses: actions/download-artifact@v4
+        with:
+          name: LGTVCompanion-Setup-Release
+      - name: Upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: LGTV.Companion.Setup.msi
+          draft: true
+          generate_release_notes: true
