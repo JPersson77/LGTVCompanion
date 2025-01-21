@@ -1,5 +1,5 @@
 # BUILD INSTRUCTIONS AND DEPENDENCIES
-To build the projects (UI, Service, Daemon, Console and Installer) in Visual Studio 2022 please ensure that Vcpkg (https://github.com/microsoft/vcpkg) is installed. Vcpkg is a free library Manager for Windows. You should use Vcpkg in one of two ways:
+To build the projects (UI, Service, Daemon, Console and Installer) in Visual Studio 2022 please ensure that [Vcpkg](https://github.com/microsoft/vcpkg) is installed. Vcpkg is a free library Manager for Windows. You should use Vcpkg in one of two ways:
 
 ### Manifest
 A Vcpkg manifest is included with the source code and the necessary dependencies will be automatically downloaded, configured and installed, if you choose to enable it. To enable the manifest please open the properties for each project in the solution, then 
