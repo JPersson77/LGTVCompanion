@@ -20,7 +20,7 @@
 
 // timers
 #define			TIMER_LOG_MUTEX						5		// ms wait for thread sync
-#define			TIMER_ASYNC_TIMEOUT					5000	// milliseconds before async_connect and async_handshake SSL timeout
+#define			TIMER_ASYNC_TIMEOUT					2000	// milliseconds before async_connect and async_handshake SSL timeout
 #define			TIMER_RETRY_WAIT					2000	// milliseconds to wait before retrying connection
 #define			TIMER_POWER_POLL_WAIT				1000	// milliseconds to wait before sending next power state poll
 #define			TIMER_WOL_WAIT						1000	// milliseconds to  wait before sending next WOL magic packet
@@ -350,6 +350,7 @@ void WebOsClient::Impl::startNextWork(void)
 void WebOsClient::Impl::workIsFinished(void)
 {
 	work_.clear();
+	Sleep(20); // potentially webOS does not like requests to be sent too quickly
 	startNextWork();
 }
 void WebOsClient::Impl::doClose(void) {
