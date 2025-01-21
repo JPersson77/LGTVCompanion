@@ -10,9 +10,12 @@ jobs:
       fail-fast: false
       matrix:
         configuration: [Release, Debug]
+        arch: [x64, arm64]
     outputs:
-      hashReleaseInstaller: ${{ steps.hash.outputs.hashRelease }}
-      hashDebugInstaller: ${{ steps.hash.outputs.hashDebug }}
+      x64_hashReleaseInstaller: ${{ steps.hash.outputs.hashRelease_x64 }}
+      x64_hashDebugInstaller: ${{ steps.hash.outputs.hashDebug_x64 }}
+      arm64_hashReleaseInstaller: ${{ steps.hash.outputs.hashRelease_arm64 }}
+      arm64_hashDebugInstaller: ${{ steps.hash.outputs.hashDebug_arm64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
@@ -22,26 +25,27 @@ jobs:
         with:
           manifest-dir: ${{ github.workspace }} # Set to directory containing vcpkg.json
 #         pkgs: nlohmann-json boost-asio boost-optional boost-utility boost-date-time boost-beast wintoast openssl
-          triplet: x64-windows-static
+          triplet: ${{ matrix.arch }}-windows-static
           token: ${{ github.token }}
           github-binarycache: true
       - run: vcpkg integrate install
       - run: msbuild LGTVCompanion.sln /p:VcpkgEnableManifest=true 
         env:
           Configuration: ${{ matrix.configuration }}
+          Platform: ${{ matrix.arch }}
       - name: Generate hash
         id: hash
         shell: bash
         run: |
-          echo "hash${{ matrix.configuration }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.configuration }}/LGTV Companion Setup.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
+          echo "hash${{ matrix.configuration }}_${{ matrix.arch }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.arch }}/${{ matrix.configuration }}/LGTV Companion Setup ${{ matrix.arch }}.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: LGTVCompanion-Output-${{ matrix.configuration }}
-          path: x64/${{ matrix.configuration }}/
+          name: LGTVCompanion-Output-${{ matrix.configuration }}-${{ matrix.arch }}
+          path: ${{ matrix.arch }}/${{ matrix.configuration }}/
       - uses: actions/upload-artifact@v4
         with:
-          name: LGTVCompanion-Setup-${{ matrix.configuration }}
-          path: LGTV Companion Setup/bin/${{ matrix.configuration }}/  
+          name: LGTVCompanion-Setup-${{ matrix.configuration }}-${{ matrix.arch }}
+          path: LGTV Companion Setup/bin/${{ matrix.arch }}/${{ matrix.configuration }}/  
   provenance:
     needs: [build]
     if: startsWith(github.ref, 'refs/tags/')
@@ -51,7 +55,7 @@ jobs:
       contents: write # To add assets to a release.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
     with:
-      base64-subjects: "${{ needs.build.outputs.hashReleaseInstaller }}"
+      base64-subjects: "${{ needs.build.outputs.x64_hashReleaseInstaller }} ${{ needs.build.outputs.arm64_hashReleaseInstaller }}"
       draft-release: false
       upload-assets: false # Optional: Upload to a new release
   release:
@@ -61,19 +65,29 @@ jobs:
     permissions:
       contents: write # To add assets to a release.
     steps:
-      - name: Download Installer
+      - name: Download x64 Installer
         uses: actions/download-artifact@v4
         with:
-          name: LGTVCompanion-Setup-Release
-      - name: Download Provenance
+          name: LGTVCompanion-Setup-Release-x64
+      - name: Download arm64 Installer
         uses: actions/download-artifact@v4
         with:
-          name: LGTV Companion Setup.msi.intoto.jsonl
+          name: LGTVCompanion-Setup-Release-arm64
+      - name: Download x64 Provenance
+        uses: actions/download-artifact@v4
+        with:
+          name: LGTV Companion Setup x64.msi.intoto.jsonl
+      - name: Download arm64 Provenance
+        uses: actions/download-artifact@v4
+        with:
+          name: LGTV Companion Setup arm64.msi.intoto.jsonl
       - name: Upload assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            LGTV Companion Setup.msi
-            LGTV Companion Setup.msi.intoto.jsonl
+            LGTV Companion Setup x64.msi
+            LGTV Companion Setup arm64.msi
+            LGTV Companion Setup x64.msi.intoto.jsonl
+            LGTV Companion Setup arm64.msi.intoto.jsonl
           draft: true
           generate_release_notes: true
