@@ -684,7 +684,7 @@ void Companion::Impl::ipcCallback(std::wstring message)
 	}
 	// hack to allow for escaped double quotes in arguments
 	tools::replaceAllInPlace(temp, "\\\"", "*#*#*#");
-	tools::replaceAllInPlace(temp, "\"", "%¤%¤%¤");
+	tools::replaceAllInPlace(temp, "\"", "%ï¿½%ï¿½%ï¿½");
 	// split into separate command lines and process each
 	std::vector <std::string> commands = extractSeparateCommands(temp);
 	if (commands.size() == 0)
@@ -694,7 +694,7 @@ void Companion::Impl::ipcCallback(std::wstring message)
 	}
 	for (auto& commandline : commands)
 	{
-		tools::replaceAllInPlace(commandline, "%¤%¤%¤", "\"");
+		tools::replaceAllInPlace(commandline, "%ï¿½%ï¿½%ï¿½", "\"");
 		std::string log_message = "";
 		// split command line into words
 		std::vector <std::string> words = tools::stringsplit(commandline, " ");

@@ -1,85 +1,93 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- When publishing updated version, make sure to update "Product Id" GUID and "Version" -->
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" 
-     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-  <?define LGTV Companion Service_TargetDir=$(var.LGTV Companion Service.TargetDir)?><?define LGTV Companion UI_TargetDir=$(var.LGTV Companion UI.TargetDir)?>
-	<Product Id="50C0FE3A-BAE2-496F-B841-4B7B3913511A" Name="LGTV Companion" Language="1033" Version="4.1.4" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A">
-		<Package Id="*" InstallerVersion="301" Compressed="yes" InstallScope="perMachine" Platform='x64' Description="LGTV Companion installer" InstallPrivileges="elevated" AdminImage="yes"/>
+﻿<!-- When publishing updated version, make sure to update "ProductCode" GUID and "Version" -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="LGTV Companion" Language="1033" Version="4.1.0" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A" InstallerVersion="500" ProductCode="D5C39AE3-DB37-44A1-9F76-B516E733D81C">
+    <SummaryInformation Description="LGTV Companion installer" />
     <Media Id="1" Cabinet="LGTVapp.cab" EmbedCab="yes" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of LGTV Companion is already installed." />
 
-    <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramMenuFolder" Name="Programs" />
-      <Directory Id="StartupFolder" Name="Startup" />
+    <!--
+    This will set the WIX_NATIVE_MACHINE property, for which:
+    34404 = 0x8664 = IMAGE_FILE_MACHINE_AMD64
+    43620 = 0xAA64 = IMAGE_FILE_MACHINE_ARM64
+    -->
+    <util:QueryNativeMachine />
 
-      <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="LGTV Companion" >
-          <Component Id="LGTVService" Guid="5949e7ba-212c-4cfc-8489-ee8b81daa541" Win64="yes">
-            <File Id="LGTVsvcEXE" Name="LGTVsvc.exe" Source="$(var.LGTV Companion Service_TargetDir)LGTVsvc.exe" Vital="yes" KeyPath='yes' />
-            <ServiceControl Id="StopService"  Stop="both" Remove="uninstall" Name="LGTVsvc" Wait="yes" />
-          </Component>
-          <Component Id="LGTVCompanionUI" Guid="08090141-ca74-4529-927e-ce4b7e1d95c6" Win64="yes">
-           <File Id="LGTVCompanionEXE" Name="LGTV Companion.exe" Source="$(var.LGTV Companion UI_TargetDir)LGTV Companion.exe" KeyPath='yes'   >
-            <Shortcut Id="startmenuicon" Directory="ProgramMenuFolder" Name="LGTV Companion" WorkingDirectory='INSTALLDIR' Icon="LGTVCompanion.exe" IconIndex="0" Advertise="yes" />
-           </File>
-          </Component>
-          <Component Id="LGTVCompanionDaemon" Guid="3C10ADE5-5D3E-4F5A-A31F-86D29D8317A6" Win64="yes">
-            <File Id="LGTVdaemonEXE" Name="LGTVdaemon.exe" Source="$(var.LGTV Companion UI_TargetDir)LGTVdaemon.exe" KeyPath='yes'   />
-              <Shortcut Id="daemonstart" Directory="StartupFolder" Name="LGTV Companion (Daemon)" Arguments="-hide" Icon="LGTVdaemon.exe" IconIndex="0" Advertise="yes" />
-          </Component>
-          <Component Id="LGTVcli" Guid="D7F686C9-0AC3-4ADC-8428-B41C77ACEB05" Win64="yes">
-            <File Id="LGTVcliEXE" Name="LGTVcli.exe" Source="$(var.LGTV Companion UI_TargetDir)LGTVcli.exe" KeyPath='yes' />
-          </Component>
-          <Component Id="LGTVCompanionIcon" Guid="4720E7B3-AC16-41F4-B961-148D4EFFB28A" Win64="yes">
-            <File Id="mainicon" Name="mainicon.ico" Source="$(var.LGTV Companion UI_TargetDir)mainicon.ico" KeyPath='yes'   />
-          </Component>
-        </Directory>         
-      </Directory>
+    <?if $(sys.BUILDARCH) = "x64" ?>
+    <Launch
+      Condition="WIX_NATIVE_MACHINE = 34404"
+      Message="This application requires Windows for x64 processors." />
+    <?endif ?>
 
+    <?if $(sys.BUILDARCH) = "arm64" ?>
+    <Launch
+      Condition="WIX_NATIVE_MACHINE = 43620"
+      Message="This application requires Windows for Arm64 processors." />
+    <?endif ?>
 
-      <!--
-      <Directory Id="CommonAppDataFolder" >
-        <Directory Id="DataDir" Name="LGTV Companion">
-          <Component Id="RemoveOrphanFiles" Guid="3B1B816B-471B-4D3B-B73B-B97802405A47" Win64="yes">
-            <RemoveFile Id='LogFile' On='uninstall' Name='Log.txt' />
-            <RemoveFile Id='ConfigFile' On='uninstall' Name='Config.json' />
-            <RemoveFolder Id='RemoveDataDir' On='uninstall' />
+    <CustomAction Id="EXECUTE_BEFORE_FINALIZE_INSTALL" Execute="deferred" Impersonate="no" Return="ignore" ExeCommand="-install" FileRef="LGTVsvcEXE" />
+    <CustomAction Id="EXECUTE_AFTER_FINALIZE" Execute="immediate" Impersonate="no" Return="asyncNoWait" ExeCommand="-firstrun" FileRef="LGTVdaemonEXE" />
+    <util:CloseApplication Id="StopDaemon" CloseMessage="yes" Target="LGTVdaemon.exe" RebootPrompt="no" />
 
-          </Component>
-        </Directory>
- 
-      </Directory>
-      -->
-      
-    </Directory>
-
-    <CustomAction Id="EXECUTE_BEFORE_FINALIZE_INSTALL" Execute="deferred" Impersonate="no"  Return="ignore"  FileKey="LGTVsvcEXE" ExeCommand="-install" />
-    <CustomAction Id="EXECUTE_AFTER_FINALIZE" Execute="immediate" Impersonate="no"  Return="asyncNoWait" FileKey="LGTVdaemonEXE" ExeCommand="-firstrun" />
-    <util:CloseApplication Id="StopDaemon" CloseMessage="yes" Target="LGTVdaemon.exe" RebootPrompt="no"/>
-   
     <InstallExecuteSequence>
-      <Custom Action="WixCloseApplications" Before="InstallValidate"/>
-      <Custom Action="EXECUTE_BEFORE_FINALIZE_INSTALL" Before="InstallFinalize">NOT Installed</Custom>
-      <Custom Action="EXECUTE_AFTER_FINALIZE" After="InstallFinalize">NOT Installed</Custom>     
+      <Custom Action="override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" Before="InstallValidate" />
+      <Custom Action="EXECUTE_BEFORE_FINALIZE_INSTALL" Before="InstallFinalize" Condition="NOT Installed" />
+      <Custom Action="EXECUTE_AFTER_FINALIZE" After="InstallFinalize" Condition="NOT Installed" />
     </InstallExecuteSequence>
-      <Feature Id="MainProgram" Title="LGTV Companion Setup" Level="1" ConfigurableDirectory='INSTALLFOLDER'>
-        <ComponentRef Id='LGTVService' />
-        <ComponentRef Id='LGTVCompanionUI' />
-        <ComponentRef Id='LGTVCompanionDaemon' />
-        <ComponentRef Id='LGTVCompanionIcon' />
-        <ComponentRef Id='LGTVcli' />
 
-        <!--       <ComponentRef Id='RemoveOrphanFiles' /> -->
-      </Feature>
-  
-    <Icon Id="LGTVCompanion.exe" SourceFile="$(var.LGTV Companion UI_TargetDir)LGTV Companion.exe" />
-    <Icon Id="LGTVdaemon.exe" SourceFile="$(var.LGTV Companion UI_TargetDir)LGTVdaemon.exe" />
+    <Feature Id="MainProgram" Title="LGTV Companion Setup" Level="1" ConfigurableDirectory="INSTALLFOLDER">
+      <ComponentRef Id="LGTVService" />
+      <ComponentRef Id="LGTVCompanionUI" />
+      <ComponentRef Id="LGTVCompanionDaemon" />
+      <ComponentRef Id="LGTVCompanionIcon" />
+      <ComponentRef Id="LGTVcli" />
+      <!--<ComponentRef Id='RemoveOrphanFiles' />-->
+    </Feature>
+
+    <Icon Id="LGTVCompanion.exe" SourceFile="LGTV Companion.exe" />
+    <Icon Id="LGTVdaemon.exe" SourceFile="LGTVdaemon.exe" />
 
     <Property Id="ARPPRODUCTICON" Value="LGTVCompanion.exe" />
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-    <UIRef Id="WixUI_InstallDir" />
+    <ui:WixUI Id="WixUI_InstallDir" />
     <Property Id="ARPNOREPAIR" Value="yes" Secure="yes" />
-  </Product>
+
+    <StandardDirectory Id="ProgramMenuFolder" />
+    <StandardDirectory Id="StartupFolder" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="LGTV Companion">
+        <Component Id="LGTVService" Guid="5949e7ba-212c-4cfc-8489-ee8b81daa541" Bitness="always64">
+          <File Id="LGTVsvcEXE" Name="LGTVsvc.exe" Source="LGTVsvc.exe" Vital="yes" KeyPath="yes" />
+          <ServiceControl Id="StopService" Stop="both" Remove="uninstall" Name="LGTVsvc" Wait="yes" />
+        </Component>
+        <Component Id="LGTVCompanionUI" Guid="08090141-ca74-4529-927e-ce4b7e1d95c6" Bitness="always64">
+          <File Id="LGTVCompanionEXE" Name="LGTV Companion.exe" Source="LGTV Companion.exe" KeyPath="yes">
+            <Shortcut Id="startmenuicon" Directory="ProgramMenuFolder" Name="LGTV Companion" WorkingDirectory="INSTALLFOLDER" Icon="LGTVCompanion.exe" IconIndex="0" Advertise="yes" />
+          </File>
+        </Component>
+        <Component Id="LGTVCompanionDaemon" Guid="3C10ADE5-5D3E-4F5A-A31F-86D29D8317A6" Bitness="always64">
+          <File Id="LGTVdaemonEXE" Name="LGTVdaemon.exe" Source="LGTVdaemon.exe" KeyPath="yes" />
+          <Shortcut Id="daemonstart" Directory="StartupFolder" Name="LGTV Companion (Daemon)" Arguments="-hide" Icon="LGTVdaemon.exe" IconIndex="0" Advertise="yes" />
+        </Component>
+        <Component Id="LGTVcli" Guid="D7F686C9-0AC3-4ADC-8428-B41C77ACEB05" Bitness="always64">
+          <File Id="LGTVcliEXE" Name="LGTVcli.exe" Source="LGTVcli.exe" KeyPath="yes" />
+        </Component>
+        <Component Id="LGTVCompanionIcon" Guid="4720E7B3-AC16-41F4-B961-148D4EFFB28A" Bitness="always64">
+          <File Id="mainicon" Name="mainicon.ico" Source="mainicon.ico" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <!--<StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DataDir" Name="LGTV Companion">
+        <Component Id="RemoveOrphanFiles" Guid="3B1B816B-471B-4D3B-B73B-B97802405A47" Bitness="always64">
+          <RemoveFile Id='LogFile' On='uninstall' Name='Log.txt' />
+          <RemoveFile Id='ConfigFile' On='uninstall' Name='Config.json' />
+          <RemoveFolder Id='RemoveDataDir' On='uninstall' />
+        </Component>
+      </Directory>
+    </StandardDirectory>-->
+  </Package>
 </Wix>

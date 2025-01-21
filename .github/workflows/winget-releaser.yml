@@ -2,11 +2,24 @@ name: Publish to WinGet
 on:
   release:
     types: [released]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Tag of version to publish'
+        required: true
 jobs:
   publish:
     runs-on: windows-latest
     steps:
       - uses: vedantmgoyal9/winget-releaser@main
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         with:
-          identifier: Package.Identifier
+          identifier: JPersson77.LGTVCompanion
+          token: ${{ secrets.WINGET_PAT }}          
+          release-tag: ${{ inputs.version }} # workflow_dispatch input 'version'
+      - uses: vedantmgoyal9/winget-releaser@main
+        if: ${{ github.event_name == 'release' }}
+        with:
+          identifier: JPersson77.LGTVCompanion
           token: ${{ secrets.WINGET_PAT }}
+
