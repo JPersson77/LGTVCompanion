@@ -412,7 +412,7 @@ void WebOsClient::Impl::onConnect(beast::error_code ec, tcp::resolver::results_t
 	}
 	else
 	{
-		beast::get_lowest_layer(*ws_tcp_).expires_never();
+		beast::get_lowest_layer(*ws_tcp_).expires_after(std::chrono::milliseconds(work_.type_ == WORK_POWER_OFF ? 200 : TIMER_ASYNC_TIMEOUT));
 		ws_tcp_->set_option(websocket::stream_base::timeout::suggested(beast::role_type::client));
 		ws_tcp_->set_option(websocket::stream_base::decorator(
 			[](websocket::request_type& req)
@@ -429,7 +429,7 @@ void WebOsClient::Impl::onSSLhandshake(beast::error_code ec) {
 	if (ec)
 		return onError(ec, "onSSLhandshake");
 	socket_status_ = SOCKET_CONNECTING;
-	beast::get_lowest_layer(*ws_).expires_never();
+	beast::get_lowest_layer(*ws_).expires_after(std::chrono::milliseconds(work_.type_ == WORK_POWER_OFF ? 200 : TIMER_ASYNC_TIMEOUT));
 	ws_->set_option(websocket::stream_base::timeout::suggested(beast::role_type::client));
 	ws_->set_option(websocket::stream_base::decorator(
 		[](websocket::request_type& req)
@@ -443,8 +443,8 @@ void WebOsClient::Impl::onSSLhandshake(beast::error_code ec) {
 void WebOsClient::Impl::onWinsockHandshake(beast::error_code ec) {
 	if (ec)
 		return onError(ec, "onWinsockHandshake");
-	socket_status_ = SOCKET_CONNECTED;
-	read();
+	socket_status_ = SOCKET_CONNECTING;
+//	read();
 	send(webos_handshake_, "webOS handshake");
 }
 void WebOsClient::Impl::onKeepAlive(beast::error_code ec) {
@@ -468,6 +468,8 @@ void WebOsClient::Impl::onWrite(beast::error_code ec, std::size_t bytes_transfer
 	boost::ignore_unused(bytes_transferred);
 	if (ec)
 		return onError(ec, "onWrite");
+	if (socket_status_ == SOCKET_CONNECTING)
+		read();
 	socket_status_ = SOCKET_CONNECTED;
 }
 void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferred) {
