@@ -3,6 +3,10 @@ on:
   push:
     tags:
     - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Tag (optional)'
 jobs:
   build:
     runs-on: windows-latest
@@ -29,7 +33,7 @@ jobs:
           token: ${{ github.token }}
           github-binarycache: true
       - run: vcpkg integrate install
-      - run: msbuild LGTVCompanion.sln /p:VcpkgEnableManifest=true 
+      - run: msbuild LGTVCompanion.sln /p:VcpkgEnableManifest=true /t:Restore
         env:
           Configuration: ${{ matrix.configuration }}
           Platform: ${{ matrix.arch }}
