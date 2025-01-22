@@ -56,7 +56,9 @@ jobs:
       contents: write # To add assets to a release.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
     with:
-      base64-subjects: "${{ needs.build.outputs.x64_hashReleaseInstaller }} ${{ needs.build.outputs.arm64_hashReleaseInstaller }}"
+      base64-subjects: |
+        "${{ needs.build.outputs.x64_hashReleaseInstaller }}" 
+        "${{ needs.build.outputs.arm64_hashReleaseInstaller }}"
       draft-release: false
       upload-assets: false # Optional: Upload to a new release
   release:
