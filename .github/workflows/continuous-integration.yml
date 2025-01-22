@@ -88,21 +88,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: LGTVCompanion-Setup-Release-arm64
-      - name: Download x64 Provenance
+      - name: Download Provenance
         uses: actions/download-artifact@v4
         with:
-          name: LGTV Companion Setup x64.msi.intoto.jsonl
-      - name: Download arm64 Provenance
-        uses: actions/download-artifact@v4
-        with:
-          name: LGTV Companion Setup arm64.msi.intoto.jsonl
+          name: LGTV Companion Setup.intoto.jsonl
       - name: Upload assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
             LGTV Companion Setup x64.msi
             LGTV Companion Setup arm64.msi
-            LGTV Companion Setup x64.msi.intoto.jsonl
-            LGTV Companion Setup arm64.msi.intoto.jsonl
+            LGTV Companion Setup.intoto.jsonl
           draft: true
           generate_release_notes: true
