@@ -1072,7 +1072,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 					"connected to. \n\nThe option to prevent powering off the device during non-PC use will ensure that the device is not accidentally powered off or that the screen is turned off "
 					"while you are using the device for watching other things, i.e. when you are busy watching Netflix or gaming on your console.\n\n"
 					"The setting to switch to the HDMI input the PC is connected to when powering on can be used with a configurable delay to "
-					"ensure that the HDMI input of the PC is switched to timely. Please note that this feature does not work when resuming from 'modern standby' power mode.",
+					"ensure that the HDMI input of the PC is switched to timely.",
 					L"Information", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the connection settings

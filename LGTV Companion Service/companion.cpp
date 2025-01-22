@@ -459,7 +459,11 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				if (!remote_client_connected_)
 					break;
 				if (windows_power_status_on_ == true)
+				{
 					work_was_enqueued = session.client_.powerOn();
+					if (prefs_.remote_streaming_host_prefer_power_off_ && session.device_.set_hdmi_input_on_power_on)
+						work_was_enqueued = setHdmiInput(event, session);
+				}
 				break;
 			case EVENT_SYSTEM_REBOOT:
 			case EVENT_SYSTEM_RESUME:
@@ -483,7 +487,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
 				work_was_enqueued = session.client_.powerOn();
-				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_resume_or_boot_time < 10)
+				if (session.device_.set_hdmi_input_on_power_on ) // && time(0) - time_last_resume_or_boot_time < 10)
 					work_was_enqueued = setHdmiInput(event, session);
 				break;
 
@@ -550,7 +554,11 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 					break;
 				if (prefs_.topology_support_)
 					if (session.topology_enabled_)
+					{
 						work_was_enqueued = session.client_.powerOn();
+						if (session.device_.set_hdmi_input_on_power_on)
+							work_was_enqueued = setHdmiInput(event, session);
+					}
 					else
 						work_was_enqueued = session.client_.powerOff();
 				break;
