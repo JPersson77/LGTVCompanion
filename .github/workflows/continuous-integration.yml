@@ -97,7 +97,7 @@ jobs:
         with:
           files: |
             LGTV Companion Setup x64.msi
-            LGTV Companion Setup arm64.msi
+            LGTV Companion Setup ARM64.msi
             LGTV Companion Setup.intoto.jsonl
           draft: true
           generate_release_notes: true
