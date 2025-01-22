@@ -33,7 +33,7 @@ jobs:
           token: ${{ github.token }}
           github-binarycache: true
       - run: vcpkg integrate install
-      - run: msbuild LGTVCompanion.sln /p:VcpkgEnableManifest=true /t:Restore
+      - run: msbuild /p:VcpkgEnableManifest=true /Restore LGTVCompanion.sln
         env:
           Configuration: ${{ matrix.configuration }}
           Platform: ${{ matrix.arch }}
