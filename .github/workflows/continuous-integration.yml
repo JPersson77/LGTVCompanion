@@ -4,9 +4,6 @@ on:
     tags:
     - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Tag (optional)'
 jobs:
   build:
     runs-on: windows-latest
