@@ -109,7 +109,8 @@ LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 "LGTV Companion.exe" -mute Device1
 ```
 ## Button commands (LGTV Companion and LGTVcli)
-- *-button [button]* 	- virtual remote key press 
+- *-button [button]* 	- virtual remote key press, values below are allowed
+- *-button_nocheck [button]* 	- virtual remote key press, no verification of input value
 
 >[button]: LEFT, RIGHT, UP, DOWN, RED, GREEN, YELLOW, BLUE, CHANNELUP, CHANNELDOWN, VOLUMEUP, VOLUMEDOWN, PLAY, PAUSE, STOP, REWIND, FASTFORWARD, ASTERISK, BACK, EXIT, ENTER, AMAZON, NETFLIX, 3D_MODE, AD *(Audio Description)*, ADVANCE_SETTING, ALEXA, AMAZON, ASPECT_RATIO, CC *(Closed Captions)*, DASH *(Live TV)*, EMANUAL, EZPIC, EZ_ADJUST *(CAREFUL! EzAdjust Service Menu. Default code is 0413)*, EYE_Q, GUIDE, HCEC, HOME (Dashboard), INFO, IN_START *(CAREFUL! InStart Service Menu. Default code is 0413)*, INPUT_HUB, IVI, LIST, LIVE_ZOOM, MAGNIFIER_ZOOM, MENU, MUTE, MYAPPS, NETFLIX, POWER, PROGRAM, QMENU, RECENT, RECLIST, RECORD, SAP, SCREEN_REMOTE, SEARCH, SOCCER, TELETEXT, TEXTOPTION, TIMER, TV, TWIN, UPDOWN *(Always Ready app)* USP, YANDEX, BENDABLE, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
 #### Examples: 
