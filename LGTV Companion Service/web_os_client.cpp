@@ -470,7 +470,7 @@ void WebOsClient::Impl::onWrite(beast::error_code ec, std::size_t bytes_transfer
 		return onError(ec, "onWrite");
 	if (socket_status_ == SOCKET_CONNECTING)
 		read();
-	socket_status_ = SOCKET_CONNECTED;
+//	socket_status_ = SOCKET_CONNECTED;
 }
 void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferred) {
 	std::stringstream logmsg;

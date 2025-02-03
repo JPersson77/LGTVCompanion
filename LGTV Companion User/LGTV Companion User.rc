@@ -67,8 +67,10 @@ FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     EDITTEXT        IDC_EDIT,7,7,295,134,ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | ES_WANTRETURN | WS_VSCROLL
     EDITTEXT        IDC_EDIT3,7,166,94,14,ES_AUTOHSCROLL
-    LTEXT           "Seconds since last input (mouse, kb, controller)",IDC_STATIC,9,147,79,19
-    PUSHBUTTON      "Test",IDC_BUTTON1,187,159,50,14,NOT WS_VISIBLE
+    LTEXT           "Seconds since last input (Steam Input)",IDC_STATIC,112,147,79,19
+    PUSHBUTTON      "Test",IDC_BUTTON1,252,147,50,14,NOT WS_VISIBLE
+    LTEXT           "Seconds since last input (mouse, kb, controller)",IDC_STATIC,7,147,79,19
+    EDITTEXT        IDC_EDIT4,112,166,94,14,ES_AUTOHSCROLL
 END
 
 
