@@ -350,7 +350,7 @@ void WebOsClient::Impl::startNextWork(void)
 void WebOsClient::Impl::workIsFinished(void)
 {
 	work_.clear();
-	Sleep(20); // potentially webOS does not like requests to be sent too quickly
+//	Sleep(20); // potentially webOS does not like requests to be sent too quickly
 	startNextWork();
 }
 void WebOsClient::Impl::doClose(void) {
@@ -429,7 +429,7 @@ void WebOsClient::Impl::onSSLhandshake(beast::error_code ec) {
 	if (ec)
 		return onError(ec, "onSSLhandshake");
 	socket_status_ = SOCKET_CONNECTING;
-	beast::get_lowest_layer(*ws_).expires_after(std::chrono::milliseconds(work_.type_ == WORK_POWER_OFF ? 200 : TIMER_ASYNC_TIMEOUT));
+	beast::get_lowest_layer(*ws_).expires_never();;
 	ws_->set_option(websocket::stream_base::timeout::suggested(beast::role_type::client));
 	ws_->set_option(websocket::stream_base::decorator(
 		[](websocket::request_type& req)
