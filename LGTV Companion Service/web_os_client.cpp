@@ -177,19 +177,31 @@ void WebOsClient::Impl::enqueueWork(Work& work)
 	work.timestamp_enqueue_ = time(0);
 	net::dispatch(resolver_.get_executor(), [unit = work, self = shared_from_this()]() mutable
 		{
+			//optimisations
 			if (unit.type_ == WORK_POWER_ON ) //&& !unit.forced_)
 			{
+				// Discard if already trying to power on
+				if(self->work_.type_ == WORK_POWER_ON)
+					return;
+
 				// dequeue all currently queued WORK_POWER_OFF
 				self->workQueue_.erase(std::remove_if(self->workQueue_.begin(), self->workQueue_.end(), [](Work a) {
 					return a.type_ == WORK_POWER_OFF; // && !a.forced_;
 					}), self->workQueue_.end());
-				
-				//don't add WORK_POWER_ON twice in a row
-				if (!self->workQueue_.empty() && self->workQueue_.back().type_ == WORK_POWER_ON ) //&& !self->workQueue_.back().forced_)
-				{
-					self->startNextWork();
+				// dequeue all currently queued WORK_POWER_ON
+				self->workQueue_.erase(std::remove_if(self->workQueue_.begin(), self->workQueue_.end(), [](Work a) {
+					return a.type_ == WORK_POWER_ON; // && !a.forced_;
+					}), self->workQueue_.end());
+			}
+			if (unit.type_ == WORK_REQUEST_DELAYED) //&& !unit.forced_)
+			{
+				if (self->work_.type_ == WORK_REQUEST_DELAYED)
 					return;
-				}
+
+				// dequeue all currently queued WORK_REQUEST_DELAYED
+				self->workQueue_.erase(std::remove_if(self->workQueue_.begin(), self->workQueue_.end(), [](Work a) {
+					return a.type_ == WORK_REQUEST_DELAYED; // && !a.forced_;
+					}), self->workQueue_.end());
 			}
 
 			self->workQueue_.emplace_back(std::move(unit));
