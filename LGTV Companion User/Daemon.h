@@ -24,3 +24,4 @@ std::string					sunshine_GetConfVal(std::string, std::string);
 std::string					sunshine_GetLogFile();
 void						ipcCallback(std::wstring, LPVOID);
 std::wstring				getWndText(HWND);
+bool						IsWindowElevated(HWND);

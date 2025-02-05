@@ -30,12 +30,15 @@
 #include <initguid.h>
 #include <usbiodef.h>
 #include <Dbt.h>
+#include <Hidsdi.h>
+#include <hidpi.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <wintoastlib.h>
 #include "resource.h"
 
 #pragma comment(lib, "urlmon.lib")
 #pragma comment(lib, "Wtsapi32.lib")
+#pragma comment(lib, "hid.lib")
 
 #define			APPNAME_SHORT							L"LGTVdaemon"
 #define			APPNAME_FULL							L"LGTV Companion Daemon"
@@ -45,8 +48,8 @@
 #define         TIMER_TOPOLOGY							20
 #define         TIMER_CHECK_PROCESSES					21
 #define         TIMER_TOPOLOGY_COLLECTION				22
-#define         TIMER_MAIN_DELAY_WHEN_BUSY				100
-#define         TIMER_MAIN_DELAY_WHEN_IDLE				100
+#define         TIMER_MAIN_DELAY_WHEN_BUSY				1000
+#define         TIMER_MAIN_DELAY_WHEN_IDLE				50
 #define         TIMER_REMOTE_DELAY						10000
 #define         TIMER_TOPOLOGY_DELAY					8000
 #define         TIMER_CHECK_PROCESSES_DELAY				5000
@@ -117,25 +120,28 @@ private:
 HINSTANCE                       hInstance;  // current instance
 HWND                            hMainWnd = NULL;
 bool                            bIdle = false;
-bool                            bIdlePreventEarlyWakeup = false;
-bool                            bIdlePreventFalseBusy = false;
 bool                            bDaemonVisible = true;
 bool                            bFirstRun = false;
-DWORD                           dwLastInputTick = 0;
-DWORD                           dwProcessedLastInputTick = 0;
 WinToastHandler                 m_WinToastHandler;
 HANDLE                          hPipe = INVALID_HANDLE_VALUE;
 INT64                           idToastFirstrun = NULL;
 INT64                           idToastNewversion = NULL;
 UINT							shellhookMessage;
-DWORD							daemon_startup_user_input_time = 0;
+ULONGLONG						daemon_startup_user_input_time = 0;
 UINT							ManualUserIdleMode = 0;
 HBRUSH                          hBackbrush;
 time_t							TimeOfLastTopologyChange = 0;
+ULONGLONG						ulLastRawInput = 0;
+ULONGLONG						ulLastControllerSample = 0;
+ULONGLONG						ulLastMouseSample = 0;
+DWORD							dwGetLastInputInfoSave = 0;
+int								iMouseChecksPerformed = 0;
+std::vector<int>				Axes;
 bool							ToastInitialised = false;
 std::shared_ptr<IpcClient>		pPipeClient;
 Preferences						Prefs(CONFIG_FILE);
 std::string						sessionID;
+bool							isElevated = false;
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -232,6 +238,28 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	//Set a timer for the idle detection
 	if (Prefs.user_idle_mode_)
 	{
+		RAWINPUTDEVICE Rid[3];
+
+		Rid[0].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
+		Rid[0].usUsage = 0x00;
+		Rid[0].dwFlags = RIDEV_PAGEONLY | RIDEV_INPUTSINK;   // add entire page              
+		Rid[0].hwndTarget = hMainWnd;
+
+		Rid[1].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
+		Rid[1].usUsage = 0x02;								// HID_USAGE_GENERIC_MOUSE
+		Rid[1].dwFlags = bDaemonVisible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
+		Rid[1].hwndTarget = hMainWnd;
+
+		Rid[2].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
+		Rid[2].usUsage = 0x06;								// HID_USAGE_GENERIC_KEYBOARD
+		Rid[2].dwFlags = bDaemonVisible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
+		Rid[2].hwndTarget = hMainWnd;
+		if (RegisterRawInputDevices(Rid, 2, sizeof(Rid[0])) == FALSE)
+		{
+			log(L"Failed to register for Raw Input!");
+			//registration failed. Call GetLastError for the cause of the error.
+		}
+		ulLastRawInput = GetTickCount64();
 		SetTimer(hMainWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 		SetTimer(hMainWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 	}
@@ -241,14 +269,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	if (Prefs.remote_streaming_host_support_ || Prefs.user_idle_mode_whitelist_)
 		SetTimer(hMainWnd, TIMER_CHECK_PROCESSES, TIMER_CHECK_PROCESSES_DELAY, (TIMERPROC)NULL);
 
+	isElevated = IsWindowElevated(hMainWnd);
 	std::wstring startupmess = WindowTitle;
-	startupmess += L" is running.";
+	startupmess += L" is running. Process is ";
+	startupmess += isElevated ? L"elevated." : L"not elevated.";
 	log(startupmess);
 	communicateWithService("started");
 	
 	std::wstring sessionmessage = L"Session ID is: ";
 	sessionmessage += tools::widen(sessionID);
 	log(sessionmessage);
+
+
 
 	HPOWERNOTIFY rsrn = RegisterSuspendResumeNotification(hMainWnd, DEVICE_NOTIFY_WINDOW_HANDLE);
 	HPOWERNOTIFY rpsn = RegisterPowerSettingNotification(hMainWnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
@@ -313,6 +345,143 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	std::wstring str;
 	switch (message)
 	{
+	case WM_INPUT:
+	{
+		if (!lParam)
+			return 0;
+		HRAWINPUT hRawInput = reinterpret_cast<HRAWINPUT>(lParam);
+		UINT size;
+		GetRawInputData(hRawInput, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER));
+		std::vector<BYTE> buffer(size);
+		if (GetRawInputData(hRawInput, RID_INPUT, buffer.data(), &size, sizeof(RAWINPUTHEADER)) != size) 
+		{
+			log(L"Failed to get raw input data.");
+			return 0;
+		}
+		ULONGLONG tick_now = GetTickCount64();
+		RAWINPUT* raw = reinterpret_cast<RAWINPUT*>(buffer.data());
+
+		// Was a key pressed?
+		if (raw->header.dwType == RIM_TYPEKEYBOARD)
+		{
+			ulLastRawInput = tick_now;
+			return 0;
+		}
+		// Was the mouse moved?
+		else if (raw->header.dwType == RIM_TYPEMOUSE)
+		{
+			// avoid accidental mouse-wake
+			if (tick_now - ulLastMouseSample < 50)
+				break;
+			if (tick_now - ulLastMouseSample > 500)
+				iMouseChecksPerformed = 1;
+			else
+				iMouseChecksPerformed++;
+			if (iMouseChecksPerformed >= 3)
+				ulLastRawInput = tick_now;
+			ulLastMouseSample = tick_now;
+			return 0;
+		}
+		// If not mouse or keyboard, then a controller was used
+		else
+		{
+			HIDP_CAPS caps;
+			UINT nameSize = 0;
+			if (GetRawInputDeviceInfo(raw->header.hDevice, RIDI_DEVICENAME, nullptr, &nameSize) != 0)
+				return 0;
+			std::vector<WCHAR> deviceName(nameSize);
+			if (GetRawInputDeviceInfo(raw->header.hDevice, RIDI_DEVICENAME, deviceName.data(), &nameSize) < 0)
+			{
+				log(L"Failed to get device name.");
+				return 0;
+			}
+
+			// Open HID device
+			HANDLE hDevice = CreateFile(deviceName.data(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+				nullptr, OPEN_EXISTING, 0, nullptr);
+			if (hDevice == INVALID_HANDLE_VALUE) {
+				log(L"Device open failed");
+				return 0;
+			}
+			// Get preparsed data using correct HID functions
+			PHIDP_PREPARSED_DATA ppd = nullptr;
+			if (!HidD_GetPreparsedData(hDevice, &ppd)) {
+				log(L"Preparsed data failed");
+				CloseHandle(hDevice);
+				return 0;
+			}
+			if (HidP_GetCaps(ppd, &caps) != HIDP_STATUS_SUCCESS) 
+			{
+				HidD_FreePreparsedData(ppd);
+				CloseHandle(hDevice);
+				return 0;
+			}
+
+			// Check whether a digital button was pressed on the controller
+			if (caps.NumberInputButtonCaps > 0) 
+			{
+				std::vector<HIDP_BUTTON_CAPS> buttonCaps(caps.NumberInputButtonCaps);
+				USHORT buttonCapsLength = caps.NumberInputButtonCaps;
+				if (HidP_GetButtonCaps(HidP_Input, buttonCaps.data(), &buttonCapsLength, ppd) == HIDP_STATUS_SUCCESS)
+				{
+					ULONG usageLength = buttonCaps[0].Range.UsageMax - buttonCaps[0].Range.UsageMin + 1;
+					std::vector<USAGE> usages(usageLength);
+					if (HidP_GetUsages(HidP_Input, buttonCaps[0].UsagePage, 0, usages.data(), &usageLength, ppd,
+						reinterpret_cast<PCHAR>(raw->data.hid.bRawData), raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS)
+					{
+						if (usageLength > 0)
+							ulLastRawInput = tick_now;
+					}
+					
+				}
+			}
+			// Check whether any analog sticks were moved and avoid accidental wake
+			if (tick_now - ulLastControllerSample < 50)
+				break;
+			if (caps.NumberInputValueCaps > 0) 
+			{
+				std::vector<HIDP_VALUE_CAPS> valueCaps(caps.NumberInputValueCaps);
+				USHORT valueCapsLength = caps.NumberInputValueCaps;
+				if (Axes.size() != valueCapsLength)
+				{
+					Axes.clear();
+					Axes.assign(valueCapsLength, -1);
+				}
+				if (HidP_GetValueCaps(HidP_Input, valueCaps.data(), &valueCapsLength, ppd) == HIDP_STATUS_SUCCESS) 
+				{
+					for (USHORT i = 0; i < valueCapsLength; ++i) 
+					{
+						ULONG value;
+						if (HidP_GetUsageValue(HidP_Input, valueCaps[i].UsagePage, 0, valueCaps[i].Range.UsageMin, &value, ppd,
+							reinterpret_cast<PCHAR>(raw->data.hid.bRawData), raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS) 
+						{
+							// Scale value to normalized range if needed (using LogicalMin/Max from valueCaps)
+							LONG scaledValue = value;
+							if (valueCaps[i].LogicalMin < valueCaps[i].LogicalMax) 
+							{
+								// Example scaling (adjust based on your needs)
+								LONG min = valueCaps[i].LogicalMin;
+								LONG max = valueCaps[i].LogicalMax;
+								scaledValue = (value - min) * 65535 / (max - min);
+							}
+							if (Axes[i] != -1)
+							{
+								if (abs(Axes[i] - scaledValue) > 0.012 * 65535)
+								{
+									ulLastRawInput = tick_now;
+									ulLastControllerSample = tick_now;
+								}
+							}
+							Axes[i] = scaledValue;
+						}
+					}
+				}
+			}
+			HidD_FreePreparsedData(ppd);
+			CloseHandle(hDevice);
+		}
+		return 0;
+	}break;
 	case WM_INITDIALOG:
 	{
 		if (bFirstRun && ToastInitialised)
@@ -414,10 +583,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		if (Prefs.user_idle_mode_)
 		{
 			ManualUserIdleMode = APP_USER_IDLE_ON;
-
 			bIdle = true;
-			bIdlePreventEarlyWakeup = false;
-			bIdlePreventFalseBusy = false;
 			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
 			SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 			log(L"User forced user idle mode!");
@@ -430,21 +596,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		if (Prefs.user_idle_mode_)
 		{
-			LASTINPUTINFO lii;
-			lii.cbSize = sizeof(LASTINPUTINFO);
-			if (GetLastInputInfo(&lii))
-			{
-				ManualUserIdleMode = 0;
-
-				bIdle = false;
-				bIdlePreventEarlyWakeup = false;
-				bIdlePreventFalseBusy = false;
-				SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
-				SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
-				dwLastInputTick = lii.dwTime;
-				log(L"User forced unsetting user idle mode!");
-				communicateWithService("userbusy");
-			}
+			ManualUserIdleMode = 0;
+			bIdle = false;
+			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
+			SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
+			ulLastRawInput = GetTickCount64();
+			log(L"User forced unsetting user idle mode!");
+			communicateWithService("userbusy");
 		}
 		else
 			log(L"Can not force unset user idle mode, as the feature is not enabled in the global options!");
@@ -455,73 +613,61 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 		case TIMER_MAIN:
 		{
-			LASTINPUTINFO lii;
-			lii.cbSize = sizeof(LASTINPUTINFO);
-			if (GetLastInputInfo(&lii))
+			ULONGLONG time_now = GetTickCount64();
+
+			// do this first time the timer is triggered
+			if (daemon_startup_user_input_time == 0)
+				daemon_startup_user_input_time = ulLastRawInput;
+
+			//fix for the fullscreen idle detection on system startup because windows will return QUNS_BUSY until the user has interacted with the PC
+			if (ulLastRawInput != daemon_startup_user_input_time)
+				daemon_startup_user_input_time = -1;
+
+			// workaround for unelevated/normal processes not receiving raw input for elevated processes
+			bool bElevatedMethod = false; 
+			if(!isElevated)
 			{
-				// do this first time the timer is triggered
-				if (daemon_startup_user_input_time == 0)
-					daemon_startup_user_input_time = lii.dwTime;
-
-				//fix for the fullscreen idle detection on system startup because windows will return QUNS_BUSY until the user has interacted with the PC
-				if (lii.dwTime != daemon_startup_user_input_time)
-					daemon_startup_user_input_time = -1;
-
-				if (bDaemonVisible)
+				bElevatedMethod = IsWindowElevated(GetForegroundWindow());
+				if (bElevatedMethod)
 				{
-//					std::wstring tick = common::widen(std::to_string(lii.dwTime));
-					DWORD time = (GetTickCount() - (dwProcessedLastInputTick != 0 ? dwProcessedLastInputTick : lii.dwTime)) / 1000;
-					std::wstring ago = tools::widen(std::to_string(time));
-
-					//					SendMessage(GetDlgItem(hMainWnd, IDC_EDIT2), WM_SETTEXT, 0, (WPARAM)tick.c_str());
-					SendMessage(GetDlgItem(hMainWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());
-				}
-				if (bIdle)
-				{
-					if (lii.dwTime != dwLastInputTick) // was there user input during the last check interval (100ms)?
-					{
-						if (!bIdlePreventEarlyWakeup) // don't do anything unless user input for two consective intervals
-						{
-							dwLastInputTick = lii.dwTime;
-							bIdlePreventEarlyWakeup = true;
-						}
-						else
-						{
-							ManualUserIdleMode = 0;
-							SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
-							SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
-							dwLastInputTick = lii.dwTime;
-							dwProcessedLastInputTick = dwLastInputTick;
-							bIdlePreventEarlyWakeup = false;
-							bIdle = false;
-							communicateWithService("userbusy");
-						}
-					}
-					else
-						bIdlePreventEarlyWakeup = false;
-					bIdlePreventFalseBusy = false;
-				}
-				else
-				{
-					if (lii.dwTime != dwLastInputTick) // was there user input during the last check interval (1000ms)?
+					LASTINPUTINFO lii;
+					lii.cbSize = sizeof(LASTINPUTINFO);
+					GetLastInputInfo(&lii);
+					// avoid accidental wake
 					{
 
-						if (!bIdlePreventFalseBusy) // don't do anything unless user input for two consective intervals
-						{
-							dwLastInputTick = lii.dwTime;
-							bIdlePreventFalseBusy = true;
-						}
-						else
-						{
-							SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
-							dwLastInputTick = lii.dwTime;
-							dwProcessedLastInputTick = dwLastInputTick;
-							bIdlePreventFalseBusy = false;
-						}
+						if ((lii.dwTime - dwGetLastInputInfoSave <= TIMER_MAIN_DELAY_WHEN_BUSY * 2))
+							if (lii.dwTime - dwGetLastInputInfoSave > 0)
+								ulLastRawInput = time_now;
+						dwGetLastInputInfoSave = lii.dwTime;
 					}
-					else
-						bIdlePreventFalseBusy = false;
-					bIdlePreventEarlyWakeup = false;
+				}
+			}
+
+			// update the status window with last input
+			if (bDaemonVisible)
+			{
+				ULONGLONG time = (time_now - ulLastRawInput) / 1000;
+				std::wstring ago = tools::widen(std::to_string(time));
+				SendMessage(GetDlgItem(hMainWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());
+				ShowWindow(GetDlgItem(hWnd, IDC_STATIC_ELEVATED), bElevatedMethod ? SW_SHOW : SW_HIDE);
+			}
+			if (bIdle)
+			{
+				if (time_now - ulLastRawInput <= TIMER_MAIN_DELAY_WHEN_IDLE * 2) // was there user input during the interval?
+				{
+					ManualUserIdleMode = 0;
+					SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
+					SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
+					bIdle = false;
+					communicateWithService("userbusy");
+				}
+			}
+			else
+			{
+				if (time_now - ulLastRawInput <= TIMER_MAIN_DELAY_WHEN_BUSY) // was there user input during the interval?
+				{
+					SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 				}
 			}
 			return 0;
@@ -545,7 +691,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}
 				// fullscreen fix for first boot
 				// fullsceen detection routine
-				if(daemon_startup_user_input_time == -1)
+				if (daemon_startup_user_input_time == -1)
 				{
 					// UIM is disabled during fullsceen
 					if (Prefs.user_idle_mode_exclude_fullscreen_)
@@ -559,7 +705,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					else // UIM is enabled during fullscreen
 					{
 						//Is an excluded fullscreen process running?
-						if(Prefs.user_idle_mode_exclude_fullscreen_whitelist_ && Remote.sCurrentlyRunningFsExcludedProcess != L"")
+						if (Prefs.user_idle_mode_exclude_fullscreen_whitelist_ && Remote.sCurrentlyRunningFsExcludedProcess != L"")
 						{
 							if (isFullscreenApplicationRunning())
 							{
@@ -569,19 +715,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 								log(mess);
 								return 0;
 							}
-						}					
+						}
 					}
 				}
 			}
-
 			bIdle = true;
-			bIdlePreventEarlyWakeup = false;
-			bIdlePreventFalseBusy = false;
-
 			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
-
 			communicateWithService("useridle");
-
 			return 0;
 		}break;
 		case TIMER_CHECK_PROCESSES:
@@ -621,7 +761,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			{
 				log(L"Warning! No active devices detected when verifying Windows Monitor Topology.");
 				communicateWithService("topology undetermined");
-//				Prefs.AdhereTopology = false;
+				//				Prefs.AdhereTopology = false;
 			}
 			else if (result == TOPOLOGY_OK_DISABLE)
 			{
@@ -669,7 +809,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}break;
 	case WM_QUERYENDSESSION:
 	{
-		if(Prefs.shutdown_timing_ == PREFS_SHUTDOWN_TIMING_DELAYED)
+		if (Prefs.shutdown_timing_ == PREFS_SHUTDOWN_TIMING_DELAYED)
 			Sleep(1500);
 		return false; // because it is a dialog
 	}break;
@@ -682,18 +822,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			KillTimer(hWnd, TIMER_MAIN);
 			KillTimer(hWnd, TIMER_IDLE);
 			bIdle = false;
-			dwLastInputTick = 0;
-			bIdlePreventEarlyWakeup = false;
-			bIdlePreventFalseBusy = false;
+			ulLastRawInput = GetTickCount64();
 			log(L"Suspending system.");
 			return true;
 		}break;
 		case PBT_APMRESUMEAUTOMATIC:
 		{
 			bIdle = false;
-			dwLastInputTick = 0;
-			bIdlePreventEarlyWakeup = false;
-			bIdlePreventFalseBusy = false;
+			ulLastRawInput = GetTickCount64();
 			if (Prefs.user_idle_mode_)
 			{
 				SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
@@ -721,9 +857,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					else
 					{
 						bIdle = false;
-						dwLastInputTick = 0;
-						bIdlePreventEarlyWakeup = false;
-						bIdlePreventFalseBusy = false;
+						ulLastRawInput = GetTickCount64();
 						if (Prefs.user_idle_mode_)
 						{
 							SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
@@ -829,7 +963,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_CTLCOLORSTATIC:
 	{
 		HDC hdcStatic = (HDC)wParam;
-//		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE))
+		//		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE))
 		{
 			SetBkMode(hdcStatic, TRANSPARENT);
 		}
@@ -1510,4 +1644,43 @@ std::wstring getWndText(HWND hWnd)
 	GetWindowText(hWnd, &buf[0], len);
 	std::wstring text = &buf[0];
 	return text;
+}
+
+bool IsWindowElevated(HWND hWnd) {
+	DWORD processId = 0;
+	HANDLE hProcess = nullptr;
+	HANDLE hToken = nullptr;
+	bool isElevated = false;
+
+	if (hWnd == NULL)
+		return false;
+
+	// Get process ID from window handle
+	GetWindowThreadProcessId(hWnd, &processId);
+
+	// Open the process with query limited information access
+	hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+	if (!hProcess) {
+		return false;
+	}
+
+	// Get the process token
+	if (!OpenProcessToken(hProcess, TOKEN_QUERY, &hToken)) {
+		CloseHandle(hProcess);
+		return false;
+	}
+
+	// Check token elevation status
+	TOKEN_ELEVATION_TYPE elevationType;
+	DWORD dwSize;
+	if (GetTokenInformation(hToken, TokenElevationType,
+		&elevationType, sizeof(elevationType), &dwSize)) {
+		isElevated = (elevationType == TokenElevationTypeFull);
+	}
+
+	// Clean up handles
+	CloseHandle(hToken);
+	CloseHandle(hProcess);
+
+	return isElevated;
 }
