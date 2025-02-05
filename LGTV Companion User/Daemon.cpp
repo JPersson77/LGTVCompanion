@@ -32,6 +32,7 @@
 #include <Dbt.h>
 #include <Hidsdi.h>
 #include <hidpi.h>
+#include <unordered_map>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <wintoastlib.h>
 #include "resource.h"
@@ -103,6 +104,13 @@ struct RemoteWrapper {					// Remote streaming info
 	};
 } Remote;
 
+struct DeviceInfo { // Cache for raw input data stuff
+	HANDLE hDevice;
+	PHIDP_PREPARSED_DATA ppd;
+	HIDP_CAPS caps;
+	std::vector<int> axes;
+};
+
 class WinToastHandler : public WinToastLib::IWinToastHandler
 {
 public:
@@ -136,12 +144,12 @@ ULONGLONG						ulLastControllerSample = 0;
 ULONGLONG						ulLastMouseSample = 0;
 DWORD							dwGetLastInputInfoSave = 0;
 int								iMouseChecksPerformed = 0;
-std::vector<int>				Axes;
 bool							ToastInitialised = false;
 std::shared_ptr<IpcClient>		pPipeClient;
 Preferences						Prefs(CONFIG_FILE);
 std::string						sessionID;
 bool							isElevated = false;
+std::unordered_map<std::wstring, DeviceInfo> g_deviceCache; // Key = device path
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -334,6 +342,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		UnregisterDeviceNotification(dev_notify);
 	if (Prefs.remote_streaming_host_support_)
 		WTSUnRegisterSessionNotification(hMainWnd);
+	RawInput_ClearCache();
 	return (int)msg.wParam;
 }
 
@@ -383,7 +392,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// If not mouse or keyboard, then a controller was used
 		else
 		{
-			HIDP_CAPS caps;
 			UINT nameSize = 0;
 			if (GetRawInputDeviceInfo(raw->header.hDevice, RIDI_DEVICENAME, nullptr, &nameSize) != 0)
 				return 0;
@@ -393,71 +401,59 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				log(L"Failed to get device name.");
 				return 0;
 			}
-
-			// Open HID device
-			HANDLE hDevice = CreateFile(deviceName.data(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-				nullptr, OPEN_EXISTING, 0, nullptr);
-			if (hDevice == INVALID_HANDLE_VALUE) {
-				log(L"Device open failed");
-				return 0;
+			// Check if exists in cache or perform initialization
+			std::wstring devicePath(deviceName.data());
+			auto it = g_deviceCache.find(devicePath);
+			if (it == g_deviceCache.end()) {
+				RawInput_AddToCache(devicePath);
+				it = g_deviceCache.find(devicePath); // Re-check after insertion attempt
+				if (it == g_deviceCache.end())
+				{
+					log(L"Error in cache management.");
+					return 0;
+				}
 			}
-			// Get preparsed data using correct HID functions
-			PHIDP_PREPARSED_DATA ppd = nullptr;
-			if (!HidD_GetPreparsedData(hDevice, &ppd)) {
-				log(L"Preparsed data failed");
-				CloseHandle(hDevice);
-				return 0;
-			}
-			if (HidP_GetCaps(ppd, &caps) != HIDP_STATUS_SUCCESS) 
-			{
-				HidD_FreePreparsedData(ppd);
-				CloseHandle(hDevice);
-				return 0;
-			}
-
 			// Check whether a digital button was pressed on the controller
-			if (caps.NumberInputButtonCaps > 0) 
+			DeviceInfo& cache = it->second;
+			if (cache.caps.NumberInputButtonCaps > 0)
 			{
-				std::vector<HIDP_BUTTON_CAPS> buttonCaps(caps.NumberInputButtonCaps);
-				USHORT buttonCapsLength = caps.NumberInputButtonCaps;
-				if (HidP_GetButtonCaps(HidP_Input, buttonCaps.data(), &buttonCapsLength, ppd) == HIDP_STATUS_SUCCESS)
+				std::vector<HIDP_BUTTON_CAPS> buttonCaps(cache.caps.NumberInputButtonCaps);
+				USHORT buttonCapsLength = cache.caps.NumberInputButtonCaps;
+				if (HidP_GetButtonCaps(HidP_Input, buttonCaps.data(), &buttonCapsLength, cache.ppd) == HIDP_STATUS_SUCCESS)
 				{
 					ULONG usageLength = buttonCaps[0].Range.UsageMax - buttonCaps[0].Range.UsageMin + 1;
 					std::vector<USAGE> usages(usageLength);
-					if (HidP_GetUsages(HidP_Input, buttonCaps[0].UsagePage, 0, usages.data(), &usageLength, ppd,
+					if (HidP_GetUsages(HidP_Input, buttonCaps[0].UsagePage, 0, usages.data(), &usageLength, cache.ppd,
 						reinterpret_cast<PCHAR>(raw->data.hid.bRawData), raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS)
 					{
 						if (usageLength > 0)
 							ulLastRawInput = tick_now;
-					}
-					
+					}					
 				}
 			}
 			// Check whether any analog sticks were moved and avoid accidental wake
 			if (tick_now - ulLastControllerSample < 50)
 			{
-				HidD_FreePreparsedData(ppd);
-				CloseHandle(hDevice);
 				break;
 			}
-			if (caps.NumberInputValueCaps > 0) 
+			if (cache.caps.NumberInputValueCaps > 0)
 			{
-				std::vector<HIDP_VALUE_CAPS> valueCaps(caps.NumberInputValueCaps);
-				USHORT valueCapsLength = caps.NumberInputValueCaps;
-				if (Axes.size() != valueCapsLength)
+				std::vector<HIDP_VALUE_CAPS> valueCaps(cache.caps.NumberInputValueCaps);
+				USHORT valueCapsLength = cache.caps.NumberInputValueCaps;
+				if (cache.axes.size() != valueCapsLength)
 				{
-					Axes.clear();
-					Axes.assign(valueCapsLength, -1);
+					cache.axes.clear();
+					cache.axes.assign(valueCapsLength, -1);
 				}
-				if (HidP_GetValueCaps(HidP_Input, valueCaps.data(), &valueCapsLength, ppd) == HIDP_STATUS_SUCCESS) 
+				if (HidP_GetValueCaps(HidP_Input, valueCaps.data(), &valueCapsLength, cache.ppd) == HIDP_STATUS_SUCCESS) 
 				{
 					for (USHORT i = 0; i < valueCapsLength; ++i) 
 					{
 						ULONG value;
-						if (HidP_GetUsageValue(HidP_Input, valueCaps[i].UsagePage, 0, valueCaps[i].Range.UsageMin, &value, ppd,
+						if (HidP_GetUsageValue(HidP_Input, valueCaps[i].UsagePage, 0, valueCaps[i].Range.UsageMin, &value, cache.ppd,
 							reinterpret_cast<PCHAR>(raw->data.hid.bRawData), raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS) 
 						{
-							// Scale value to normalized range if needed (using LogicalMin/Max from valueCaps)
+							// Scale to normalized range
 							LONG scaledValue = value;
 							if (valueCaps[i].LogicalMin < valueCaps[i].LogicalMax) 
 							{
@@ -466,21 +462,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 								LONG max = valueCaps[i].LogicalMax;
 								scaledValue = (value - min) * 65535 / (max - min);
 							}
-							if (Axes[i] != -1)
+							if (cache.axes[i] != -1)
 							{
-								if (abs(Axes[i] - scaledValue) > 0.012 * 65535)
+								if (abs(cache.axes[i] - scaledValue) > 0.012 * 65535) // sensitivity of the input detection
 								{
 									ulLastRawInput = tick_now;
 									ulLastControllerSample = tick_now;
 								}
 							}
-							Axes[i] = scaledValue;
+							cache.axes[i] = scaledValue;
 						}
 					}
 				}
 			}
-			HidD_FreePreparsedData(ppd);
-			CloseHandle(hDevice);
 		}
 		return 0;
 	}break;
@@ -826,6 +820,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			bIdle = false;
 			ulLastRawInput = GetTickCount64();
 			log(L"Suspending system.");
+			RawInput_ClearCache();
 			return true;
 		}break;
 		case PBT_APMRESUMEAUTOMATIC:
@@ -838,6 +833,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 			}
 			log(L"Resuming system.");
+			RawInput_ClearCache();
 			return true;
 		}break;
 		case PBT_POWERSETTINGCHANGE:
@@ -865,6 +861,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 							SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 							SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 						}
+						RawInput_ClearCache();
 						log(L"System requests displays ON.");
 					}
 					return true;
@@ -900,6 +897,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WM_DEVICECHANGE:
 	{
+		//clear the raw input cache whenever a controller was connected/disconnected.
+		RawInput_ClearCache();
+
 		if (Prefs.remote_streaming_host_support_ && lParam)
 		{
 			PDEV_BROADCAST_HDR lpdb = (PDEV_BROADCAST_HDR)lParam;
@@ -1685,4 +1685,34 @@ bool IsWindowElevated(HWND hWnd) {
 	CloseHandle(hProcess);
 
 	return isElevated;
+}
+
+void RawInput_AddToCache(const std::wstring& devicePath) {
+	HANDLE hDevice = CreateFile(devicePath.c_str(), GENERIC_READ,
+		FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+	if (hDevice == INVALID_HANDLE_VALUE) return;
+
+	PHIDP_PREPARSED_DATA ppd = nullptr;
+	if (!HidD_GetPreparsedData(hDevice, &ppd)) {
+		CloseHandle(hDevice);
+		return;
+	}
+
+	HIDP_CAPS caps;
+	if (HidP_GetCaps(ppd, &caps) != HIDP_STATUS_SUCCESS) {
+		HidD_FreePreparsedData(ppd);
+		CloseHandle(hDevice);
+		return;
+	}
+
+	g_deviceCache[devicePath] = { hDevice, ppd, caps };
+}
+
+void RawInput_ClearCache() {
+	for (auto it = g_deviceCache.begin(); it != g_deviceCache.end(); ++it) {
+		HidD_FreePreparsedData(it->second.ppd);
+		CloseHandle(it->second.hDevice);
+		it->second.axes.clear();
+	}
+	g_deviceCache.clear();
 }

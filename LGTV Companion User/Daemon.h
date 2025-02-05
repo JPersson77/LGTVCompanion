@@ -25,3 +25,5 @@ std::string					sunshine_GetLogFile();
 void						ipcCallback(std::wstring, LPVOID);
 std::wstring				getWndText(HWND);
 bool						IsWindowElevated(HWND);
+void						RawInput_AddToCache(const std::wstring& devicePath);
+void						RawInput_ClearCache();
