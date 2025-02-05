@@ -235,7 +235,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		thread_obj.detach();
 	}
 
-	//Set a timer for the idle detection
 	if (Prefs.user_idle_mode_)
 	{
 		RAWINPUTDEVICE Rid[3];
@@ -257,7 +256,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		if (RegisterRawInputDevices(Rid, 2, sizeof(Rid[0])) == FALSE)
 		{
 			log(L"Failed to register for Raw Input!");
-			//registration failed. Call GetLastError for the cause of the error.
 		}
 		ulLastRawInput = GetTickCount64();
 		SetTimer(hMainWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
@@ -437,7 +435,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			// Check whether any analog sticks were moved and avoid accidental wake
 			if (tick_now - ulLastControllerSample < 50)
+			{
+				HidD_FreePreparsedData(ppd);
+				CloseHandle(hDevice);
 				break;
+			}
 			if (caps.NumberInputValueCaps > 0) 
 			{
 				std::vector<HIDP_VALUE_CAPS> valueCaps(caps.NumberInputValueCaps);
