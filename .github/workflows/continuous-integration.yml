@@ -38,6 +38,7 @@ jobs:
         id: upload-unsigned-artifact
         uses: actions/upload-artifact@v4
         with: 
+          name: artifact-${{ matrix.configuration }}-${{ matrix.arch }}
           path: 'LGTV Companion Setup/bin/${{ matrix.arch }}/${{ matrix.configuration }}/'
       - id: optional_step_id
         uses: signpath/github-action-submit-signing-request@v1.1
