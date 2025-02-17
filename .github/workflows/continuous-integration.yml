@@ -34,11 +34,27 @@ jobs:
         env:
           Configuration: ${{ matrix.configuration }}
           Platform: ${{ matrix.arch }}
+      - name: upload-unsigned-artifact
+        id: upload-unsigned-artifact
+        uses: actions/upload-artifact@v4
+        with: 
+          path: 'LGTV Companion Setup/bin/${{ matrix.arch }}/${{ matrix.configuration }}/'
+      - id: optional_step_id
+        uses: signpath/github-action-submit-signing-request@v1.1
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: 'bd3594bc-4691-4685-9f32-795558975d6e'
+          project-slug: 'LGTVCompanion'
+          signing-policy-slug: 'test-signing'
+          github-artifact-id: '${{ steps.upload-unsigned-artifact.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'signed/${{ matrix.arch }}/${{ matrix.configuration }}'
+          
       - name: Generate hash
         id: hash
         shell: bash
         run: |
-          echo "hash${{ matrix.configuration }}_${{ matrix.arch }}=$( sha256sum 'LGTV Companion Setup/bin/${{ matrix.arch }}/${{ matrix.configuration }}/LGTV Companion Setup ${{ matrix.arch }}.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
+          echo "hash${{ matrix.configuration }}_${{ matrix.arch }}=$( sha256sum 'signed/${{ matrix.arch }}/${{ matrix.configuration }}/LGTV Companion Setup ${{ matrix.arch }}.msi' | base64 -w0 )" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: LGTVCompanion-Output-${{ matrix.configuration }}-${{ matrix.arch }}
@@ -46,7 +62,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: LGTVCompanion-Setup-${{ matrix.configuration }}-${{ matrix.arch }}
-          path: LGTV Companion Setup/bin/${{ matrix.arch }}/${{ matrix.configuration }}/  
+          path: signed/${{ matrix.arch }}/${{ matrix.configuration }}/  
   combine_hashes:
     needs: [build]
     runs-on: ubuntu-latest
