@@ -46,7 +46,7 @@ jobs:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: 'bd3594bc-4691-4685-9f32-795558975d6e'
           project-slug: 'LGTVCompanion'
-          signing-policy-slug: 'test-signing'
+          signing-policy-slug: 'release-signing'
           github-artifact-id: '${{ steps.upload-unsigned-artifact.outputs.artifact-id }}'
           wait-for-completion: true
           output-artifact-directory: 'signed/${{ matrix.arch }}/${{ matrix.configuration }}'
