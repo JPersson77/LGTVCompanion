@@ -247,8 +247,16 @@ void WebOsClient::Impl::startNextWork(void)
 		if (work_.type_ == WORK_POWER_ON && time_diff > (device_settings_.extra.timeout + 10)
 			|| (work_.type_ != WORK_POWER_ON && time_diff > 10 + work_.delay_))
 		{
-			ERR("Lingering work of type %1% detected. Closing connection and aborting work!", std::to_string(work_.type_));
-			doClose();
+			ERR("Lingering work of type %1% detected. Aborting lingering work and closing socket!", std::to_string(work_.type_));
+			if (socket_status_ == SOCKET_CONNECTED || socket_status_ == SOCKET_CONNECTING)
+			{		
+				if (device_settings_.ssl)
+					ws_->close(websocket::close_code::normal);
+				else
+					ws_tcp_->close(websocket::close_code::normal);
+				socket_status_ = SOCKET_DISCONNECTED;
+			}
+			work_.clear();
 		}
 		else
 		{
