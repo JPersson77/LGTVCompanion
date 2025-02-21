@@ -19,5 +19,6 @@ public:
 	~Companion() {};
 	void					systemEvent(int event, std::string data = "");
 	void					shutdown(void);
+	bool					isBusy(void);
 };
 

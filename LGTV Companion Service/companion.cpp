@@ -95,6 +95,7 @@ public:
 	~Impl();
 	void												shutdown(void);
 	void												systemEvent(int event, std::string data = "");
+	bool												isBusy(void);
 };
 
 Companion::Impl::Impl(Preferences& settings) 
@@ -156,6 +157,12 @@ Companion::Impl::Impl(Preferences& settings)
 Companion::Impl::~Impl(void)
 {
 
+}
+bool Companion::Impl::isBusy(void)
+{
+	if (ioc_.stopped())
+		return false;
+	return true;
 }
 void Companion::Impl::shutdown(void){
 	ipc_server_->terminate();
@@ -1535,3 +1542,4 @@ Companion::Companion(Preferences& settings)
 void Companion::systemEvent(int event, std::string data) {
 	pimpl->systemEvent(event, data); }
 void Companion::shutdown(void) { pimpl->shutdown(); }
+bool Companion::isBusy(void) { return pimpl->isBusy(); }

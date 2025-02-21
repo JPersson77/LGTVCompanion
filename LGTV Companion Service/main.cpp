@@ -11,6 +11,7 @@
 #include "../Common/tools.h"
 #include "../Common/lg_api.h"
 #include <sddl.h>
+#include <thread>
 
 #pragma comment(lib, "Wevtapi.lib")
 
@@ -218,8 +219,14 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 		SvcReportStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000, *context);
 		context->lgtv_companion->shutdown();
 		// Signal the service to stop.
-		SetEvent(context->service_stop_event);
-		SvcReportStatus(context->service_status.dwCurrentState, NO_ERROR, 0, *context);
+		std::thread([context]() {
+			SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
+			while (context->lgtv_companion->isBusy())
+				Sleep(500);
+			SetEvent(context->service_stop_event); // Signal shutdown can proceed
+			SetThreadExecutionState(ES_CONTINUOUS);
+			}).detach();
+//		SvcReportStatus(context->service_status.dwCurrentState, NO_ERROR, 0, *context);
 	}	break;
 	case SERVICE_CONTROL_POWEREVENT:
 	{
@@ -266,9 +273,14 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 	{
 		context->lgtv_companion->systemEvent(EVENT_SYSTEM_SHUTDOWN);
 		SvcReportStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000, *context);
-		context->lgtv_companion->shutdown();
-		SetEvent(context->service_stop_event);
-		SvcReportStatus(context->service_status.dwCurrentState, NO_ERROR, 0, *context);
+		std::thread([context]() {
+			SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
+			while (context->lgtv_companion->isBusy())
+				Sleep(100);
+			SetEvent(context->service_stop_event); // Signal shutdown can proceed
+			SetThreadExecutionState(ES_CONTINUOUS);
+			}).detach();
+//		SvcReportStatus(context->service_status.dwCurrentState, NO_ERROR, 0, *context);
 	}	break;
 
 	case SERVICE_CONTROL_INTERROGATE:
@@ -413,7 +425,7 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 
 	UnregisterPowerSettingNotification(power_notify_handle);
 	EvtClose(event_subscribe_handle);
-	SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has ended.");
+	SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has ended normally.");
 	SvcReportStatus(SERVICE_STOPPED, NO_ERROR, 0, context);
 	return;
 }
