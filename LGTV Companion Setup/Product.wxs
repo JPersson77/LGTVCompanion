@@ -1,6 +1,6 @@
 ﻿<!-- When publishing updated version, make sure to update "ProductCode" GUID and "Version" -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-  <Package Name="LGTV Companion" Language="1033" Version="4.3.5" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A" InstallerVersion="500" ProductCode="{A7987686-6240-4DF2-BE22-5ED77E2B5069}">
+  <Package Name="LGTV Companion" Language="1033" Version="4.3.8" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A" InstallerVersion="500" ProductCode="{1C68ABAF-E26E-4331-909F-0156C6D9E6CA}">
     <SummaryInformation Description="LGTV Companion installer" />
     <Media Id="1" Cabinet="LGTVapp.cab" EmbedCab="yes" />
 

@@ -209,6 +209,7 @@ bool SvcUninstall()
 }
 DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOID lpContext)
 {
+	SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 	Context* context = (Context*)lpContext;
 	switch (dwCtrl)
 	{
@@ -275,8 +276,10 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 
 	}	break;
 	default:
+		SetThreadExecutionState(ES_CONTINUOUS);
 		return ERROR_CALL_NOT_IMPLEMENTED;
 	}
+	SetThreadExecutionState(ES_CONTINUOUS);
 	return NO_ERROR;
 }
 

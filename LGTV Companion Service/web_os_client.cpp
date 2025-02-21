@@ -240,6 +240,7 @@ void WebOsClient::Impl::read(void) {
 }
 void WebOsClient::Impl::startNextWork(void)
 {
+	SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 	if (work_.type_ != WORK_UNDEFINED) // work is already ongoing
 	{
 		time_t time_diff = time(0) - work_.timestamp_start_;
@@ -357,6 +358,7 @@ void WebOsClient::Impl::startNextWork(void)
 			DEBUG("Work queue is empty");
 			doClose();
 		}
+		SetThreadExecutionState(ES_CONTINUOUS);
 	}
 }
 void WebOsClient::Impl::workIsFinished(void)

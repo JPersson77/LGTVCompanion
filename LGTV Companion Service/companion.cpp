@@ -286,7 +286,7 @@ std::string Companion::Impl::validateDevices(std::vector<std::string> devices){
 void Companion::Impl::dispatchEvent(Event& event) {
 	if (sessions_.size() == 0)
 		return;
-	SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
+//	SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 	// fix for only receiving DIMMED event when screensaver is active
 	if (event.getType() == EVENT_SYSTEM_DISPLAYDIMMED)
 	{
@@ -317,11 +317,11 @@ void Companion::Impl::dispatchEvent(Event& event) {
 	case EVENT_SYSTEM_SHUTDOWN:
 	case EVENT_SYSTEM_UNSURE:
 		remote_client_connected_ = false;
-		Sleep(2000); //buy some time during shutdown
+//		Sleep(2000); //buy some time during shutdown
 		break;
 
 	case EVENT_SYSTEM_SUSPEND:
-		Sleep(2000); //buy some time during suspend
+//		Sleep(2000); //buy some time during suspend
 		remote_client_connected_ = false;
 		windows_power_status_on_ = false;
 		time_last_suspend = time(0);
@@ -359,7 +359,7 @@ void Companion::Impl::dispatchEvent(Event& event) {
 	default:break;
 	}
 
-	SetThreadExecutionState(ES_CONTINUOUS);
+//	SetThreadExecutionState(ES_CONTINUOUS);
 	return;
 }
 bool Companion::Impl::isScreensaverActive(void)

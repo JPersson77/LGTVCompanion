@@ -49,6 +49,7 @@ R"(
     "se mettre hors tension",
     "se mettre hors tension.",
     "stäng av",
+    "avsluta",
     "apagar",
     "apagado",
     "Apagar el sistema",
