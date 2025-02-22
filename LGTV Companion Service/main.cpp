@@ -216,16 +216,21 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 	{
 	case SERVICE_CONTROL_STOP:
 	{
-		SvcReportStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000, *context);
-		context->lgtv_companion->shutdown();
-		// Signal the service to stop.
+		SvcReportStatus(SERVICE_STOP_PENDING, NO_ERROR, 10000, *context);
+
 		std::thread([context]() {
 			SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
-			while (context->lgtv_companion->isBusy())
-				Sleep(500);
+			context->lgtv_companion->shutdown(true);
+			time_t entry = time(0);
+			while (context->lgtv_companion->isBusy() && time(0) - entry < 10)
+			{
+				Sleep(200);
+				SvcReportStatus(SERVICE_STOP_PENDING, NO_ERROR, 10000, *context);
+			}
 			SetEvent(context->service_stop_event); // Signal shutdown can proceed
 			SetThreadExecutionState(ES_CONTINUOUS);
 			}).detach();
+
 //		SvcReportStatus(context->service_status.dwCurrentState, NO_ERROR, 0, *context);
 	}	break;
 	case SERVICE_CONTROL_POWEREVENT:
@@ -271,13 +276,32 @@ DWORD  SvcCtrlHandler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOI
 	case SERVICE_CONTROL_PRESHUTDOWN:
 	case SERVICE_CONTROL_SHUTDOWN:
 	{
-		context->lgtv_companion->systemEvent(EVENT_SYSTEM_SHUTDOWN);
-		SvcReportStatus(SERVICE_STOP_PENDING, NO_ERROR, 20000, *context);
+		if(context->prefs->shutdown_timing_ != PREFS_SHUTDOWN_TIMING_DELAYED)
+			context->lgtv_companion->systemEvent(EVENT_SYSTEM_SHUTDOWN);
+
+		SvcReportStatus(SERVICE_STOP_PENDING, NO_ERROR, 10000, *context);
+
 		std::thread([context]() {
 			SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
-			while (context->lgtv_companion->isBusy())
+			if (context->prefs->shutdown_timing_ == PREFS_SHUTDOWN_TIMING_DELAYED)
+			{
+				for (int i = 0; i < 4; i++)
+				{
+					Sleep(1000);
+					SvcReportStatus(SERVICE_STOP_PENDING, NO_ERROR, 10000, *context);
+				}
+				context->lgtv_companion->systemEvent(EVENT_SYSTEM_SHUTDOWN);
+			}
+			Sleep(200);
+			context->lgtv_companion->shutdown(true);
+			time_t entry = time(0);
+			while (context->lgtv_companion->isBusy() && time(0) - entry < 10)
+			{
+				SvcReportStatus(SERVICE_STOP_PENDING, NO_ERROR, 10000, *context);
 				Sleep(100);
+			}
 			SetEvent(context->service_stop_event); // Signal shutdown can proceed
+			Sleep(100);
 			SetThreadExecutionState(ES_CONTINUOUS);
 			}).detach();
 //		SvcReportStatus(context->service_status.dwCurrentState, NO_ERROR, 0, *context);
@@ -414,19 +438,22 @@ VOID WINAPI SvcMain(DWORD dwArgc, LPTSTR* lpszArgv)
 		&context,                                           //Context
 		(EVT_SUBSCRIBE_CALLBACK)SvcEventLogSubscribeCallback,            //callback
 		EvtSubscribeToFutureEvents);
-	SetProcessShutdownParameters(prefs.shutdown_timing_ == PREFS_SHUTDOWN_TIMING_EARLY? 0x100 : 0x3FF, SHUTDOWN_NORETRY);
+	SetProcessShutdownParameters(0x100, SHUTDOWN_NORETRY);
 	SvcReportStatus(SERVICE_RUNNING, NO_ERROR, 0, context);
 	SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has started.");
 	lgtv_companion.systemEvent(EVENT_SYSTEM_BOOT);
 	power_notify_handle = RegisterPowerSettingNotification(context.service_status_handle, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_SERVICE_HANDLE);
 
-	// Wait until service stops
+	// Wait until service shuts down and all activities are performed
 	WaitForSingleObject(context.service_stop_event, INFINITE);
-
+	
+	SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 	UnregisterPowerSettingNotification(power_notify_handle);
 	EvtClose(event_subscribe_handle);
+	context.lgtv_companion->shutdown(false);
 	SvcReportEvent(EVENTLOG_INFORMATION_TYPE, L"The service has ended normally.");
 	SvcReportStatus(SERVICE_STOPPED, NO_ERROR, 0, context);
+	SetThreadExecutionState(ES_CONTINUOUS);
 	return;
 }
 DWORD WINAPI SvcEventLogSubscribeCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PVOID UserContext, EVT_HANDLE hEvent)

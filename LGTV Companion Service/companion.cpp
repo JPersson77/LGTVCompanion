@@ -49,6 +49,8 @@ public:
 class Companion::Impl : public std::enable_shared_from_this<Companion::Impl> {
 private:
 	boost::asio::io_context								ioc_;
+	std::atomic<bool>									ioc_started_;
+	std::atomic<bool>									ioc_reset_;
 	boost::asio::ssl::context							ctx_{ boost::asio::ssl::context::tlsv12_client };
 	Preferences											prefs_;
 	std::vector <std::shared_ptr<SessionWrapper>>		sessions_;								
@@ -58,7 +60,6 @@ private:
 	time_t												time_last_resume_or_boot_time = 0;
 	time_t												time_last_power_on = 0;
 	time_t												time_last_suspend = 0;
-	bool												io_context_reset_ = true;
 	bool												user_idle_mode_log_ = true;
 	int													event_log_callback_status_ = NULL;
 	std::vector<std::string>							host_ips_;
@@ -93,7 +94,7 @@ private:
 public:
 	Impl(Preferences&);
 	~Impl();
-	void												shutdown(void);
+	void												shutdown(bool);
 	void												systemEvent(int event, std::string data = "");
 	bool												isBusy(void);
 };
@@ -101,6 +102,8 @@ public:
 Companion::Impl::Impl(Preferences& settings) 
 	: prefs_(settings)
 {
+	ioc_started_.store(false);
+	ioc_reset_.store(true);
 	prefs_.topology_support_ = false; //disable initially
 	std::wstring file = tools::widen(prefs_.data_path_);
 	file += LOG_FILE;
@@ -160,16 +163,29 @@ Companion::Impl::~Impl(void)
 }
 bool Companion::Impl::isBusy(void)
 {
+	// if io context was never started
+	if (!ioc_started_.load())
+		return false;
+	// if io context is currently in a reset state (this state means .stopped() return false)
+	if (ioc_reset_.load())
+		return false;
+	// if io context is stopped (as a result of running out of work or manually stopped)
 	if (ioc_.stopped())
 		return false;
 	return true;
 }
-void Companion::Impl::shutdown(void){
-	ipc_server_->terminate();
-	if (sessions_.size() > 0)
-		for (auto& session : sessions_)
-			session->client_.close();
-	INFO("The service has terminated");
+void Companion::Impl::shutdown(bool stage){
+	if(!stage)
+		INFO("The service has terminated.");
+	else
+	{
+		INFO("Service is shutting down. Finishing activities and closing connections");
+		ipc_server_->terminate();
+		if(isBusy())
+			if (sessions_.size() > 0)
+				for (auto& session : sessions_)
+					session->client_.close(true);
+	}
 }
 void Companion::Impl::enableSession(std::vector<std::string> device_names_or_ids){
 	for (auto& session : sessions_)
@@ -293,13 +309,26 @@ std::string Companion::Impl::validateDevices(std::vector<std::string> devices){
 void Companion::Impl::dispatchEvent(Event& event) {
 	if (sessions_.size() == 0)
 		return;
-//	SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 	// fix for only receiving DIMMED event when screensaver is active
 	if (event.getType() == EVENT_SYSTEM_DISPLAYDIMMED)
 	{
 		screensaver_active_ = isScreensaverActive();
 		if(screensaver_active_)
 			DEBUG("Screensaver is active during DIMMED event");
+	}
+
+	//stop io_context when system is resuming to purge lingering work
+	if ((event.getType() == EVENT_SYSTEM_RESUME || event.getType() == EVENT_SYSTEM_RESUMEAUTO) && isBusy())
+	{
+		ERR("I/O Context did not finish work during the previous system suspend.");
+		if (sessions_.size() > 0)
+			for (auto& session : sessions_)
+				session->client_.close(false);
+		time_t entry = time(0);
+		while (isBusy() && (time(0) - entry < 2))
+			Sleep(200);
+		ioc_.stop();
+		DEBUG("I/O Context purged and stopped!");
 	}
 
 	// process event for ALL devices
@@ -313,6 +342,7 @@ void Companion::Impl::dispatchEvent(Event& event) {
 				if (tools::tolower(device) == tools::tolower(session->device_.id) || tools::tolower(device) == tools::tolower(session->device_.name))
 					processEvent(event, *session);
 	//post processing stuff
+	time_t pp_entry = time(0);
 	switch (event.getType())
 	{
 	case EVENT_SYSTEM_REMOTE_CONNECT:
@@ -324,14 +354,21 @@ void Companion::Impl::dispatchEvent(Event& event) {
 	case EVENT_SYSTEM_SHUTDOWN:
 	case EVENT_SYSTEM_UNSURE:
 		remote_client_connected_ = false;
-//		Sleep(2000); //buy some time during shutdown
 		break;
 
 	case EVENT_SYSTEM_SUSPEND:
-//		Sleep(2000); //buy some time during suspend
 		remote_client_connected_ = false;
 		windows_power_status_on_ = false;
-		time_last_suspend = time(0);
+		time_last_suspend = pp_entry;
+		
+		//buy some time during suspend. Hack which seems to preserve network connectivity during suspend
+		Sleep(100);
+		while (isBusy() && time(0) - pp_entry < 9)
+		{
+			SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
+			Sleep(100);
+		}
+		SetThreadExecutionState(ES_CONTINUOUS);
 		break;
 	case EVENT_SYSTEM_REBOOT:
 		remote_client_connected_ = false;
@@ -352,21 +389,19 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		break;
 	case EVENT_SYSTEM_DISPLAYON:
 		windows_power_status_on_ = true;
-		time_last_power_on = time(0);
+		time_last_power_on = pp_entry;
 		break;
 	case EVENT_SYSTEM_RESUMEAUTO:
 		remote_client_connected_ = false;
 		windows_power_status_on_ = true;
-		time_last_resume_or_boot_time = time(0);
+		time_last_resume_or_boot_time = pp_entry;
 		user_idle_mode_log_ = true;
 		break;
 	case EVENT_SYSTEM_BOOT:
-		time_last_resume_or_boot_time = time(0);
+		time_last_resume_or_boot_time = pp_entry;
 		break;
 	default:break;
 	}
-
-//	SetThreadExecutionState(ES_CONTINUOUS);
 	return;
 }
 bool Companion::Impl::isScreensaverActive(void)
@@ -404,17 +439,18 @@ bool Companion::Impl::setHdmiInput(Event& event, SessionWrapper& session)
 	session.client_.sendRequest(change_hdmi_input_event.getData(), log, session.device_.set_hdmi_input_on_power_on_delay);
 	return true;
 }
-void Companion::Impl::processEvent(Event& event, SessionWrapper& session) 
+void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 {
 	bool work_was_enqueued;
 	do
 	{
 		work_was_enqueued = false;
-		//reset the io_context as needed
+
+		//reset io_context as needed
 		if (ioc_.stopped())
 		{
-			DEBUG("I/O context was stopped. Resetting!");
-			io_context_reset_ = true;
+			DEBUG("I/O context is stopped. Resetting!");
+			ioc_reset_.store(true);
 			ioc_.restart();
 		}
 		// process forced and user initiated events
@@ -474,18 +510,13 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				break;
 			case EVENT_SYSTEM_REBOOT:
 			case EVENT_SYSTEM_RESUME:
+			case EVENT_SYSTEM_RESUMEAUTO:
+			case EVENT_SYSTEM_BOOT:
 				break;
 
 			case EVENT_SYSTEM_SHUTDOWN:
 			case EVENT_SYSTEM_UNSURE:
 				work_was_enqueued = session.client_.powerOff();
-				break;
-
-			case EVENT_SYSTEM_RESUMEAUTO:
-				if (prefs_.topology_support_ && !session.topology_enabled_)
-					break;
-//				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_power_on < 10)
-//					work_was_enqueued = setHdmiInput(event, session);
 				break;
 
 			case EVENT_SYSTEM_DISPLAYON:
@@ -494,16 +525,13 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
 				work_was_enqueued = session.client_.powerOn();
-				if (session.device_.set_hdmi_input_on_power_on ) // && time(0) - time_last_resume_or_boot_time < 10)
+				if (session.device_.set_hdmi_input_on_power_on) // && time(0) - time_last_resume_or_boot_time < 10)
 					work_was_enqueued = setHdmiInput(event, session);
 				break;
 
 			case EVENT_SYSTEM_SUSPEND:
 				if (windows_power_status_on_ == true)
-				{
 					work_was_enqueued = session.client_.powerOff();
-
-				}					
 				break;
 
 			case EVENT_SYSTEM_DISPLAYDIMMED:
@@ -513,9 +541,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 					if (remote_client_connected_)
 						break;
 					if (windows_power_status_on_ == true)
-					{
 						work_was_enqueued = session.client_.powerOff();
-					}
 				}
 				break;
 
@@ -523,9 +549,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				if (remote_client_connected_ && prefs_.remote_streaming_host_prefer_power_off_)
 					break;
 				if (windows_power_status_on_ == true)
-				{
 					work_was_enqueued = session.client_.powerOff();
-				}
 				break;
 
 			case EVENT_SYSTEM_BLANKSCREEN:
@@ -550,12 +574,6 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 					work_was_enqueued = session.client_.powerOn();
 				break;
 
-			case EVENT_SYSTEM_BOOT:
-				if (prefs_.topology_support_ && !session.topology_enabled_)
-					break;
-//				if (session.device_.set_hdmi_input_on_power_on && time(0) - time_last_power_on < 10)
-//					work_was_enqueued = setHdmiInput(event, session);
-				break;
 			case EVENT_SYSTEM_TOPOLOGY:
 				if (remote_client_connected_)
 					break;
@@ -573,7 +591,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			}
 		}
 	} while (ioc_.stopped());
-	if (io_context_reset_ && work_was_enqueued)
+	if (ioc_reset_.load() && work_was_enqueued)
 	{
 		int threads = 0;
 		for (auto& dev : sessions_)
@@ -590,12 +608,15 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			thread_pool.emplace_back(
 				[self_ = shared_from_this()]
 				{
+					SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 					SetThreadUILanguage(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US));
 					self_->ioc_.run();
+					SetThreadExecutionState(ES_CONTINUOUS);
 				});
 			thread_pool[i].detach();
 		}
-		io_context_reset_ = false;
+		ioc_started_.store(true);
+		ioc_reset_.store(false);
 	}
 }
 void Companion::Impl::sendToIpc(DWORD dwEvent)
@@ -1441,8 +1462,8 @@ void Companion::Impl::systemEvent(int e, std::string data) {
 		event_log_callback_status_ = NULL;
 		break;
 	case EVENT_SHUTDOWN_TYPE_ERROR:
-		ERR_("System", "Could not detect whether system is shutting down or rebooting. Invalid XML!");
-		event_log_callback_status_ = NULL;
+		DEBUG_("System", "Invalid or unexpected XML received in Event Subscription!");
+//		event_log_callback_status_ = NULL;
 		break;
 	case EVENT_SYSTEM_SHUTDOWN:
 		if (event_log_callback_status_ == EVENT_SHUTDOWN_TYPE_REBOOT)
@@ -1541,5 +1562,5 @@ Companion::Companion(Preferences& settings)
 	: pimpl(std::make_shared<Impl>(settings)) {}
 void Companion::systemEvent(int event, std::string data) {
 	pimpl->systemEvent(event, data); }
-void Companion::shutdown(void) { pimpl->shutdown(); }
+void Companion::shutdown(bool stage) { pimpl->shutdown(stage); }
 bool Companion::isBusy(void) { return pimpl->isBusy(); }

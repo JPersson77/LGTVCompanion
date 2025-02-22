@@ -806,7 +806,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_QUERYENDSESSION:
 	{
 		if (Prefs.shutdown_timing_ == PREFS_SHUTDOWN_TIMING_DELAYED)
-			Sleep(1500);
+			ShutdownBlockReasonCreate(hWnd, L"Delaying shutdown...");
 		return false; // because it is a dialog
 	}break;
 	case WM_POWERBROADCAST:
@@ -877,7 +877,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		TimeOfLastTopologyChange = time(0);
 		checkDisplayTopology();
 	}break;
-
 	case WM_DISPLAYCHANGE:
 	{
 		if (Prefs.topology_support_)
@@ -894,7 +893,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 		}
 	}break;
-
 	case WM_DEVICECHANGE:
 	{
 		//clear the raw input cache whenever a controller was connected/disconnected.
@@ -939,7 +937,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 		}
 	}break;
-
 	case WM_WTSSESSION_CHANGE:
 	{
 		if (wParam == WTS_REMOTE_CONNECT)
@@ -1022,8 +1019,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				WinToastLib::WinToast::instance()->clear();
 			}
 		}
+		if (Prefs.shutdown_timing_ == PREFS_SHUTDOWN_TIMING_DELAYED)
+		{
+			Sleep(7000);
+			ShutdownBlockReasonDestroy(hWnd);
+		}
 	}break;
-
 	case WM_DESTROY:
 	{
 		PostQuitMessage(0);

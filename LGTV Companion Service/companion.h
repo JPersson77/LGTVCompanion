@@ -18,7 +18,7 @@ public:
 	Companion(Preferences&);
 	~Companion() {};
 	void					systemEvent(int event, std::string data = "");
-	void					shutdown(void);
+	void					shutdown(bool);
 	bool					isBusy(void);
 };
 

@@ -662,7 +662,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				ControlService(serviceHandle, SERVICE_CONTROL_STOP, (LPSERVICE_STATUS)&status);
 				while (status.dwCurrentState != SERVICE_STOPPED)
 				{
-					Sleep(status.dwWaitHint);
+					Sleep(100);
 					if (QueryServiceStatusEx(serviceHandle, SC_STATUS_PROCESS_INFO, (LPBYTE)&status, sizeof(SERVICE_STATUS_PROCESS), &bytesNeeded))
 					{
 						if (status.dwCurrentState == SERVICE_STOPPED)

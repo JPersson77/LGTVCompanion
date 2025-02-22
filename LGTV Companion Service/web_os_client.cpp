@@ -20,7 +20,7 @@
 
 // timers
 #define			TIMER_LOG_MUTEX						5		// ms wait for thread sync
-#define			TIMER_ASYNC_TIMEOUT					2000	// milliseconds before async_connect and async_handshake SSL timeout
+#define			TIMER_ASYNC_TIMEOUT					3000	// milliseconds before async_connect and async_handshake SSL timeout
 #define			TIMER_RETRY_WAIT					2000	// milliseconds to wait before retrying connection
 #define			TIMER_POWER_POLL_WAIT				1000	// milliseconds to wait before sending next power state poll
 #define			TIMER_WOL_WAIT						1000	// milliseconds to  wait before sending next WOL magic packet
@@ -240,22 +240,14 @@ void WebOsClient::Impl::read(void) {
 }
 void WebOsClient::Impl::startNextWork(void)
 {
-	SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
+	
 	if (work_.type_ != WORK_UNDEFINED) // work is already ongoing
 	{
 		time_t time_diff = time(0) - work_.timestamp_start_;
 		if (work_.type_ == WORK_POWER_ON && time_diff > (device_settings_.extra.timeout + 10)
 			|| (work_.type_ != WORK_POWER_ON && time_diff > 10 + work_.delay_))
 		{
-			ERR("Lingering work of type %1% detected. Aborting lingering work and closing socket!", std::to_string(work_.type_));
-			if (socket_status_ == SOCKET_CONNECTED || socket_status_ == SOCKET_CONNECTING)
-			{		
-				if (device_settings_.ssl)
-					ws_->close(websocket::close_code::normal);
-				else
-					ws_tcp_->close(websocket::close_code::normal);
-				socket_status_ = SOCKET_DISCONNECTED;
-			}
+			ERR("Lingering work of type %1% detected. Aborting lingering work!", std::to_string(work_.type_));
 			work_.clear();
 		}
 		else
@@ -269,7 +261,6 @@ void WebOsClient::Impl::startNextWork(void)
 		ERR("Socket status is CONNECTING while starting new work, which is undefined. Closing connection and aborting work!");
 		doClose(); 
 	}
-	
 	else if (!workQueue_.empty()) {
 		work_ = std::move(workQueue_.front());
 		workQueue_.pop_front();
@@ -295,7 +286,7 @@ void WebOsClient::Impl::startNextWork(void)
 			break;
 	
 		case WORK_REQUEST_DELAYED:		
-			DEBUG("---  Starting work: REQUEST (Delayed %1% seconds) -----------------", std::to_string(work_.delay_));
+			DEBUG("---  Starting work: REQUEST (Delayed %1% s) -----------------", std::to_string(work_.delay_));
 			delayed_request_timer_.expires_from_now(boost::posix_time::seconds(work_.delay_));
 			delayed_request_timer_.async_wait(beast::bind_front_handler(&Impl::onDelayedRequest, shared_from_this()));
 			break;
@@ -366,7 +357,6 @@ void WebOsClient::Impl::startNextWork(void)
 			DEBUG("Work queue is empty");
 			doClose();
 		}
-		SetThreadExecutionState(ES_CONTINUOUS);
 	}
 }
 void WebOsClient::Impl::workIsFinished(void)
@@ -408,12 +398,12 @@ void WebOsClient::Impl::onResolve(beast::error_code ec, tcp::resolver::results_t
 	socket_status_ = SOCKET_CONNECTING;
 	if(device_settings_.ssl)
 	{
-		beast::get_lowest_layer(*ws_).expires_after(std::chrono::milliseconds(work_.type_ == WORK_POWER_OFF ? 200 : TIMER_ASYNC_TIMEOUT));
+		beast::get_lowest_layer(*ws_).expires_after(std::chrono::milliseconds(work_.type_ == WORK_POWER_OFF ? 1000 : TIMER_ASYNC_TIMEOUT));
 		beast::get_lowest_layer(*ws_).async_connect(results, beast::bind_front_handler(&Impl::onConnect, shared_from_this()));
 	}
 	else
 	{
-		beast::get_lowest_layer(*ws_tcp_).expires_after(std::chrono::milliseconds(work_.type_ == WORK_POWER_OFF ? 200 : TIMER_ASYNC_TIMEOUT));
+		beast::get_lowest_layer(*ws_tcp_).expires_after(std::chrono::milliseconds(work_.type_ == WORK_POWER_OFF ? 1000 : TIMER_ASYNC_TIMEOUT));
 		beast::get_lowest_layer(*ws_tcp_).async_connect(results, beast::bind_front_handler(&Impl::onConnect, shared_from_this()));
 	}
 }
@@ -423,7 +413,7 @@ void WebOsClient::Impl::onConnect(beast::error_code ec, tcp::resolver::results_t
 	socket_status_ = SOCKET_CONNECTING;
 	if(device_settings_.ssl)
 	{
-		beast::get_lowest_layer(*ws_).expires_after(std::chrono::milliseconds(work_.type_ == WORK_POWER_OFF ? 200 : TIMER_ASYNC_TIMEOUT));
+		beast::get_lowest_layer(*ws_).expires_after(std::chrono::milliseconds(TIMER_ASYNC_TIMEOUT));
 		if (!SSL_set_tlsext_host_name(ws_->next_layer().native_handle(), device_settings_.ip.c_str())) // Set SNI Hostname
 		{
 			ec = beast::error_code(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category());
@@ -434,7 +424,7 @@ void WebOsClient::Impl::onConnect(beast::error_code ec, tcp::resolver::results_t
 	}
 	else
 	{
-		beast::get_lowest_layer(*ws_tcp_).expires_after(std::chrono::milliseconds(work_.type_ == WORK_POWER_OFF ? 200 : TIMER_ASYNC_TIMEOUT));
+		beast::get_lowest_layer(*ws_tcp_).expires_after(std::chrono::milliseconds(TIMER_ASYNC_TIMEOUT));
 		ws_tcp_->set_option(websocket::stream_base::timeout::suggested(beast::role_type::client));
 		ws_tcp_->set_option(websocket::stream_base::decorator(
 			[](websocket::request_type& req)
