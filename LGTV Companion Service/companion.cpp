@@ -362,6 +362,7 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		time_last_suspend = pp_entry;
 		
 		//buy some time during suspend. Hack which seems to preserve network connectivity during suspend
+		SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 		Sleep(100);
 		while (isBusy() && time(0) - pp_entry < 9)
 		{
@@ -608,10 +609,8 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			thread_pool.emplace_back(
 				[self_ = shared_from_this()]
 				{
-					SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
 					SetThreadUILanguage(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US));
 					self_->ioc_.run();
-					SetThreadExecutionState(ES_CONTINUOUS);
 				});
 			thread_pool[i].detach();
 		}
