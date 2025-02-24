@@ -120,7 +120,7 @@ LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 "LGTV Companion.exe" -button INFO device1
 ```
 ## Working with the service menu (LGTV Companion and LGTVcli)
-It is possible to display the Service Menu and/or disable TPC/GSR (the auto-brightness limiter ABL) on some models. Please use caution in the service menu! 
+It is possible to display the Service Menu and/or disable TPC/GSR (the auto-brightness static limiter ASBL) on some models. Please use caution in the service menu! 
 - *-servicemenu* - show the Service Menu. Enter default code 0413 when prompted.
 - *-servicemenu_legacy_enable* 	- enable the legacy (more feature complete) Service Menu
 - *-servicemenu_legacy_disable* - return to default Service Menu
