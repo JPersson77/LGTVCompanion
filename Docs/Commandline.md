@@ -100,6 +100,7 @@ LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 ## Audio commands (LGTV Companion and LGTVcli)
 - *-mute* 	- mute the built-in-speakers of a device
 - *-unmute* - unmute the built-in-speakers of a device
+- *-volume [0 -> 100]* 	- set volume
 - *-soundmode [aiSoundPlus | aiSound | standard | news | music | movie | sports | game]* 	- set sound mode
 - *-soundoutput [tv_speaker | external_arc | external_optical | bt_soundbar | mobile_phone | lineout | headphone | tv_speaker_bluetooth | tv_external_speaker | tv_speaker_headphone | wisa_speaker]* 	- set sound output 
 - *-autovolume [off | on]* 	- set automatic volume
@@ -118,8 +119,16 @@ LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 ```
 "LGTV Companion.exe" -button INFO device1
 ```
-## Accessing the service menu (LGTV Companion and LGTVcli)
-It is possible to display the Service Menu. Please use caution in the service menu! 
+## Working with the service menu (LGTV Companion and LGTVcli)
+It is possible to display the Service Menu and/or disable TPC/GSR (the auto-brightness limiter ABL) on some models. Please use caution in the service menu! 
+- *-servicemenu* - show the Service Menu. Enter default code 0413 when prompted.
+- *-servicemenu_legacy_enable* 	- enable the legacy (more feature complete) Service Menu
+- *-servicemenu_legacy_disable* - return to default Service Menu
+- *-servicemenu_tpc_enable* 	- enable Temporal Peak Control (TPC)
+- *-servicemenu_tpc_disable* 	- disable Temporal Peak Control (TPC)
+- *-servicemenu_gsr_enable* 	- enable Global Stress Reduction (GSR)
+- *-servicemenu_gsr_disable* 	- disable Global Stress Reduction (GSR)
+  
 #### Examples: 
 *Display the service menu on device 1. Enter default code 0413 when prompted.*
 ```
@@ -259,7 +268,8 @@ LGTVcli.exe -get_system_settings picture [\"color\",\"contrast\",\"backlight\"] 
 - *-gameoptimization [off|on]* 	- set VRR and G-Sync
 - *-inputoptimization [auto|on|standard|boost]* 	- Prevent Input Delay
 - *-freesync [off|on]* 	- set AMD Freesync Premium 
-
+- *-freesyncinfo*  - show the freesync information panel (the 7 x tap on green button), i e current FPS in freesync/gsync mode
+  
 #### Examples: 
 *Set the picture mode to "Normal" for device1 and device2*
 ```
@@ -269,18 +279,19 @@ LGTVcli.exe -get_system_settings picture [\"color\",\"contrast\",\"backlight\"] 
 ```
 "LGTV Companion.exe" -contrast 80 device1
 ```
+*Show the freesync info, i.e. the frame rate counter, on device1*
+```
+"LGTV Companion.exe" -freesyncinfo device1
+```
 ## Network settings (LGTV Companion and LGTVcli)
 - *-wol* [true|false] 	- enable or disable the Wake-On-Lan setting, a k a "On with Mobile" or "Turn on via Wi-Fi"
-- *-freesyncinfo* 	- show the freesync information panel (the 7 x tap on green button), i e current FPS in freesync/gsync mode
+
 #### Examples: 
 *Set the wake-on-lan setting to ON for all devices*
 ```
 "LGTV Companion.exe" -wol true
 ```
-*Show the freesync info on device1*
-```
-"LGTV Companion.exe" -freesyncinfo device1
-```
+
 ## Other settings (LGTV Companion and LGTVcli)
 - *-set_curve_preset* [flat|1 -> 3]	- Set the curve preset for compatible devices
 - *-adjust_curve_preset* [1 -> 3] [0 -> 100]	- Adjust value of curve preset for compatible devices

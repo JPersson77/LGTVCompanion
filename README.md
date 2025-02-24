@@ -21,7 +21,6 @@ This application aim to be a set-and-forget application to provide:
 With the rise in popularity of using OLED TVs as PC monitors, it is apparent that standard functionality of PC-monitors is missing. Particularly turning the device on or off in response to power events in windows. With OLED monitors this is particularly important to prevent "burn-in", or more accurately pixel-wear.
 
 ## What other people say
-
 - *"That is a really janky solution. But... it WORKS!"* - Linus Tech Tips at [YouTube](https://youtu.be/4mgePWWCAmA?t=21m14s)
 - *"OLED life saver"* - Way of the Wrench at [YouTube](https://youtu.be/qUiH_btH6NY)
 - *"The best kind of programming is fueled by pure hate for an annoying situation."* - reddituser at [Reddit](https://www.reddit.com/r/OLED_Gaming/comments/okhv67/comment/h58alyu/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button)
@@ -94,7 +93,6 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 - A Local Area Network (LAN)
 
 ## Commandline arguments
-
  'LGTV companion.exe" can accept hundreds of command line arguments for controlling the application and managed devices. Please see the documentation for all command line arguments here: [Command line documentation](https://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Commandline.md)
 
 ## License
@@ -107,7 +105,6 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Discussions
-
 Discord: https://discord.gg/7KkTPrP3fq
 
 Please use the Github issue tracker for potential bug reports and/or feature requests
@@ -120,11 +117,17 @@ Please use the Github issue tracker for potential bug reports and/or feature req
 - @mohabouje - Mohammed Boujemaoui - Author of WinToast https://github.com/mohabouje/WinToast
 - OpenSSL - https://www.openssl.org/
 - Vcpkg - https://github.com/microsoft/vcpkg
+- SignPath - Free code signing for OpenSource projects https://signpath.io
 - Contributors
 - Donors and supporters
 
-## Donations
+## Code Signing Policy
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/)
 
+## Privacy Policy
+This program will not transfer any information to other networked systems
+
+## Donations
 This is free software, but your support is appreciated and there is a donation page set up over at PayPal. PayPal allows you to use a credit- or debit card or your PayPal balance to make a donation.
 
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.me/jpersson77)
