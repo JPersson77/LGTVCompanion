@@ -279,6 +279,10 @@ LGTVcli.exe -get_system_settings picture [\"color\",\"contrast\",\"backlight\"] 
 ```
 "LGTV Companion.exe" -contrast 80 device1
 ```
+*Show the freesync info, i.e. the frame rate counter, on device1*
+```
+"LGTV Companion.exe" -freesyncinfo device1
+```
 ## Network settings (LGTV Companion and LGTVcli)
 - *-wol* [true|false] 	- enable or disable the Wake-On-Lan setting, a k a "On with Mobile" or "Turn on via Wi-Fi"
 
@@ -287,10 +291,7 @@ LGTVcli.exe -get_system_settings picture [\"color\",\"contrast\",\"backlight\"] 
 ```
 "LGTV Companion.exe" -wol true
 ```
-*Show the freesync info on device1*
-```
-"LGTV Companion.exe" -freesyncinfo device1
-```
+
 ## Other settings (LGTV Companion and LGTVcli)
 - *-set_curve_preset* [flat|1 -> 3]	- Set the curve preset for compatible devices
 - *-adjust_curve_preset* [1 -> 3] [0 -> 100]	- Adjust value of curve preset for compatible devices
