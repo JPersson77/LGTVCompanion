@@ -15,11 +15,14 @@
 #define LG_URI_LAUNCH				"system.launcher/launch"
 #define LG_URI_CLOSE				"system.launcher/close"
 #define LG_URI_SETMUTE				"audio/setMute"
+#define LG_URI_SETVOLUME			"audio/setVolume"
 #define LG_URI_GET_SYSTEM_SETTINGS	"settings/getSystemSettings"
 #define LG_LUNA_SET_SYSTEM_SETT		"luna://com.webos.settingsservice/setSystemSettings"
 #define LG_LUNA_SET_DEVICE_INFO		"luna://com.webos.service.eim/setDeviceInfo"
 #define LG_LUNA_SET_CURVE_PRESET	"luna://com.webos.service.rollingscreen/changeCurve"
 #define LG_LUNA_ADJUST_CURVE_PRESET	"luna://com.webos.service.rollingscreen/updateCurvature"
+#define LG_LUNA_SET_TPC				"luna://com.webos.service.oledepl/setTemporalPeakControl"
+#define LG_LUNA_SET_GSR				"luna://com.webos.service.oledepl/setGlobalStressReduction"
 
 // Various
 #define LG_URI_PAYLOAD_SETHDMI		"{\"id\":\"com.webos.app.hdmi#ARG#\"}"

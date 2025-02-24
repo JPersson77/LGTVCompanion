@@ -78,7 +78,7 @@ private:
 	void												saveTopologyConfiguration(void);
 	std::string											validateDevices(std::vector<std::string>);
 	static void											ipcCallbackStatic(std::wstring message, LPVOID lpFunct);
-	void												ipcCallback(std::wstring message);
+	void												ipcCallback(std::wstring message, bool recursive = false);
 	void												sendToIpc(DWORD);
 	std::vector<std::string>							grabDevices(std::vector<std::string>, int);
 	std::vector<std::string>							extractSeparateCommands(std::string);
@@ -693,7 +693,7 @@ std::vector<std::string> Companion::Impl::extractSeparateCommands(std::string st
 	 Companion::Impl* p = (Companion::Impl*)lpFunct;
 	 p->ipcCallback(message);
 }
-void Companion::Impl::ipcCallback(std::wstring message)
+void Companion::Impl::ipcCallback(std::wstring message, bool recursive)
 {
 	if (message.length() == 0)
 	{
@@ -702,7 +702,8 @@ void Companion::Impl::ipcCallback(std::wstring message)
 	}
 
 	std::string temp = tools::narrow(message);
-	DEBUG_("IPC", "Received IPC/CLI: %1%", temp);
+	if(!recursive)
+		DEBUG_("IPC", "Received IPC/CLI: %1%", temp);
 
 	// remove leading spaces
 	size_t first = temp.find_first_not_of(" ", 0);
@@ -945,6 +946,27 @@ void Companion::Impl::ipcCallback(std::wstring message)
 				continue;
 			}
 		}
+		else if (command == "volume")										// SET SOUND VOLUME
+		{
+			if (nWords > 1)
+			{
+				int arg = atoi(words[1].c_str());
+				if (arg < 0)
+					arg = 0;
+				if (arg > 100)
+					arg = 100;
+				std::string vol = std::to_string(arg);
+				nlohmann::json payload;
+				payload["volume"] = arg;
+				DEBUG_("CLI", "Volume [%1%]: %2%", vol, validateDevices(grabDevices(words, 2)));
+				log_message = "Volume ";
+				log_message += vol;
+				eventRequest(grabDevices(words, 2), LG_URI_SETVOLUME, payload.dump(), log_message);
+			}
+			else
+				WARNING_("CLI", "Too few arguments for -volume");
+			continue;
+		}
 		else if (command == "mute")										// MUTE DEVICE SOUND
 		{
 			std::string payload = "{\"mute\":\"true\"}";
@@ -967,7 +989,68 @@ void Companion::Impl::ipcCallback(std::wstring message)
 				cmd_line_start_app_with_param += " ";
 				cmd_line_start_app_with_param += dev;
 			}
-			ipcCallback(tools::widen(cmd_line_start_app_with_param));
+			ipcCallback(tools::widen(cmd_line_start_app_with_param), true);
+			continue;
+		}
+		else if (command == "servicemenu")									// SHOW SERVICE MENU
+		{
+			std::vector<std::string> devices = grabDevices(words, 1);
+			std::string cmd_line_service_menu = "-button IN_START";
+			for (auto& dev : devices)
+			{
+				cmd_line_service_menu += " ";
+				cmd_line_service_menu += dev;
+			}
+			INFO_("CLI", "Showing Service Menu (use code 0413");
+			ipcCallback(tools::widen(cmd_line_service_menu), true);
+			continue;
+		}
+		else if (command == "servicemenu_legacy_enable" || command == "servicemenu_legacy_disable")					// ENABLE FULL/LEGACY SERVICE MENU
+		{
+			std::vector<std::string> devices = grabDevices(words, 1);
+			std::string cmd_line_legacy = "-settings_other \"{\\\"svcMenuFlag\\\":";
+			cmd_line_legacy += command == "servicemenu_legacy_enable" ? "false}\"" : "true}\"";
+			for (auto& dev : devices)
+			{
+				cmd_line_legacy += " ";
+				cmd_line_legacy += dev;
+			}
+			ipcCallback(tools::widen(cmd_line_legacy), true);
+			continue;
+		}
+		else if (command == "servicemenu_tpc_enable" || command == "servicemenu_tpc_disable")					// ENABLE FULL/LEGACY SERVICE MENU
+		{
+			nlohmann::json payload;
+			payload["enable"] = command == "servicemenu_tpc_enable" ? true : false;
+			if(command == "servicemenu_tpc_enable")
+			{
+				DEBUG_("CLI", "Enable Temporal Peak Contrl (TPC): %1%", validateDevices(grabDevices(words, 1)));
+				log_message = "Enable TPC";
+			}
+			else
+			{
+				DEBUG_("CLI", "Disable Temporal Peak Contrl (TPC): %1%", validateDevices(grabDevices(words, 1)));
+				log_message = "Disable TPC";
+			}
+			eventLunaGeneric(grabDevices(words, 1), LG_LUNA_SET_TPC, payload.dump(), log_message);
+			continue;
+		}
+		else if (command == "servicemenu_gsr_enable" || command == "servicemenu_gsr_disable")					// ENABLE FULL/LEGACY SERVICE MENU
+		{
+			nlohmann::json payload;
+			payload["enable"] = command == "servicemenu_gsr_enable" ? true : false;
+
+			if (command == "servicemenu_gsr_enable")
+			{
+				DEBUG_("CLI", "Enable Global Stress Reduction (GSR): %1%", validateDevices(grabDevices(words, 1)));
+				log_message = "Enable GSR";
+			}
+			else
+			{
+				DEBUG_("CLI", "Disable Global Stress Reduction (GSR): %1%", validateDevices(grabDevices(words, 1)));
+				log_message = "Disable GSR";
+			}
+			eventLunaGeneric(grabDevices(words, 1), LG_LUNA_SET_GSR, payload.dump(), log_message);
 			continue;
 		}
 		else if (command == "clearlog")									// CLEAR LOG
@@ -1135,7 +1218,7 @@ void Companion::Impl::ipcCallback(std::wstring message)
 				log_message += id;
 				log_message += " with params ";
 				log_message += params;
-				DEBUG_("CLI", "Start spplication %1% with params %2% : %3%", id, params, validateDevices(grabDevices(words, 3)));
+				DEBUG_("CLI", "Start application %1% with params %2% : %3%", id, params, validateDevices(grabDevices(words, 3)));
 				eventRequest(grabDevices(words, 3), LG_URI_LAUNCH, j.dump(), log_message);
 			}
 			else
@@ -1248,7 +1331,7 @@ void Companion::Impl::ipcCallback(std::wstring message)
 						cmd1 += " ";
 						cmd1 += dev;
 					}
-					ipcCallback(tools::widen(cmd1));
+					ipcCallback(tools::widen(cmd1), true);
 				}
 				else
 				{
@@ -1267,10 +1350,10 @@ void Companion::Impl::ipcCallback(std::wstring message)
 						cmd4 += " ";
 						cmd4 += dev;
 					}
-					ipcCallback(tools::widen(cmd1));
-					ipcCallback(tools::widen(cmd2));
-					ipcCallback(tools::widen(cmd3));
-					ipcCallback(tools::widen(cmd4));
+					ipcCallback(tools::widen(cmd1), true);
+					ipcCallback(tools::widen(cmd2), true);
+					ipcCallback(tools::widen(cmd3), true);
+					ipcCallback(tools::widen(cmd4), true);
 				}
 			}
 			else

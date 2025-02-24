@@ -312,10 +312,59 @@ std::string ProcessCommand(std::vector<std::string>& words)
 		else
 			iError = 1;
 	}
+	else if (command == "volume")										// SET SOUND VOLUME
+	{
+		if (nWords > 1)
+		{
+			int arg = atoi(words[1].c_str());
+			if (arg < 0)
+				arg = 0;
+			if (arg > 100)
+				arg = 100;
+			nlohmann::json payload;
+			payload["volume"] = arg;
+			return CreateEvent_request(_Devices(words, 2), LG_URI_SETVOLUME, payload.dump());
+		}
+		else
+			iError = 1;
+	}
 	else if (command == "mute")													// MUTE DEVICE SOUND
 		return CreateEvent_request(_Devices(words, 1), LG_URI_SETMUTE, "{\"mute\":\"true\"}");
 	else if (command == "unmute")												// UNMUTE DEVICE SOUND
 		return CreateEvent_request(_Devices(words, 1), LG_URI_SETMUTE, "");
+	else if (command == "servicemenu")									// SHOW SERVICE MENU
+	{
+		std::vector<std::string> devices = _Devices(words, 1);
+		std::vector<std::string> newCmdLine;
+		newCmdLine.push_back("-button");
+		newCmdLine.push_back("IN_START");
+		newCmdLine.insert(std::end(newCmdLine), std::begin(devices), std::end(devices));
+		return ProcessCommand(newCmdLine);
+	}
+	else if (command == "servicemenu_legacy_enable" || command == "servicemenu_legacy_disable")					// ENABLE FULL/LEGACY SERVICE MENU
+	{
+		std::vector<std::string> devices = _Devices(words, 1);
+		std::vector<std::string> newCmdLine;
+		newCmdLine.push_back("-settings_other");
+		if (command == "servicemenu_legacy_enable")
+			newCmdLine.push_back("{\"svcMenuFlag\":false}");
+		else
+			newCmdLine.push_back("{\"svcMenuFlag\":true}");
+		newCmdLine.insert(std::end(newCmdLine), std::begin(devices), std::end(devices));
+		return ProcessCommand(newCmdLine);
+	}
+	else if (command == "servicemenu_tpc_enable" || command == "servicemenu_tpc_disable")					// ENABLE FULL/LEGACY SERVICE MENU
+	{
+		nlohmann::json payload;
+		payload["enable"] = command == "servicemenu_tpc_enable" ? true : false;
+		return CreateEvent_luna_generic(_Devices(words, 1), LG_LUNA_SET_TPC, payload.dump());
+	}
+	else if (command == "servicemenu_gsr_enable" || command == "servicemenu_gsr_disable")					// ENABLE FULL/LEGACY SERVICE MENU
+	{
+		nlohmann::json payload;
+		payload["enable"] = command == "servicemenu_gsr_enable" ? true : false;
+		return CreateEvent_luna_generic(_Devices(words, 1), LG_LUNA_SET_GSR, payload.dump());
+	}
 	else if (command == "freesyncinfo")											// SHOW FREESYNC INFORMATION
 	{
 		std::vector<std::string> devices = _Devices(words, 1);
