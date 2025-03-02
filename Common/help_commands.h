@@ -53,6 +53,16 @@ Commands are case-insensitive, but JSON typically is case-sensitive.
 -soundMode [mode]                               set sound mode
 -soundOutput [output]                           set sound output
 -autoVolume [off|on]                            set automatic volume
+-volume [0 -> 100]								set volume
+
+## Service menu ##
+-servicemenu									show the service menu (code: 0413)
+-servicemenu_legacy_enable						enable the legacy service menu
+-servicemenu_legacy_disable						enable default service menu
+-servicemenu_tpc_enable							enable TPC
+-servicemenu_tpc_disable						disable TPC
+-servicemenu_gsr_enable							enable GSR
+-servicemenu_gsr_disable						disable GSR
 
 ## Picture settings ##
 -pictureMode [mode]                             set picture mode

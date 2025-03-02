@@ -317,8 +317,11 @@ void Companion::Impl::dispatchEvent(Event& event) {
 			DEBUG("Screensaver is active during DIMMED event");
 	}
 
-	//stop io_context when system is resuming to purge lingering work
-	if ((event.getType() == EVENT_SYSTEM_RESUME || event.getType() == EVENT_SYSTEM_RESUMEAUTO) && isBusy())
+	//stop io_context when system is resuming when needed to purge lingering work
+	if ((event.getType() == EVENT_SYSTEM_RESUME 
+		|| event.getType() == EVENT_SYSTEM_RESUMEAUTO) 
+		&& time(0) - time_last_resume_or_boot_time > 5
+		&& isBusy())
 	{
 		ERR("I/O Context did not finish work during the previous system suspend.");
 		if (sessions_.size() > 0)
@@ -387,6 +390,7 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		remote_client_connected_ = false;
 		windows_power_status_on_ = true;
 		user_idle_mode_log_ = true;
+		time_last_resume_or_boot_time = pp_entry;
 		break;
 	case EVENT_SYSTEM_DISPLAYON:
 		windows_power_status_on_ = true;
@@ -526,7 +530,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				if (prefs_.topology_support_ && !session.topology_enabled_)
 					break;
 				work_was_enqueued = session.client_.powerOn();
-				if (session.device_.set_hdmi_input_on_power_on) // && time(0) - time_last_resume_or_boot_time < 10)
+				if (session.device_.set_hdmi_input_on_power_on) 
 					work_was_enqueued = setHdmiInput(event, session);
 				break;
 

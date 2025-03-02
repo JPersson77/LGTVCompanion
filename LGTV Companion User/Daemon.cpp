@@ -135,13 +135,13 @@ HANDLE                          hPipe = INVALID_HANDLE_VALUE;
 INT64                           idToastFirstrun = NULL;
 INT64                           idToastNewversion = NULL;
 UINT							shellhookMessage;
-ULONGLONG						daemon_startup_user_input_time = 0;
+DWORD							daemon_startup_user_input_time = 0;
 UINT							ManualUserIdleMode = 0;
 HBRUSH                          hBackbrush;
 time_t							TimeOfLastTopologyChange = 0;
-ULONGLONG						ulLastRawInput = 0;
-ULONGLONG						ulLastControllerSample = 0;
-ULONGLONG						ulLastMouseSample = 0;
+DWORD							ulLastRawInput = 0;
+DWORD							ulLastControllerSample = 0;
+DWORD							ulLastMouseSample = 0;
 DWORD							dwGetLastInputInfoSave = 0;
 int								iMouseChecksPerformed = 0;
 bool							ToastInitialised = false;
@@ -265,7 +265,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		{
 			log(L"Failed to register for Raw Input!");
 		}
-		ulLastRawInput = GetTickCount64();
+		ulLastRawInput = GetTickCount();
 		SetTimer(hMainWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 		SetTimer(hMainWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 	}
@@ -365,7 +365,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			log(L"Failed to get raw input data.");
 			return 0;
 		}
-		ULONGLONG tick_now = GetTickCount64();
+		DWORD tick_now = GetTickCount();
 		RAWINPUT* raw = reinterpret_cast<RAWINPUT*>(buffer.data());
 
 		// Was a key pressed?
@@ -561,8 +561,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			{
 			case IDC_BUTTON1:
 			{
-				std::filesystem::path p(Remote.Sunshine_Log_File);
-				uintmax_t len = std::filesystem::file_size(p);
+				bDaemonVisible = false;
+				ShowWindow(hWnd, SW_HIDE);
 			}break;
 			default:break;
 			}
@@ -596,7 +596,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			bIdle = false;
 			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 			SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
-			ulLastRawInput = GetTickCount64();
+			ulLastRawInput = GetTickCount();
 			log(L"User forced unsetting user idle mode!");
 			communicateWithService("userbusy");
 		}
@@ -609,7 +609,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 		case TIMER_MAIN:
 		{
-			ULONGLONG time_now = GetTickCount64();
+			DWORD time_now = GetTickCount();
+			LASTINPUTINFO lii;
+			lii.cbSize = sizeof(LASTINPUTINFO);
+			GetLastInputInfo(&lii);
 
 			// do this first time the timer is triggered
 			if (daemon_startup_user_input_time == 0)
@@ -619,34 +622,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (ulLastRawInput != daemon_startup_user_input_time)
 				daemon_startup_user_input_time = -1;
 
-			// workaround for unelevated/normal processes not receiving raw input for elevated processes
-			bool bElevatedMethod = false; 
-			if(!isElevated)
-			{
-				bElevatedMethod = IsWindowElevated(GetForegroundWindow());
-				if (bElevatedMethod)
-				{
-					LASTINPUTINFO lii;
-					lii.cbSize = sizeof(LASTINPUTINFO);
-					GetLastInputInfo(&lii);
-					// avoid accidental wake
-					{
-
-						if ((lii.dwTime - dwGetLastInputInfoSave <= TIMER_MAIN_DELAY_WHEN_BUSY * 2))
-							if (lii.dwTime - dwGetLastInputInfoSave > 0)
-								ulLastRawInput = time_now;
-						dwGetLastInputInfoSave = lii.dwTime;
-					}
-				}
-			}
-
+			if ((lii.dwTime - dwGetLastInputInfoSave <= TIMER_MAIN_DELAY_WHEN_BUSY * 2)) // is the last input within two secs from the previous?
+				if (lii.dwTime - dwGetLastInputInfoSave > 0) // is the last input more recent than the last one?
+					if (lii.dwTime > ulLastRawInput) // is the last input more recent than what Raw Input determined?
+						ulLastRawInput = time_now;
+			dwGetLastInputInfoSave = lii.dwTime;
+					
 			// update the status window with last input
 			if (bDaemonVisible)
 			{
-				ULONGLONG time = (time_now - ulLastRawInput) / 1000;
+				DWORD time = (time_now - ulLastRawInput) / 1000;
 				std::wstring ago = tools::widen(std::to_string(time));
 				SendMessage(GetDlgItem(hMainWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());
-				ShowWindow(GetDlgItem(hWnd, IDC_STATIC_ELEVATED), bElevatedMethod ? SW_SHOW : SW_HIDE);
+//				ShowWindow(GetDlgItem(hWnd, IDC_STATIC_ELEVATED), SW_HIDE);
 			}
 			if (bIdle)
 			{
@@ -818,7 +806,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			KillTimer(hWnd, TIMER_MAIN);
 			KillTimer(hWnd, TIMER_IDLE);
 			bIdle = false;
-			ulLastRawInput = GetTickCount64();
+			ulLastRawInput = GetTickCount();
 			log(L"Suspending system.");
 			RawInput_ClearCache();
 			return true;
@@ -826,7 +814,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case PBT_APMRESUMEAUTOMATIC:
 		{
 			bIdle = false;
-			ulLastRawInput = GetTickCount64();
+			ulLastRawInput = GetTickCount();
 			if (Prefs.user_idle_mode_)
 			{
 				SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
@@ -855,7 +843,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					else
 					{
 						bIdle = false;
-						ulLastRawInput = GetTickCount64();
+						ulLastRawInput = GetTickCount();
 						if (Prefs.user_idle_mode_)
 						{
 							SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
