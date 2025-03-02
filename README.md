@@ -36,23 +36,23 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
 
 2. Download the latest version of the setup package from the releases page ( [Click here](https://github.com/JPersson77/LGTVCompanion/releases) ) and install it. This will install and start the service (LGTVsvc.exe), install the user interface (LGTV Companion.exe) as well as the desktop user mode daemon (LGTVdaemon.exe).
 3. Open the user interface from the Windows start menu, it is called "LGTV Companion".
+   
+![1](https://github.com/user-attachments/assets/6596b81f-3f91-483c-9a04-cb576f2a673b)
 
-![l_main](https://user-images.githubusercontent.com/77928210/213521847-31f66061-629f-4808-a20c-1bb7bbf441ca.jpg)
-
-4. Click the 'Scan' button to let the application try and automatically find network attached WebOs devices (TVs) (This button is called 'Configure' in the screenshot above). If the 'Scan' feature is unable to find your device(s) you are able to add your devices manually.
-5. Optionally, click the drop down button to manually add, remove, configure devices and the parameters of the respective device, this includes the network IP-address, the physical address, i.e. the MAC(s). This information can easily be found in the network settings of the TV. Also, the default wake-on-lan network options should work for most configurations, but if your TV has difficulties powering on then try the other options. 
+5. Click the 'Scan' button to let the application try and automatically find network attached WebOs devices (TVs) (This button is called 'Configure' in the screenshot above). If the 'Scan' feature is unable to find your device(s) you are able to add your devices manually.
+6. Optionally, click the drop down button to manually add, remove, configure devices and the parameters of the respective device, this includes the network IP-address, the physical address, i.e. the MAC(s). This information can easily be found in the network settings of the TV. Also, the default wake-on-lan network options should work for most configurations, but if your TV has difficulties powering on then try the other options. 
 
 🔥HOT TIP! Clicking the 'What's this?' links will show you more information about all options throughout the UI.
 
-![l_dev](https://user-images.githubusercontent.com/77928210/213522732-ee6c737c-c12e-4f32-b638-863e875151e2.jpg)
+![2](https://github.com/user-attachments/assets/f57e9ebe-103a-482d-b657-c2e8893e2be2)
 
 6. In the main application window, ensure the 'Automatically manage this device' checkbox is checked so the application will automatically respond to power events (shutdown, restart, suspend, resume, idle) for the respective devices.
 7. Optionally, tweak the global settings, by clicking on the hamburger icon button (settings). 
 
 🔥HOT TIP! The "User Idle Mode" works seprately from all other windows power options and can be really useful to provide maximum protection against screen burn-in and also some additional power savings.
 
-![l_opt](https://user-images.githubusercontent.com/77928210/213523626-e54dc98e-9ea2-4f3c-ac55-fe2ad7c1088e.jpg)
-    
+![3](https://github.com/user-attachments/assets/5714975f-a7bd-4201-a281-c4700967c5cd)
+
 >if your OS is not localised in english, and the built in dictionary does not include your language, you must in the 'shutdown settings' dialog click the correct checkboxes to indicate what words refer to the system restarting/rebooting (as opposed to shutting down). This is needed because there is no better (at least known to me) way for a service to know if the system is being restarted or shut down than looking at a certain event in the event log. Contribute to building the dictionary here: [Link](https://docs.google.com/spreadsheets/d/1SNjYh7kt4aVhHg0ZjI3i96vCeOJZJS73o9Wl-OVEvzk/edit?usp=drive_link).
 
 8. Click Apply, to save the configuration file and automatically restart the service. 
