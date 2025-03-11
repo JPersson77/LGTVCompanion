@@ -108,7 +108,7 @@ struct DeviceInfo { // Cache for raw input data stuff
 	HANDLE hDevice;
 	PHIDP_PREPARSED_DATA ppd;
 	HIDP_CAPS caps;
-	std::vector<int> axes;
+	std::vector<int> axis_value;
 };
 
 class WinToastHandler : public WinToastLib::IWinToastHandler
@@ -140,9 +140,10 @@ UINT							ManualUserIdleMode = 0;
 HBRUSH                          hBackbrush;
 time_t							TimeOfLastTopologyChange = 0;
 DWORD							ulLastRawInput = 0;
-DWORD							ulLastControllerSample = 0;
 DWORD							ulLastMouseSample = 0;
 DWORD							dwGetLastInputInfoSave = 0;
+DWORD							dwLastInput = 0;
+DWORD							dwLastControllerInfoTick = 0;
 int								iMouseChecksPerformed = 0;
 bool							ToastInitialised = false;
 std::shared_ptr<IpcClient>		pPipeClient;
@@ -245,23 +246,29 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 
 	if (Prefs.user_idle_mode_)
 	{
-		RAWINPUTDEVICE Rid[3];
-
+		RAWINPUTDEVICE Rid[4];
 		Rid[0].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
-		Rid[0].usUsage = 0x00;
-		Rid[0].dwFlags = RIDEV_PAGEONLY | RIDEV_INPUTSINK;   // add entire page              
+		Rid[0].usUsage = 0x02;								// HID_USAGE_GENERIC_MOUSE
+		Rid[0].dwFlags = bDaemonVisible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
 		Rid[0].hwndTarget = hMainWnd;
 
 		Rid[1].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
-		Rid[1].usUsage = 0x02;								// HID_USAGE_GENERIC_MOUSE
-		Rid[1].dwFlags = bDaemonVisible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
+		Rid[1].usUsage = 0x04;								// HID_USAGE_GENERIC_JOYSTICK
+		Rid[1].dwFlags = RIDEV_INPUTSINK;
 		Rid[1].hwndTarget = hMainWnd;
 
 		Rid[2].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
-		Rid[2].usUsage = 0x06;								// HID_USAGE_GENERIC_KEYBOARD
-		Rid[2].dwFlags = bDaemonVisible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
+		Rid[2].usUsage = 0x05;								// HID_USAGE_GENERIC_GAMEPAD
+		Rid[2].dwFlags = RIDEV_INPUTSINK;
 		Rid[2].hwndTarget = hMainWnd;
-		if (RegisterRawInputDevices(Rid, 2, sizeof(Rid[0])) == FALSE)
+
+		Rid[3].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
+		Rid[3].usUsage = 0x06;								// HID_USAGE_GENERIC_KEYBOARD
+		Rid[3].dwFlags = bDaemonVisible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
+		Rid[3].hwndTarget = hMainWnd;
+
+		UINT deviceCount = sizeof(Rid) / sizeof(*Rid);
+		if (RegisterRawInputDevices(Rid, deviceCount, sizeof(Rid[0])) == FALSE)
 		{
 			log(L"Failed to register for Raw Input!");
 		}
@@ -285,8 +292,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	std::wstring sessionmessage = L"Session ID is: ";
 	sessionmessage += tools::widen(sessionID);
 	log(sessionmessage);
-
-
 
 	HPOWERNOTIFY rsrn = RegisterSuspendResumeNotification(hMainWnd, DEVICE_NOTIFY_WINDOW_HANDLE);
 	HPOWERNOTIFY rpsn = RegisterPowerSettingNotification(hMainWnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
@@ -427,23 +432,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						reinterpret_cast<PCHAR>(raw->data.hid.bRawData), raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS)
 					{
 						if (usageLength > 0)
+						{
 							ulLastRawInput = tick_now;
+							return 0;
+						}
 					}					
 				}
 			}
 			// Check whether any analog sticks were moved and avoid accidental wake
-			if (tick_now - ulLastControllerSample < 50)
+
+			if (tick_now - dwLastControllerInfoTick < 5)
 			{
-				break;
+				return 0;
 			}
+			dwLastControllerInfoTick = tick_now;
 			if (cache.caps.NumberInputValueCaps > 0)
 			{
 				std::vector<HIDP_VALUE_CAPS> valueCaps(cache.caps.NumberInputValueCaps);
 				USHORT valueCapsLength = cache.caps.NumberInputValueCaps;
-				if (cache.axes.size() != valueCapsLength)
+				if (cache.axis_value.size() != valueCapsLength)
 				{
-					cache.axes.clear();
-					cache.axes.assign(valueCapsLength, -1);
+					cache.axis_value.clear();
+					cache.axis_value.assign(valueCapsLength, -1);
 				}
 				if (HidP_GetValueCaps(HidP_Input, valueCaps.data(), &valueCapsLength, cache.ppd) == HIDP_STATUS_SUCCESS) 
 				{
@@ -454,23 +464,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 							reinterpret_cast<PCHAR>(raw->data.hid.bRawData), raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS) 
 						{
 							// Scale to normalized range
-							LONG scaledValue = value;
-							if (valueCaps[i].LogicalMin < valueCaps[i].LogicalMax) 
+							int scaledValue = value;
+							if (valueCaps[i].LogicalMin < valueCaps[i].LogicalMax)
 							{
-								// Example scaling (adjust based on your needs)
 								LONG min = valueCaps[i].LogicalMin;
 								LONG max = valueCaps[i].LogicalMax;
-								scaledValue = (value - min) * 65535 / (max - min);
+								scaledValue = (int)((value - min) * 65535 / (max - min));
 							}
-							if (cache.axes[i] != -1)
+							// check if sticks were moved
+							if (cache.axis_value[i] != -1)
 							{
-								if (abs(cache.axes[i] - scaledValue) > 0.012 * 65535) // sensitivity of the input detection
+								if (abs(cache.axis_value[i] - scaledValue) >= (int)(0.045 * 65535)) // sensitivity of the input detection
 								{
 									ulLastRawInput = tick_now;
-									ulLastControllerSample = tick_now;
 								}
 							}
-							cache.axes[i] = scaledValue;
+							cache.axis_value[i] = scaledValue;
 						}
 					}
 				}
@@ -609,36 +618,74 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 		case TIMER_MAIN:
 		{
+			static bool bJitter = false;
+			static int jitterCount = 0;
+			static bool usingFallback = false;
 			DWORD time_now = GetTickCount();
 			LASTINPUTINFO lii;
 			lii.cbSize = sizeof(LASTINPUTINFO);
 			GetLastInputInfo(&lii);
-
+			
+			// prioritise Raw Input...
+			if (ulLastRawInput >= dwGetLastInputInfoSave)
+			{
+				usingFallback = false;
+				dwLastInput = ulLastRawInput;
+			}
+			// but also use GetLastInputInfo() to determine user input (fallback method)
+			else if((lii.dwTime > ulLastRawInput) && (lii.dwTime - ulLastRawInput > 1000 ))
+			{
+				// discover and discard controllers that are jittery (i.e. that send constant updates)
+				if ((bIdle && abs((int)(lii.dwTime - dwGetLastInputInfoSave - (DWORD)TIMER_MAIN_DELAY_WHEN_IDLE)) <= 20)
+					|| (!bIdle && abs((int)(lii.dwTime - dwGetLastInputInfoSave - (DWORD)TIMER_MAIN_DELAY_WHEN_BUSY)) <= 20))
+					jitterCount++;
+				else
+					jitterCount--;
+				if (jitterCount > 10)
+				{
+					jitterCount = 10;
+					bJitter = true;
+				}
+				else if (jitterCount < 1)
+				{
+					jitterCount = 1;
+					bJitter = false;
+				}
+			
+				if ((lii.dwTime - dwGetLastInputInfoSave) <= (DWORD)((bIdle ? TIMER_MAIN_DELAY_WHEN_IDLE : TIMER_MAIN_DELAY_WHEN_BUSY) * 2 )) // If there was activity the last two consecutive intervals
+				{
+					if (lii.dwTime - dwGetLastInputInfoSave > 0) // and the last input is more recent than the one registered last interval?
+					{
+						usingFallback = true;
+						if (!bJitter) // if the controller is not jittery
+						{
+							dwLastInput = time_now;
+						}
+					}
+				}
+			}
+			dwGetLastInputInfoSave = lii.dwTime;
+			
 			// do this first time the timer is triggered
 			if (daemon_startup_user_input_time == 0)
-				daemon_startup_user_input_time = ulLastRawInput;
+				daemon_startup_user_input_time = dwLastInput;
 
-			//fix for the fullscreen idle detection on system startup because windows will return QUNS_BUSY until the user has interacted with the PC
-			if (ulLastRawInput != daemon_startup_user_input_time)
+			// fix for the fullscreen idle detection on system startup because windows will return QUNS_BUSY until the user has interacted with the PC
+			if (dwLastInput != daemon_startup_user_input_time)
 				daemon_startup_user_input_time = -1;
 
-			if ((lii.dwTime - dwGetLastInputInfoSave <= TIMER_MAIN_DELAY_WHEN_BUSY * 2)) // is the last input within two secs from the previous?
-				if (lii.dwTime - dwGetLastInputInfoSave > 0) // is the last input more recent than the last one?
-					if (lii.dwTime > ulLastRawInput) // is the last input more recent than what Raw Input determined?
-						ulLastRawInput = time_now;
-			dwGetLastInputInfoSave = lii.dwTime;
-					
 			// update the status window with last input
 			if (bDaemonVisible)
 			{
-				DWORD time = (time_now - ulLastRawInput) / 1000;
+				DWORD time = (time_now - dwLastInput) / 1000;
 				std::wstring ago = tools::widen(std::to_string(time));
 				SendMessage(GetDlgItem(hMainWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());
-//				ShowWindow(GetDlgItem(hWnd, IDC_STATIC_ELEVATED), SW_HIDE);
+				ShowWindow(GetDlgItem(hWnd, IDC_STATIC_FALLBACK), usingFallback ? SW_SHOW : SW_HIDE);
+				ShowWindow(GetDlgItem(hWnd, IDC_STATIC_JITTER), (usingFallback && bJitter) ? SW_SHOW : SW_HIDE);
 			}
 			if (bIdle)
 			{
-				if (time_now - ulLastRawInput <= TIMER_MAIN_DELAY_WHEN_IDLE * 2) // was there user input during the interval?
+				if (time_now - dwLastInput <= TIMER_MAIN_DELAY_WHEN_IDLE * 2) // was there user input during the interval?
 				{
 					ManualUserIdleMode = 0;
 					SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
@@ -649,7 +696,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			else
 			{
-				if (time_now - ulLastRawInput <= TIMER_MAIN_DELAY_WHEN_BUSY) // was there user input during the interval?
+				if (time_now - dwLastInput <= TIMER_MAIN_DELAY_WHEN_BUSY) // was there user input during the interval?
 				{
 					SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 				}
@@ -880,6 +927,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				SetTimer(hWnd, TIMER_TOPOLOGY_COLLECTION, TIMER_TOPOLOGY_COLLECTION_DELAY, (TIMERPROC)NULL);
 			}
 		}
+		
 	}break;
 	case WM_DEVICECHANGE:
 	{
@@ -1701,7 +1749,7 @@ void RawInput_ClearCache() {
 	for (auto it = g_deviceCache.begin(); it != g_deviceCache.end(); ++it) {
 		HidD_FreePreparsedData(it->second.ppd);
 		CloseHandle(it->second.hDevice);
-		it->second.axes.clear();
+		it->second.axis_value.clear();
 	}
 	g_deviceCache.clear();
 }

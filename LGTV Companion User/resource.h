@@ -9,6 +9,9 @@
 #define IDC_EDIT3                       1004
 #define IDC_BUTTON1                     1005
 #define IDC_STATIC_ELEVATED             1006
+#define IDC_STATIC_JITTER               1006
+#define IDC_STATIC_ELEVATED2            1007
+#define IDC_STATIC_FALLBACK             1007
 
 // Next default values for new objects
 // 

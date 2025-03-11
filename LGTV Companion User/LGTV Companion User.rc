@@ -68,8 +68,9 @@ BEGIN
     EDITTEXT        IDC_EDIT,7,7,295,134,ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | ES_WANTRETURN | WS_VSCROLL
     EDITTEXT        IDC_EDIT3,7,166,94,14,ES_AUTOHSCROLL
     PUSHBUTTON      "Hide",IDC_BUTTON1,252,166,50,14
-    LTEXT           "* Elevated foreground process *",IDC_STATIC_ELEVATED,112,169,118,12,NOT WS_VISIBLE
+    LTEXT           "* Jittery controller disturbance *",IDC_STATIC_JITTER,112,169,110,12,NOT WS_VISIBLE
     LTEXT           "Seconds since last input (mouse, kb, controller)",IDC_STATIC,8,147,79,19
+    LTEXT           "* Using fallback detection *",IDC_STATIC_FALLBACK,112,147,118,12,NOT WS_VISIBLE
 END
 
 
