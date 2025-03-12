@@ -10,16 +10,12 @@ Alternatively, You can manually install the dependencies, with the following com
 
 		vcpkg install nlohmann-json:x64-windows-static
 		vcpkg install boost-asio:x64-windows-static
-		vcpkg install boost-utility:x64-windows-static
-		vcpkg install boost-date-time:x64-windows-static
 		vcpkg install boost-beast:x64-windows-static
 		vcpkg install wintoast:x64-windows-static
 		vcpkg install openssl:x64-windows-static
   
   		vcpkg install nlohmann-json:arm64-windows-static
 		vcpkg install boost-asio:arm64-windows-static
-		vcpkg install boost-utility:arm64-windows-static
-		vcpkg install boost-date-time:arm64-windows-static
 		vcpkg install boost-beast:arm64-windows-static
 		vcpkg install wintoast:arm64-windows-static
 		vcpkg install openssl:arm64-windows-static
