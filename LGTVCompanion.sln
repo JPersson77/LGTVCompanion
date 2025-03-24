@@ -11,11 +11,14 @@ Project("{B7DD6F7E-DEF8-4E67-B5B7-07EF123DB6F0}") = "LGTV Companion Setup", "LGT
 	ProjectSection(ProjectDependencies) = postProject
 		{220383FE-FBC6-41C5-8F85-E4E709FD04BD} = {220383FE-FBC6-41C5-8F85-E4E709FD04BD}
 		{5611232A-E1D4-42F8-B182-F7BD8ACF1D82} = {5611232A-E1D4-42F8-B182-F7BD8ACF1D82}
+		{9DE7F040-121C-4D3A-B115-EE776B875DE3} = {9DE7F040-121C-4D3A-B115-EE776B875DE3}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LGTV Companion Daemon", "LGTV Companion User\LGTV Companion User.vcxproj", "{5611232A-E1D4-42F8-B182-F7BD8ACF1D82}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LGTV Companion Console", "LGTV Companion Console\Console.vcxproj", "{220383FE-FBC6-41C5-8F85-E4E709FD04BD}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LGTV Companion Updater", "LGTV Companion Updater\LGTV Companion Updater.vcxproj", "{9DE7F040-121C-4D3A-B115-EE776B875DE3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -65,6 +68,14 @@ Global
 		{220383FE-FBC6-41C5-8F85-E4E709FD04BD}.Release|arm64.Build.0 = Release|ARM64
 		{220383FE-FBC6-41C5-8F85-E4E709FD04BD}.Release|x64.ActiveCfg = Release|x64
 		{220383FE-FBC6-41C5-8F85-E4E709FD04BD}.Release|x64.Build.0 = Release|x64
+		{9DE7F040-121C-4D3A-B115-EE776B875DE3}.Debug|arm64.ActiveCfg = Debug|ARM64
+		{9DE7F040-121C-4D3A-B115-EE776B875DE3}.Debug|arm64.Build.0 = Debug|ARM64
+		{9DE7F040-121C-4D3A-B115-EE776B875DE3}.Debug|x64.ActiveCfg = Debug|x64
+		{9DE7F040-121C-4D3A-B115-EE776B875DE3}.Debug|x64.Build.0 = Debug|x64
+		{9DE7F040-121C-4D3A-B115-EE776B875DE3}.Release|arm64.ActiveCfg = Release|ARM64
+		{9DE7F040-121C-4D3A-B115-EE776B875DE3}.Release|arm64.Build.0 = Release|ARM64
+		{9DE7F040-121C-4D3A-B115-EE776B875DE3}.Release|x64.ActiveCfg = Release|x64
+		{9DE7F040-121C-4D3A-B115-EE776B875DE3}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
