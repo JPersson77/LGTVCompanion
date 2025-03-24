@@ -8,6 +8,15 @@
 #include <WinSock2.h>
 #include <ws2tcpip.h>
 #include <algorithm>
+//#include <MSTask.h>
+#include <taskschd.h>
+//#include <atlbase.h>
+#include <comdef.h>
+//#include <iostream>
+
+//#pragma comment(lib, "mstask.lib")
+#pragma comment(lib, "taskschd.lib")
+//#pragma comment(lib, "comsupp.lib")
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -70,7 +79,7 @@ std::vector<std::string> tools::stringsplit(std::string str, std::string token) 
 					std::string temp = str.substr(1, index - 1);
 					res.push_back(temp);
 				}
-				size_t next = str.find_first_not_of(token, index + token.size());
+				size_t next = str.find_first_not_of(token, index + 1);
 				if (next != std::string::npos)
 					str = str.substr(next); //  str.substr(index + token.size());
 				else
@@ -84,12 +93,12 @@ std::vector<std::string> tools::stringsplit(std::string str, std::string token) 
 		}
 		else // not quotation marks
 		{
-			index = str.find(token);
+			index = str.find_first_of(token, 0);
 			if (index != std::string::npos)
 			{
 				res.push_back(str.substr(0, index));
 
-				size_t next = str.find_first_not_of(token, index + token.size());
+				size_t next = str.find_first_not_of(token, index + 1);
 				if (next != std::string::npos)
 					str = str.substr(next); //  str.substr(index + token.size());
 				else
@@ -237,4 +246,62 @@ bool tools::isSameSubnet(const char* ip1, const char* ip2, const char* subnetMas
 	inet_pton(AF_INET, subnetMask, &mask);
 
 	return (addr1.s_addr & mask.s_addr) == (addr2.s_addr & mask.s_addr);
+}
+bool tools::startScheduledTask(std::wstring task_folder, std::wstring task_name)
+{
+	
+	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	if (FAILED(hr))
+		return false;
+
+	ITaskService* pService = nullptr;
+	ITaskFolder* pRootFolder = nullptr;
+	IRegisteredTask* pTask = nullptr;
+	IRunningTask* pRunningTask = nullptr;
+
+	hr = CoCreateInstance(CLSID_TaskScheduler, NULL, CLSCTX_INPROC_SERVER, IID_ITaskService, (void**)&pService);
+	if (FAILED(hr)) {
+		CoUninitialize();
+		return false;
+	}
+
+	hr = pService->Connect(_variant_t(), _variant_t(), _variant_t(), _variant_t());
+	if (FAILED(hr)) {
+		pService->Release();
+		CoUninitialize();
+		return false;
+	}
+
+	// Get the root folder of Task Scheduler	
+	hr = pService->GetFolder(_bstr_t(task_folder.c_str()), &pRootFolder);
+	if (FAILED(hr)) {
+		pService->Release();
+		CoUninitialize();
+		return false;
+	}
+
+	// Activate the task by name
+	hr = pRootFolder->GetTask(_bstr_t(task_name.c_str()), &pTask);
+	if (FAILED(hr)) {
+		pRootFolder->Release();
+		pService->Release();
+		CoUninitialize();
+		return false;
+	}
+
+	// Run the task
+	hr = pTask->Run(_variant_t(), &pRunningTask);
+	if (FAILED(hr)) {
+		pTask->Release();
+		pRootFolder->Release();
+		pService->Release();
+		CoUninitialize();
+		return false;
+	}
+	pRunningTask->Release();
+	pTask->Release();
+	pRootFolder->Release();
+	pService->Release();
+	CoUninitialize();
+	return true;
 }

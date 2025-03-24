@@ -14,5 +14,6 @@ namespace tools
 	std::vector <std::string>				getLocalIP(void);
 	std::string								getSubnetMask(std::string ip);
 	bool									isSameSubnet(const char* ip1, const char* ip2, const char* subnetMask);
+	bool									startScheduledTask(std::wstring task_folder, std::wstring task_name);
 }
 
