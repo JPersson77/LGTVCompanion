@@ -9,6 +9,10 @@
 #define PREFS_SHUTDOWN_TIMING_EARLY			1
 #define PREFS_SHUTDOWN_TIMING_DELAYED		2
 
+#define PREFS_UPDATER_OFF					0
+#define PREFS_UPDATER_NOTIFY				1
+#define PREFS_UPDATER_SILENT				2
+
 // Preferences management
 class Preferences : public std::enable_shared_from_this<Preferences>
 {
@@ -32,7 +36,7 @@ public:
 	int									version_ = 3;
 	int									version_loaded_ = 0;
 	int									power_on_timeout_ = 40;
-	bool								notify_update_ = false;
+	int									updater_mode_ = PREFS_UPDATER_OFF;
 	bool								user_idle_mode_ = false;
 	int									user_idle_mode_delay_ = 10;
 	bool								user_idle_mode_mute_speakers_ = false;

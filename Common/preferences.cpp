@@ -19,6 +19,7 @@ using			json = nlohmann::json;
 #define         JSON_LOGGING                    "ExtendedLog"
 #define         JSON_LOG_LEVEL                  "LogLevel"
 #define         JSON_AUTOUPDATE                 "AutoUpdate"
+#define         JSON_UPDATER_MODE		        "UpdaterMode"
 #define         JSON_PWRONTIMEOUT               "PowerOnTimeOut"
 #define         JSON_IDLEBLANK                  "BlankWhenIdle"
 #define         JSON_IDLEBLANKDELAY             "BlankWhenIdleDelay"
@@ -174,10 +175,13 @@ Preferences::Preferences(std::wstring configuration_file_name)
 						power_on_timeout_ = 5;
 					else if (power_on_timeout_ > 100)
 						power_on_timeout_ = 100;
-					// Update notifications
+					// Updater
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_AUTOUPDATE];
 					if (!j.empty() && j.is_boolean())
-						notify_update_ = j.get<bool>();
+						updater_mode_ = j.get<bool>() ? PREFS_UPDATER_NOTIFY : PREFS_UPDATER_OFF;
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_UPDATER_MODE];
+					if (!j.empty() && j.is_number())
+						updater_mode_ = j.get<int>();
 					// User idle mode
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEBLANK];
 					if (!j.empty() && j.is_boolean())
@@ -419,7 +423,7 @@ bool Preferences::Preferences::writeToDisk(void)
 	prefs[JSON_PREFS_NODE][JSON_VERSION] = (int)version_;
 	prefs[JSON_PREFS_NODE][JSON_PWRONTIMEOUT] = (int)power_on_timeout_;
 	prefs[JSON_PREFS_NODE][JSON_LOG_LEVEL] = (int)log_level_;
-	prefs[JSON_PREFS_NODE][JSON_AUTOUPDATE] = (bool)notify_update_;
+	prefs[JSON_PREFS_NODE][JSON_UPDATER_MODE] = (int)updater_mode_;
 	prefs[JSON_PREFS_NODE][JSON_IDLEBLANK] = (bool)user_idle_mode_;
 	prefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY] = (int)user_idle_mode_delay_;
 	prefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY] = (bool)topology_support_;
