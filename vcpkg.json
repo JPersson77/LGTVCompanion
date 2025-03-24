@@ -5,10 +5,8 @@
   "dependencies": [
     "nlohmann-json",
 	"boost-asio",
-	"boost-utility",
 	"boost-beast",
 	"openssl",
-	"boost-date-time",
 	"wintoast"
   ]
 }
