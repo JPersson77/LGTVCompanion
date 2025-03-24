@@ -9,6 +9,8 @@
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='ia64' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #elif defined _M_X64
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='amd64' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#elif defined _M_ARM64
+#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='arm64' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #else
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #endif
@@ -33,32 +35,35 @@
 #include <Hidsdi.h>
 #include <hidpi.h>
 #include <unordered_map>
+#include <Shobjidl.h>
+#include <Shlobj.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <wintoastlib.h>
 #include "resource.h"
 
 #pragma comment(lib, "urlmon.lib")
 #pragma comment(lib, "Wtsapi32.lib")
 #pragma comment(lib, "hid.lib")
+#pragma comment(lib, "Shell32.lib")
 
 #define			APPNAME_SHORT							L"LGTVdaemon"
 #define			APPNAME_FULL							L"LGTV Companion Daemon"
-#define			NOTIFY_NEW_PROCESS						1
 #define         TIMER_MAIN								18
 #define         TIMER_IDLE								19
 #define         TIMER_TOPOLOGY							20
 #define         TIMER_CHECK_PROCESSES					21
 #define         TIMER_TOPOLOGY_COLLECTION				22
+#define         TIMER_VERSIONCHECK						23
 #define         TIMER_MAIN_DELAY_WHEN_BUSY				1000
 #define         TIMER_MAIN_DELAY_WHEN_IDLE				50
 #define         TIMER_REMOTE_DELAY						10000
 #define         TIMER_TOPOLOGY_DELAY					8000
+#define         TIMER_VERSIONCHECK_DELAY				30000
 #define         TIMER_CHECK_PROCESSES_DELAY				5000
 #define         TIMER_TOPOLOGY_COLLECTION_DELAY			3000
-#define         APP_NEW_VERSION							WM_USER+9
-#define         USER_DISPLAYCHANGE						WM_USER+10
-#define         APP_USER_IDLE_ON						WM_USER+20
-#define         APP_USER_IDLE_OFF						WM_USER+21
+#define         APP_DISPLAYCHANGE						WM_USER+10
+#define         APP_SET_MESSAGEFILTER					WM_USER+11
+#define         APP_USER_IDLE_ON						1
+#define         APP_USER_IDLE_OFF						2
 #define         TOPOLOGY_OK								1
 #define         TOPOLOGY_ERROR							2
 #define         TOPOLOGY_UNDETERMINED					3
@@ -111,46 +116,33 @@ struct DeviceInfo { // Cache for raw input data stuff
 	std::vector<int> axis_value;
 };
 
-class WinToastHandler : public WinToastLib::IWinToastHandler
-{
-public:
-	void toastActivated() const override {
-	}
-	void toastActivated(int actionIndex) const override {
-		ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
-	}
-	void toastDismissed(WinToastDismissalReason state) const override {}
-	void toastFailed() const override {}
-private:
-};
-
 // Globals:
-HINSTANCE                       hInstance;  // current instance
-HWND                            hMainWnd = NULL;
-bool                            bIdle = false;
-bool                            bDaemonVisible = true;
-bool                            bFirstRun = false;
-WinToastHandler                 m_WinToastHandler;
-HANDLE                          hPipe = INVALID_HANDLE_VALUE;
-INT64                           idToastFirstrun = NULL;
-INT64                           idToastNewversion = NULL;
-UINT							shellhookMessage;
+HINSTANCE                       h_instance;  // current instance
+HWND                            h_main_wnd = NULL;
+bool                            user_is_idle = false;
+bool                            daemon_is_visible = true;
+HANDLE                          h_pipe = INVALID_HANDLE_VALUE;
+UINT							custom_shellhook_message;
+UINT							custom_daemon_restart_message;
+UINT							custom_daemon_close_message;
+UINT							custom_daemon_idle_message;
+UINT							custom_daemon_unidle_message;
+UINT							custom_updater_close_message;
 DWORD							daemon_startup_user_input_time = 0;
-UINT							ManualUserIdleMode = 0;
-HBRUSH                          hBackbrush;
-time_t							TimeOfLastTopologyChange = 0;
-DWORD							ulLastRawInput = 0;
-DWORD							ulLastMouseSample = 0;
-DWORD							dwGetLastInputInfoSave = 0;
-DWORD							dwLastInput = 0;
-DWORD							dwLastControllerInfoTick = 0;
-int								iMouseChecksPerformed = 0;
-bool							ToastInitialised = false;
-std::shared_ptr<IpcClient>		pPipeClient;
+UINT							manual_user_idle_mode = 0;
+HBRUSH                          h_backbrush;
+time_t							time_of_last_topology_change = 0;
+DWORD							time_of_last_raw_input = 0;
+DWORD							time_of_last_mouse_sample = 0;
+DWORD							time_of_last_input_info = 0;
+time_t							time_of_last_version_check = 0;
+DWORD							last_input = 0;
+DWORD							time_of_last_controller_tick = 0;
+int								number_of_mouse_checks = 0;
+std::shared_ptr<IpcClient>		p_pipe_client;
 Preferences						Prefs(CONFIG_FILE);
-std::string						sessionID;
-bool							isElevated = false;
-std::unordered_map<std::wstring, DeviceInfo> g_deviceCache; // Key = device path
+std::string						session_id;
+std::unordered_map<std::wstring, DeviceInfo> g_device_cache; // Key = device path
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -160,58 +152,52 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 {
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(nCmdShow);
-
-	hInstance = Instance;
 	MSG msg;
-	std::wstring WindowTitle;
-	WindowTitle = APPNAME_FULL;
-	WindowTitle += L" v";
-	WindowTitle += APP_VERSION;
-	std::wstring CommandLineParameters;
+	std::wstring window_title;
+	std::wstring log_message;
+	h_instance = Instance;
 
 	//commandline processing
 	if (lpCmdLine)
 	{
 		std::wstring CommandLineParameters = lpCmdLine;
 		transform(CommandLineParameters.begin(), CommandLineParameters.end(), CommandLineParameters.begin(), ::tolower);
-		if (CommandLineParameters == L"-show")
-			bDaemonVisible = true;
-		else if (CommandLineParameters == L"-hide")
-			bDaemonVisible = false;
-		else if (CommandLineParameters == L"-firstrun")
+
+		if (CommandLineParameters == L"-run_hidden") // launched from task scheduler as hidden
+			daemon_is_visible = false;
+		else if (CommandLineParameters == L"-run_visible") // launched from task scheduler as visible
+			daemon_is_visible = true;
+		else if (CommandLineParameters == L"-restart") // launched from UI when applying configuration
 		{
-			bFirstRun = true;
-			bDaemonVisible = false;
+			if (!tools::startScheduledTask(TASK_FOLDER, TASK_DAEMON))
+				MessageBox(NULL, L"Failed to launch the Daemon. The Microsoft Task Scheduler service may be stopped", L"Error", MB_OK | MB_ICONEXCLAMATION);
+			return 0;
 		}
-		else
+		else // launched by user
 		{
-			MessageBox(NULL, L"This application is the desktop user mode daemon for LGTV Companion, it runs in the background and provides additional features, e.g user idle detection. To manage your WebOS devices and options please instead start the 'LGTV Companion' application from your windows start menu.\n\nClick OK to close this message!", L"LGTV Companion (Daemon)", MB_OK);
+			if(!tools::startScheduledTask(TASK_FOLDER, TASK_DAEMON_VISIBLE))
+				MessageBox(NULL, L"Failed to launch the Daemon. The Microsoft Task Scheduler service may be stopped", L"Error", MB_OK | MB_ICONEXCLAMATION);
 			return 0;
 		}
 	}
-
-	shellhookMessage = RegisterWindowMessageW(L"SHELLHOOK");
-	//Initialize toast notifications
-	WinToastLib::WinToast::WinToastError error;
-	WinToastLib::WinToast::instance()->setAppName(L"LGTV Companion (Daemon)");
-	const auto aumi = WinToastLib::WinToast::configureAUMI
-	(L"LGTV Companion (Daemon)", L"", L"", L"");
-	WinToastLib::WinToast::instance()->setAppUserModelId(aumi);
-	if (!WinToastLib::WinToast::instance()->initialize(&error)) {
-		wchar_t buf[250];
-		swprintf_s(buf, L"Failed to initialize Toast Notifications :%d", error);
-		log(buf);
+	else 
+	{
+		if (!tools::startScheduledTask(TASK_FOLDER, TASK_DAEMON_VISIBLE))
+			MessageBox(NULL, L"Failed to launch the Daemon. The Microsoft Task Scheduler service may be stopped", L"Error", MB_OK | MB_ICONEXCLAMATION);
+		return 0;
 	}
-	else
-		ToastInitialised = true;
+	custom_shellhook_message = RegisterWindowMessage(L"SHELLHOOK");
+	custom_daemon_restart_message = RegisterWindowMessage(CUSTOM_MESSAGE_RESTART);
+	custom_daemon_close_message = RegisterWindowMessage(CUSTOM_MESSAGE_CLOSE);
+	custom_daemon_idle_message = RegisterWindowMessage(CUSTOM_MESSAGE_IDLE);
+	custom_daemon_unidle_message = RegisterWindowMessage(CUSTOM_MESSAGE_UNIDLE);
+	custom_updater_close_message = RegisterWindowMessage(CUSTOM_MESSAGE_UPD_CLOSE);
 
-	// if the app is already running as another process, tell the other process to exit
-	messageExistingProcess();
+	// if the app is already running as another process, tell the other process(es) to exit
+	closeExistingProcess();
 
 	// Initiate PipeClient IPC
-	pPipeClient = std::make_shared<IpcClient>(PIPENAME, ipcCallback, (LPVOID)NULL);
-//	ipc::PipeClient PipeCl(PIPENAME, NamedPipeCallback);
-//	pPipeClient = &PipeCl;
+	p_pipe_client = std::make_shared<IpcClient>(PIPENAME, ipcCallback, (LPVOID)NULL);
 
 	// read the configuration file and init prefs
 	if(!Prefs.isInitialised())
@@ -219,7 +205,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		communicateWithService("errorconfig");
 		return false;
 	}
-	hBackbrush = CreateSolidBrush(0x00ffffff);
 
 	// Get Session ID
 	PULONG pSessionId = NULL;
@@ -228,74 +213,72 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	{
 		DWORD id = (DWORD)*pSessionId;
 		WTSFreeMemory(pSessionId);
-		sessionID = std::to_string(id);
-
+		session_id = std::to_string(id);
 	}
 
 	// create main window (dialog)
-	hMainWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndProc);
-	SetWindowText(hMainWnd, WindowTitle.c_str());
-	ShowWindow(hMainWnd, bDaemonVisible ? SW_SHOW : SW_HIDE);
+	h_backbrush = CreateSolidBrush(0x00ffffff);
+	window_title = APPNAME_FULL;
+	window_title += L" v";
+	window_title += APP_VERSION;
+	h_main_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndProc);
+	SetWindowText(h_main_wnd, window_title.c_str());
+	ShowWindow(h_main_wnd, daemon_is_visible ? SW_SHOW : SW_HIDE);
 
-	// spawn thread to check for updated version of the app.
-	if (Prefs.notify_update_)
-	{
-		std::thread thread_obj(threadVersionCheck, hMainWnd);
-		thread_obj.detach();
-	}
-
+	// start timers
+	if (Prefs.updater_mode_ != PREFS_UPDATER_OFF)
+		SetTimer(h_main_wnd, TIMER_VERSIONCHECK, TIMER_VERSIONCHECK_DELAY, (TIMERPROC)NULL);
+	if (Prefs.topology_support_)
+		SetTimer(h_main_wnd, TIMER_TOPOLOGY, TIMER_TOPOLOGY_DELAY, (TIMERPROC)NULL);
+	if (Prefs.remote_streaming_host_support_ || Prefs.user_idle_mode_whitelist_)
+		SetTimer(h_main_wnd, TIMER_CHECK_PROCESSES, TIMER_CHECK_PROCESSES_DELAY, (TIMERPROC)NULL);
 	if (Prefs.user_idle_mode_)
 	{
 		RAWINPUTDEVICE Rid[4];
 		Rid[0].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
 		Rid[0].usUsage = 0x02;								// HID_USAGE_GENERIC_MOUSE
-		Rid[0].dwFlags = bDaemonVisible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
-		Rid[0].hwndTarget = hMainWnd;
+		Rid[0].dwFlags = daemon_is_visible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
+		Rid[0].hwndTarget = h_main_wnd;
 
 		Rid[1].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
 		Rid[1].usUsage = 0x04;								// HID_USAGE_GENERIC_JOYSTICK
 		Rid[1].dwFlags = RIDEV_INPUTSINK;
-		Rid[1].hwndTarget = hMainWnd;
+		Rid[1].hwndTarget = h_main_wnd;
 
 		Rid[2].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
 		Rid[2].usUsage = 0x05;								// HID_USAGE_GENERIC_GAMEPAD
 		Rid[2].dwFlags = RIDEV_INPUTSINK;
-		Rid[2].hwndTarget = hMainWnd;
+		Rid[2].hwndTarget = h_main_wnd;
 
 		Rid[3].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
 		Rid[3].usUsage = 0x06;								// HID_USAGE_GENERIC_KEYBOARD
-		Rid[3].dwFlags = bDaemonVisible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
-		Rid[3].hwndTarget = hMainWnd;
+		Rid[3].dwFlags = daemon_is_visible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
+		Rid[3].hwndTarget = h_main_wnd;
 
 		UINT deviceCount = sizeof(Rid) / sizeof(*Rid);
 		if (RegisterRawInputDevices(Rid, deviceCount, sizeof(Rid[0])) == FALSE)
 		{
 			log(L"Failed to register for Raw Input!");
 		}
-		ulLastRawInput = GetTickCount();
-		SetTimer(hMainWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
-		SetTimer(hMainWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
+		time_of_last_raw_input = GetTickCount();
+		SetTimer(h_main_wnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
+		SetTimer(h_main_wnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 	}
-	if (Prefs.topology_support_)
-		SetTimer(hMainWnd, TIMER_TOPOLOGY, TIMER_TOPOLOGY_DELAY, (TIMERPROC)NULL);
 
-	if (Prefs.remote_streaming_host_support_ || Prefs.user_idle_mode_whitelist_)
-		SetTimer(hMainWnd, TIMER_CHECK_PROCESSES, TIMER_CHECK_PROCESSES_DELAY, (TIMERPROC)NULL);
+	// log some basic info
+	log_message = window_title;
+	log_message += L" is running.";
+	log(log_message);
+	communicateWithService("started");	
+	log_message = L"Session ID is: ";
+	log_message += tools::widen(session_id);
+	log(log_message);
 
-	isElevated = IsWindowElevated(hMainWnd);
-	std::wstring startupmess = WindowTitle;
-	startupmess += L" is running. Process is ";
-	startupmess += isElevated ? L"elevated." : L"not elevated.";
-	log(startupmess);
-	communicateWithService("started");
-	
-	std::wstring sessionmessage = L"Session ID is: ";
-	sessionmessage += tools::widen(sessionID);
-	log(sessionmessage);
+	// register to receive power notifications
+	HPOWERNOTIFY rsrn = RegisterSuspendResumeNotification(h_main_wnd, DEVICE_NOTIFY_WINDOW_HANDLE);
+	HPOWERNOTIFY rpsn = RegisterPowerSettingNotification(h_main_wnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
 
-	HPOWERNOTIFY rsrn = RegisterSuspendResumeNotification(hMainWnd, DEVICE_NOTIFY_WINDOW_HANDLE);
-	HPOWERNOTIFY rpsn = RegisterPowerSettingNotification(hMainWnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
-
+	// register to receive device attached/detached messages
 	DEV_BROADCAST_DEVICEINTERFACE NotificationFilter;
 	HDEVNOTIFY dev_notify = NULL;
 	if (Prefs.remote_streaming_host_support_)
@@ -304,9 +287,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		NotificationFilter.dbcc_size = sizeof(DEV_BROADCAST_DEVICEINTERFACE);
 		NotificationFilter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
 		memcpy(&(NotificationFilter.dbcc_classguid), &(GUID_DEVINTERFACE_USB_DEVICE), sizeof(struct _GUID));
-		dev_notify = RegisterDeviceNotification(hMainWnd, &NotificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
+		dev_notify = RegisterDeviceNotification(h_main_wnd, &NotificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
 
-		WTSRegisterSessionNotification(hMainWnd, NOTIFY_FOR_ALL_SESSIONS);
+		WTSRegisterSessionNotification(h_main_wnd, NOTIFY_FOR_ALL_SESSIONS);
 
 		Remote.Sunshine_Log_File = sunshine_GetLogFile();
 		if (Remote.Sunshine_Log_File != "")
@@ -319,34 +302,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	// message loop:
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
-		if (!IsDialogMessage(hMainWnd, &msg))
+		if (!IsDialogMessage(h_main_wnd, &msg))
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
 	}
 
-	pPipeClient->terminate();
-
-	if (ToastInitialised)
-	{
-		if (idToastNewversion || idToastFirstrun)
-		{
-			if (idToastFirstrun)
-				WinToastLib::WinToast::instance()->hideToast(idToastFirstrun);
-			if (idToastNewversion)
-				WinToastLib::WinToast::instance()->hideToast(idToastNewversion);
-			Sleep(500);
-			WinToastLib::WinToast::instance()->clear();
-		}
-	}
-	DeleteObject(hBackbrush);
+	//clean up
+	p_pipe_client->terminate();
+	DeleteObject(h_backbrush);
 	UnregisterSuspendResumeNotification(rsrn);
 	UnregisterPowerSettingNotification(rpsn);
 	if (dev_notify)
 		UnregisterDeviceNotification(dev_notify);
 	if (Prefs.remote_streaming_host_support_)
-		WTSUnRegisterSessionNotification(hMainWnd);
+		WTSUnRegisterSessionNotification(h_main_wnd);
 	RawInput_ClearCache();
 	return (int)msg.wParam;
 }
@@ -354,18 +325,67 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 //   Process messages for the main window.
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	std::wstring str;
+	// handle intra-app custom messages
+	if (message == custom_daemon_close_message)
+		SendMessage(hWnd, WM_CLOSE, NULL, NULL);
+	else if (message == custom_daemon_restart_message)
+	{
+		tools::startScheduledTask(TASK_FOLDER, TASK_DAEMON);
+		SendMessage(hWnd, WM_CLOSE, NULL, NULL);
+	}
+	else if (message == custom_daemon_idle_message)
+	{
+		if (Prefs.user_idle_mode_)
+		{
+			manual_user_idle_mode = APP_USER_IDLE_ON;
+			user_is_idle = true;
+			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
+			SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
+			log(L"User forced user idle mode!");
+			communicateWithService("useridle");
+		}
+		else
+			log(L"Can not force user idle mode, as the feature is not enabled in the global options!");
+	}
+	else if (message == custom_daemon_unidle_message)
+	{
+		if (Prefs.user_idle_mode_)
+		{
+			manual_user_idle_mode = 0;
+			user_is_idle = false;
+			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
+			SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
+			time_of_last_raw_input = GetTickCount();
+			log(L"User forced unsetting user idle mode!");
+			communicateWithService("userbusy");
+		}
+		else
+			log(L"Can not force unset user idle mode, as the feature is not enabled in the global options!");
+	}
+
 	switch (message)
 	{
+	case WM_INITDIALOG:
+	{
+		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
+		PostMessage(hWnd, APP_SET_MESSAGEFILTER, NULL, NULL);
+	}break;
+	case APP_SET_MESSAGEFILTER:
+	{
+		ChangeWindowMessageFilterEx(hWnd, custom_daemon_restart_message, MSGFLT_ALLOW, NULL);
+		ChangeWindowMessageFilterEx(hWnd, custom_daemon_idle_message, MSGFLT_ALLOW, NULL);
+		ChangeWindowMessageFilterEx(hWnd, custom_daemon_unidle_message, MSGFLT_ALLOW, NULL);
+		ChangeWindowMessageFilterEx(hWnd, custom_daemon_close_message, MSGFLT_ALLOW, NULL);
+	}break;
 	case WM_INPUT:
 	{
 		if (!lParam)
 			return 0;
-		HRAWINPUT hRawInput = reinterpret_cast<HRAWINPUT>(lParam);
+		HRAWINPUT h_raw_input = reinterpret_cast<HRAWINPUT>(lParam);
 		UINT size;
-		GetRawInputData(hRawInput, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER));
+		GetRawInputData(h_raw_input, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER));
 		std::vector<BYTE> buffer(size);
-		if (GetRawInputData(hRawInput, RID_INPUT, buffer.data(), &size, sizeof(RAWINPUTHEADER)) != size) 
+		if (GetRawInputData(h_raw_input, RID_INPUT, buffer.data(), &size, sizeof(RAWINPUTHEADER)) != size) 
 		{
 			log(L"Failed to get raw input data.");
 			return 0;
@@ -376,22 +396,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// Was a key pressed?
 		if (raw->header.dwType == RIM_TYPEKEYBOARD)
 		{
-			ulLastRawInput = tick_now;
+			time_of_last_raw_input = tick_now;
 			return 0;
 		}
 		// Was the mouse moved?
 		else if (raw->header.dwType == RIM_TYPEMOUSE)
 		{
 			// avoid accidental mouse-wake
-			if (tick_now - ulLastMouseSample < 50)
+			if (tick_now - time_of_last_mouse_sample < 50)
 				break;
-			if (tick_now - ulLastMouseSample > 500)
-				iMouseChecksPerformed = 1;
+			if (tick_now - time_of_last_mouse_sample > 500)
+				number_of_mouse_checks = 1;
 			else
-				iMouseChecksPerformed++;
-			if (iMouseChecksPerformed >= 3)
-				ulLastRawInput = tick_now;
-			ulLastMouseSample = tick_now;
+				number_of_mouse_checks++;
+			if (number_of_mouse_checks >= 3)
+				time_of_last_raw_input = tick_now;
+			time_of_last_mouse_sample = tick_now;
 			return 0;
 		}
 		// If not mouse or keyboard, then a controller was used
@@ -403,18 +423,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			std::vector<WCHAR> deviceName(nameSize);
 			if (GetRawInputDeviceInfo(raw->header.hDevice, RIDI_DEVICENAME, deviceName.data(), &nameSize) < 0)
 			{
-				log(L"Failed to get device name.");
+				log(L"Failed to get raw input device name.");
 				return 0;
 			}
-			// Check if exists in cache or perform initialization
+			// Check if controller exists in cache or perform initialization
 			std::wstring devicePath(deviceName.data());
-			auto it = g_deviceCache.find(devicePath);
-			if (it == g_deviceCache.end()) {
+			auto it = g_device_cache.find(devicePath);
+			if (it == g_device_cache.end()) {
 				RawInput_AddToCache(devicePath);
-				it = g_deviceCache.find(devicePath); // Re-check after insertion attempt
-				if (it == g_deviceCache.end())
+				it = g_device_cache.find(devicePath); // Re-check after insertion attempt
+				if (it == g_device_cache.end())
 				{
-					log(L"Error in cache management.");
+					log(L"Error in raw input cache management.");
 					return 0;
 				}
 			}
@@ -433,19 +453,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					{
 						if (usageLength > 0)
 						{
-							ulLastRawInput = tick_now;
+							time_of_last_raw_input = tick_now;
 							return 0;
 						}
 					}					
 				}
 			}
-			// Check whether any analog sticks were moved and avoid accidental wake
-
-			if (tick_now - dwLastControllerInfoTick < 5)
+			// avoid accidental wake
+			if (tick_now - time_of_last_controller_tick < 5)
 			{
 				return 0;
 			}
-			dwLastControllerInfoTick = tick_now;
+			time_of_last_controller_tick = tick_now;
 			if (cache.caps.NumberInputValueCaps > 0)
 			{
 				std::vector<HIDP_VALUE_CAPS> valueCaps(cache.caps.NumberInputValueCaps);
@@ -476,7 +495,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 							{
 								if (abs(cache.axis_value[i] - scaledValue) >= (int)(0.045 * 65535)) // sensitivity of the input detection
 								{
-									ulLastRawInput = tick_now;
+									time_of_last_raw_input = tick_now;
 								}
 							}
 							cache.axis_value[i] = scaledValue;
@@ -486,78 +505,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 		}
 		return 0;
-	}break;
-	case WM_INITDIALOG:
-	{
-		if (bFirstRun && ToastInitialised)
-		{
-			TCHAR buffer[MAX_PATH] = { 0 };
-			GetModuleFileName(NULL, buffer, MAX_PATH);
-			std::wstring imgpath = buffer;
-			std::wstring::size_type pos = imgpath.find_last_of(L"\\/");
-			imgpath = imgpath.substr(0, pos + 1);
-			imgpath += L"mainicon.ico";
-
-			std::wstring Toast;
-			Toast = L"Good news! LGTV Companion v";
-			Toast += APP_VERSION;
-			Toast += L" is now installed.";
-
-			WinToastLib::WinToastTemplate templ;
-			templ = WinToastLib::WinToastTemplate(WinToastLib::WinToastTemplate::ImageAndText02);
-			templ.setImagePath(imgpath);
-
-			templ.setTextField(Toast, WinToastLib::WinToastTemplate::FirstLine);
-			templ.setTextField(L"Designed to protect and extend the features of your WebOS devices when used as a PC monitor.", WinToastLib::WinToastTemplate::SecondLine);
-
-			// Read the additional options section in the article
-			templ.setDuration(WinToastLib::WinToastTemplate::Duration::Short);
-			templ.setAudioOption(WinToastLib::WinToastTemplate::AudioOption::Default);
-			idToastFirstrun = WinToastLib::WinToast::instance()->showToast(templ, &m_WinToastHandler);
-			if (idToastFirstrun == -1L)
-			{
-				log(L"Failed to show first run toast notification!");
-			}
-		}
-	}break;
-	case APP_NEW_VERSION:
-	{
-		if (!bFirstRun)
-		{
-			communicateWithService("newversion");
-
-			std::wstring s = L"A new version of this app is available for download here: ";
-			s += NEWRELEASELINK;
-			log(s);
-
-			if (ToastInitialised)
-			{
-				TCHAR buffer[MAX_PATH] = { 0 };
-				GetModuleFileName(NULL, buffer, MAX_PATH);
-				std::wstring imgpath = buffer;
-				std::wstring::size_type pos = imgpath.find_last_of(L"\\/");
-				imgpath = imgpath.substr(0, pos + 1);
-				imgpath += L"mainicon.ico";
-
-				WinToastLib::WinToastTemplate templ;
-				templ = WinToastLib::WinToastTemplate(WinToastLib::WinToastTemplate::ImageAndText02);
-				templ.setImagePath(imgpath);
-
-				templ.setTextField(L"Yay! A new version is available.", WinToastLib::WinToastTemplate::FirstLine);
-				templ.setTextField(L"Please install the new version to keep up to date with bugfixes and features.", WinToastLib::WinToastTemplate::SecondLine);
-
-				templ.addAction(L"Download");
-
-				// Read the additional options section in the article
-				templ.setDuration(WinToastLib::WinToastTemplate::Duration::Long);
-				templ.setAudioOption(WinToastLib::WinToastTemplate::AudioOption::Default);
-				idToastNewversion = WinToastLib::WinToast::instance()->showToast(templ, &m_WinToastHandler);
-				if (idToastNewversion == -1L)
-				{
-					log(L"Failed to show toast notification about updated version!");
-				}
-			}
-		}
 	}break;
 
 	case WM_COMMAND:
@@ -570,8 +517,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			{
 			case IDC_BUTTON1:
 			{
-				bDaemonVisible = false;
+				daemon_is_visible = false;
 				ShowWindow(hWnd, SW_HIDE);
+			}break;
+			case IDC_TESTBUTTON:
+			{
+
 			}break;
 			default:break;
 			}
@@ -582,35 +533,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WM_NOTIFY:
 	{
-	}break;
-	case APP_USER_IDLE_ON: //message sent from lgtv companion.exe
-	{
-		if (Prefs.user_idle_mode_)
-		{
-			ManualUserIdleMode = APP_USER_IDLE_ON;
-			bIdle = true;
-			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
-			SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
-			log(L"User forced user idle mode!");
-			communicateWithService("useridle");
-		}
-		else
-			log(L"Can not force user idle mode, as the feature is not enabled in the global options!");
-	}break;
-	case APP_USER_IDLE_OFF: //message sent from lgtv companion.exe
-	{
-		if (Prefs.user_idle_mode_)
-		{
-			ManualUserIdleMode = 0;
-			bIdle = false;
-			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
-			SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
-			ulLastRawInput = GetTickCount();
-			log(L"User forced unsetting user idle mode!");
-			communicateWithService("userbusy");
-		}
-		else
-			log(L"Can not force unset user idle mode, as the feature is not enabled in the global options!");
 	}break;
 	case WM_TIMER:
 	{
@@ -627,17 +549,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			GetLastInputInfo(&lii);
 			
 			// prioritise Raw Input...
-			if (ulLastRawInput >= dwGetLastInputInfoSave)
+			if (time_of_last_raw_input >= time_of_last_input_info)
 			{
 				usingFallback = false;
-				dwLastInput = ulLastRawInput;
+				last_input = time_of_last_raw_input;
 			}
 			// but also use GetLastInputInfo() to determine user input (fallback method)
-			else if((lii.dwTime > ulLastRawInput) && (lii.dwTime - ulLastRawInput > 1000 ))
+			else if((lii.dwTime > time_of_last_raw_input) && (lii.dwTime - time_of_last_raw_input > 1000 ))
 			{
 				// discover and discard controllers that are jittery (i.e. that send constant updates)
-				if ((bIdle && abs((int)(lii.dwTime - dwGetLastInputInfoSave - (DWORD)TIMER_MAIN_DELAY_WHEN_IDLE)) <= 20)
-					|| (!bIdle && abs((int)(lii.dwTime - dwGetLastInputInfoSave - (DWORD)TIMER_MAIN_DELAY_WHEN_BUSY)) <= 20))
+				if ((user_is_idle && abs((int)(lii.dwTime - time_of_last_input_info - (DWORD)TIMER_MAIN_DELAY_WHEN_IDLE)) <= 20)
+					|| (!user_is_idle && abs((int)(lii.dwTime - time_of_last_input_info - (DWORD)TIMER_MAIN_DELAY_WHEN_BUSY)) <= 20))
 					jitterCount++;
 				else
 					jitterCount--;
@@ -652,51 +574,51 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					bJitter = false;
 				}
 			
-				if ((lii.dwTime - dwGetLastInputInfoSave) <= (DWORD)((bIdle ? TIMER_MAIN_DELAY_WHEN_IDLE : TIMER_MAIN_DELAY_WHEN_BUSY) * 2 )) // If there was activity the last two consecutive intervals
+				if ((lii.dwTime - time_of_last_input_info) <= (DWORD)((user_is_idle ? TIMER_MAIN_DELAY_WHEN_IDLE : TIMER_MAIN_DELAY_WHEN_BUSY) * 2 )) // If there was activity the last two consecutive intervals
 				{
-					if (lii.dwTime - dwGetLastInputInfoSave > 0) // and the last input is more recent than the one registered last interval?
+					if (lii.dwTime - time_of_last_input_info > 0) // and the last input is more recent than the one registered last interval?
 					{
 						usingFallback = true;
 						if (!bJitter) // if the controller is not jittery
 						{
-							dwLastInput = time_now;
+							last_input = time_now;
 						}
 					}
 				}
 			}
-			dwGetLastInputInfoSave = lii.dwTime;
+			time_of_last_input_info = lii.dwTime;
 			
 			// do this first time the timer is triggered
 			if (daemon_startup_user_input_time == 0)
-				daemon_startup_user_input_time = dwLastInput;
+				daemon_startup_user_input_time = last_input;
 
 			// fix for the fullscreen idle detection on system startup because windows will return QUNS_BUSY until the user has interacted with the PC
-			if (dwLastInput != daemon_startup_user_input_time)
+			if (last_input != daemon_startup_user_input_time)
 				daemon_startup_user_input_time = -1;
 
 			// update the status window with last input
-			if (bDaemonVisible)
+			if (daemon_is_visible)
 			{
-				DWORD time = (time_now - dwLastInput) / 1000;
+				DWORD time = (time_now - last_input) / 1000;
 				std::wstring ago = tools::widen(std::to_string(time));
-				SendMessage(GetDlgItem(hMainWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());
+				SendMessage(GetDlgItem(hWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());
 				ShowWindow(GetDlgItem(hWnd, IDC_STATIC_FALLBACK), usingFallback ? SW_SHOW : SW_HIDE);
 				ShowWindow(GetDlgItem(hWnd, IDC_STATIC_JITTER), (usingFallback && bJitter) ? SW_SHOW : SW_HIDE);
 			}
-			if (bIdle)
+			if (user_is_idle)
 			{
-				if (time_now - dwLastInput <= TIMER_MAIN_DELAY_WHEN_IDLE * 2) // was there user input during the interval?
+				if (time_now - last_input <= TIMER_MAIN_DELAY_WHEN_IDLE * 2) // was there user input during the interval?
 				{
-					ManualUserIdleMode = 0;
+					manual_user_idle_mode = 0;
 					SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 					SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
-					bIdle = false;
+					user_is_idle = false;
 					communicateWithService("userbusy");
 				}
 			}
 			else
 			{
-				if (time_now - dwLastInput <= TIMER_MAIN_DELAY_WHEN_BUSY) // was there user input during the interval?
+				if (time_now - last_input <= TIMER_MAIN_DELAY_WHEN_BUSY) // was there user input during the interval?
 				{
 					SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 				}
@@ -706,7 +628,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case TIMER_IDLE:
 		{
-			if (ManualUserIdleMode == 0)
+			if (manual_user_idle_mode == 0)
 			{
 				//Is a whitelisted process running
 				if (Prefs.user_idle_mode_whitelist_)
@@ -750,7 +672,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					}
 				}
 			}
-			bIdle = true;
+			user_is_idle = true;
 			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
 			communicateWithService("useridle");
 			return 0;
@@ -774,7 +696,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case TIMER_TOPOLOGY_COLLECTION:
 		{
 			KillTimer(hWnd, (UINT_PTR)TIMER_TOPOLOGY_COLLECTION);
-			PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+			PostMessage(hWnd, APP_DISPLAYCHANGE, NULL, NULL);
+		}break;
+		case TIMER_VERSIONCHECK:
+		{		
+			TCHAR buffer[MAX_PATH] = { 0 };
+			KillTimer(hWnd, TIMER_VERSIONCHECK);
+			if (Prefs.updater_mode_ == PREFS_UPDATER_OFF)
+				break;
+			time_of_last_version_check = time(0);
+			if (Prefs.updater_mode_ == PREFS_UPDATER_SILENT)
+				tools::startScheduledTask(TASK_FOLDER, TASK_UPDATER_SILENT);
+			else
+			{
+				GetModuleFileName(NULL, buffer, MAX_PATH);
+				std::wstring path = buffer;
+				std::wstring::size_type pos = path.find_last_of(L"\\/");
+				path = path.substr(0, pos + 1);
+				std::wstring exe = path;
+				exe += L"LGTVupdater.exe";
+				ShellExecute(NULL, L"open", exe.c_str(), L"-versioncheck", path.c_str(), SW_NORMAL);
+			}
 		}break;
 		case TIMER_TOPOLOGY:
 		{
@@ -786,7 +728,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			if (result == TOPOLOGY_OK)
 			{
-				PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+				PostMessage(hWnd, APP_DISPLAYCHANGE, NULL, NULL);
 			}
 			else if (result == TOPOLOGY_UNDETERMINED)
 			{
@@ -806,32 +748,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				std::wstring s = L"A change to the system has invalidated the monitor topology configuration and the feature has been disabled. "
 					"Please run the configuration guide in the global options to ensure correct operation.";
 				log(s);
-
-				if (ToastInitialised)
-				{
-					TCHAR buffer[MAX_PATH] = { 0 };
-					GetModuleFileName(NULL, buffer, MAX_PATH);
-					std::wstring imgpath = buffer;
-					std::wstring::size_type pos = imgpath.find_last_of(L"\\/");
-					imgpath = imgpath.substr(0, pos + 1);
-					imgpath += L"mainicon.ico";
-
-					WinToastLib::WinToastTemplate templ;
-					templ = WinToastLib::WinToastTemplate(WinToastLib::WinToastTemplate::ImageAndText02);
-					templ.setImagePath(imgpath);
-
-					templ.setTextField(L"Invalidated monitor topology configuration!", WinToastLib::WinToastTemplate::FirstLine);
-					templ.setTextField(L"A change to the system has invalidated the multi-monitor configuration. Please run the configuration guide in the global options.", WinToastLib::WinToastTemplate::SecondLine);
-
-					// Read the additional options section in the article
-					templ.setDuration(WinToastLib::WinToastTemplate::Duration::Long);
-					templ.setAudioOption(WinToastLib::WinToastTemplate::AudioOption::Default);
-					idToastNewversion = WinToastLib::WinToast::instance()->showToast(templ, &m_WinToastHandler);
-					if (idToastNewversion == -1L)
-					{
-						log(L"Failed to show toast notification about invalidated topology configuration!");
-					}
-				}
 			}
 			return 0;
 		}break;
@@ -852,16 +768,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			KillTimer(hWnd, TIMER_MAIN);
 			KillTimer(hWnd, TIMER_IDLE);
-			bIdle = false;
-			ulLastRawInput = GetTickCount();
+			user_is_idle = false;
+			time_of_last_raw_input = GetTickCount();
 			log(L"Suspending system.");
 			RawInput_ClearCache();
 			return true;
 		}break;
 		case PBT_APMRESUMEAUTOMATIC:
 		{
-			bIdle = false;
-			ulLastRawInput = GetTickCount();
+			user_is_idle = false;
+			time_of_last_raw_input = GetTickCount();
 			if (Prefs.user_idle_mode_)
 			{
 				SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
@@ -869,6 +785,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			log(L"Resuming system.");
 			RawInput_ClearCache();
+			if (Prefs.updater_mode_ != PREFS_UPDATER_OFF)
+				if (time(0) - time_of_last_version_check >= 24 * 60 * 60) // check only once per 24h
+					SetTimer(h_main_wnd, TIMER_VERSIONCHECK, TIMER_VERSIONCHECK_DELAY, (TIMERPROC)NULL);
 			return true;
 		}break;
 		case PBT_POWERSETTINGCHANGE:
@@ -889,8 +808,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					}
 					else
 					{
-						bIdle = false;
-						ulLastRawInput = GetTickCount();
+						user_is_idle = false;
+						time_of_last_raw_input = GetTickCount();
 						if (Prefs.user_idle_mode_)
 						{
 							SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
@@ -907,9 +826,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		default:break;
 		}
 	}break;
-	case USER_DISPLAYCHANGE:
+	case APP_DISPLAYCHANGE:
 	{
-		TimeOfLastTopologyChange = time(0);
+		time_of_last_topology_change = time(0);
 		checkDisplayTopology();
 	}break;
 	case WM_DISPLAYCHANGE:
@@ -917,13 +836,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		if (Prefs.topology_support_)
 		{
 			time_t now = time(0);
-			if (now - TimeOfLastTopologyChange > 10)
+			if (now - time_of_last_topology_change > 10)
 			{
-				PostMessage(hWnd, USER_DISPLAYCHANGE, NULL, NULL);
+				PostMessage(hWnd, APP_DISPLAYCHANGE, NULL, NULL);
 			}
 			else
 			{
-				TimeOfLastTopologyChange = now;
+				time_of_last_topology_change = now;
 				SetTimer(hWnd, TIMER_TOPOLOGY_COLLECTION, TIMER_TOPOLOGY_COLLECTION_DELAY, (TIMERPROC)NULL);
 			}
 		}
@@ -984,17 +903,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			remoteStreamingEvent(REMOTE_RDP_NOT_CONNECTED);
 		}
 	}break;
-	case WM_COPYDATA:
-	{
-		if (!lParam)
-			return true;
-		COPYDATASTRUCT* pcds = (COPYDATASTRUCT*)lParam;
-		if (pcds->dwData == NOTIFY_NEW_PROCESS)
-		{
-			SendMessage(hWnd, WM_CLOSE, NULL, NULL);
-		}
-		return true;
-	}break;
 	case WM_CTLCOLORSTATIC:
 	{
 		HDC hdcStatic = (HDC)wParam;
@@ -1002,7 +910,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			SetBkMode(hdcStatic, TRANSPARENT);
 		}
-		return(INT_PTR)hBackbrush;
+		return(INT_PTR)h_backbrush;
 	}break;
 	case WM_PAINT:
 	{
@@ -1021,7 +929,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		int savedDC = SaveDC(backbuffDC);
 		SelectObject(backbuffDC, backbuffer);
 
-		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+		FillRect(backbuffDC, &rc, (HBRUSH)h_backbrush);
 
 		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
 		RestoreDC(backbuffDC, savedDC);
@@ -1043,18 +951,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}break;
 	case WM_ENDSESSION: //PC is shutting down so let's do some cleaning up
 	{
-		if (ToastInitialised)
-		{
-			if (idToastNewversion || idToastFirstrun)
-			{
-				if (idToastFirstrun)
-					WinToastLib::WinToast::instance()->hideToast(idToastFirstrun);
-				if (idToastNewversion)
-					WinToastLib::WinToast::instance()->hideToast(idToastNewversion);
-				Sleep(500);
-				WinToastLib::WinToast::instance()->clear();
-			}
-		}
 		if (Prefs.shutdown_timing_ == PREFS_SHUTDOWN_TIMING_DELAYED)
 		{
 			Sleep(7000);
@@ -1063,6 +959,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}break;
 	case WM_DESTROY:
 	{
+		SendMessage(HWND_BROADCAST, custom_updater_close_message, NULL, (LPARAM)1);
 		PostQuitMessage(0);
 	}break;
 	default:
@@ -1072,28 +969,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 }
 
 //   If the application is already running, tell other process to exit
-bool messageExistingProcess(void)
+void closeExistingProcess(void)
 {
-	std::wstring WindowTitle;
-	WindowTitle = APPNAME_FULL;
-	WindowTitle += L" v";
-	WindowTitle += APP_VERSION;
-	bool return_value = false;
-
-	HWND Other_hWnd = FindWindow(NULL, WindowTitle.c_str());
-
-	while (Other_hWnd)
-	{
-		COPYDATASTRUCT cds;
-		cds.cbData = sizeof(WCHAR);
-		cds.lpData = NULL;
-		cds.dwData = NOTIFY_NEW_PROCESS;
-		SendMessage(Other_hWnd, WM_COPYDATA, NULL, (LPARAM)&cds);
-		Sleep(100);
-		Other_hWnd = FindWindow(NULL, WindowTitle.c_str());
-		return_value =  true;
-	}
-	return return_value;
+	SendMessage(HWND_BROADCAST, custom_daemon_close_message, NULL, NULL);
+	return;
 }
 //   communicate with service via IPC
 void communicateWithService(std::string sData)
@@ -1101,9 +980,9 @@ void communicateWithService(std::string sData)
 	if (sData.size() == 0)
 		return;
 	std::string message = "-daemon ";
-	if (sessionID.size() > 0)
+	if (session_id.size() > 0)
 	{
-		message += sessionID;
+		message += session_id;
 		message += " ";
 	}
 	else
@@ -1112,7 +991,7 @@ void communicateWithService(std::string sData)
 		message += " ";
 	}
 	message += sData;
-	if (!pPipeClient->send(tools::widen(message)))
+	if (!p_pipe_client->send(tools::widen(message)))
 		log(L"Failed to connect to named pipe. Service may be stopped.");
 	else
 		log(tools::widen(message));
@@ -1125,7 +1004,7 @@ void log(std::wstring input)
 	struct tm timeinfo;
 	char buffer[80];
 
-	if (!bDaemonVisible)
+	if (!daemon_is_visible)
 		return;
 
 	std::time(&rawtime);
@@ -1138,64 +1017,10 @@ void log(std::wstring input)
 	logmess += input;
 	logmess += L"\r\n";
 
-	int TextLen = (int)SendMessage(GetDlgItem(hMainWnd, IDC_EDIT), WM_GETTEXTLENGTH, 0, 0);
-	SendMessage(GetDlgItem(hMainWnd, IDC_EDIT), EM_SETSEL, (WPARAM)TextLen, (LPARAM)TextLen);
-	SendMessage(GetDlgItem(hMainWnd, IDC_EDIT), EM_REPLACESEL, FALSE, (LPARAM)logmess.c_str());
+	int TextLen = (int)SendMessage(GetDlgItem(h_main_wnd, IDC_EDIT), WM_GETTEXTLENGTH, 0, 0);
+	SendMessage(GetDlgItem(h_main_wnd, IDC_EDIT), EM_SETSEL, (WPARAM)TextLen, (LPARAM)TextLen);
+	SendMessage(GetDlgItem(h_main_wnd, IDC_EDIT), EM_REPLACESEL, FALSE, (LPARAM)logmess.c_str());
 
-	return;
-}
-
-void threadVersionCheck(HWND hWnd)
-{
-	IStream* stream;
-	char buff[100];
-	std::string s;
-	unsigned long bytesRead;
-
-	if (URLOpenBlockingStream(0, VERSIONCHECKLINK, &stream, 0, 0))
-		return;// error
-
-	while (true)
-	{
-		stream->Read(buff, 100, &bytesRead);
-
-		if (0U == bytesRead)
-			break;
-		s.append(buff, bytesRead);
-	};
-
-	stream->Release();
-
-	size_t find = s.find("\"tag_name\":", 0);
-	if (find != std::string::npos)
-	{
-		size_t begin = s.find_first_of("0123456789", find);
-		if (begin != std::string::npos)
-		{
-			size_t end = s.find("\"", begin);
-			std::string lastver = s.substr(begin, end - begin);
-
-			std::vector <std::string> local_ver = tools::stringsplit(tools::narrow(APP_VERSION), ".");
-			std::vector <std::string> remote_ver = tools::stringsplit(lastver, ".");
-
-			if (local_ver.size() < 3 || remote_ver.size() < 3)
-				return;
-			int local_ver_major = atoi(local_ver[0].c_str());
-			int local_ver_minor = atoi(local_ver[1].c_str());
-			int local_ver_patch = atoi(local_ver[2].c_str());
-
-			int remote_ver_major = atoi(remote_ver[0].c_str());
-			int remote_ver_minor = atoi(remote_ver[1].c_str());
-			int remote_ver_patch = atoi(remote_ver[2].c_str());
-
-			if ((remote_ver_major > local_ver_major) ||
-				(remote_ver_major == local_ver_major) && (remote_ver_minor > local_ver_minor) ||
-				(remote_ver_major == local_ver_major) && (remote_ver_minor == local_ver_minor) && (remote_ver_patch > local_ver_patch))
-			{
-				PostMessage(hWnd, APP_NEW_VERSION, 0, 0);
-			}
-		}
-	}
 	return;
 }
 
@@ -1459,7 +1284,7 @@ static BOOL	CALLBACK	enumWindowsProc(HWND hWnd, LPARAM lParam)
 				if (SetProp(hWnd, nonRude, INVALID_HANDLE_VALUE))
 				{
 					DWORD recipients = BSM_APPLICATIONS;
-					if (BroadcastSystemMessage(BSF_POSTMESSAGE | BSF_IGNORECURRENTTASK, &recipients, shellhookMessage, HSHELL_UNDOCUMENTED_FULLSCREEN_EXIT, (LPARAM)hWnd) < 0)
+					if (BroadcastSystemMessage(BSF_POSTMESSAGE | BSF_IGNORECURRENTTASK, &recipients, custom_shellhook_message, HSHELL_UNDOCUMENTED_FULLSCREEN_EXIT, (LPARAM)hWnd) < 0)
 					{
 						log(L"BroadcastSystemMessage() failed");
 					}
@@ -1548,9 +1373,9 @@ void remoteStreamingEvent(DWORD dwType)
 		bool bConnect = Remote.bRemoteCurrentStatusSteam || Remote.bRemoteCurrentStatusNvidia || Remote.bRemoteCurrentStatusRDP || Remote.bRemoteCurrentStatusSunshine;
 
 		if (bCurrentlyConnected && !bConnect)
-			SetTimer(hMainWnd, (UINT_PTR)REMOTE_DISCONNECT, 1000, (TIMERPROC)NULL);
+			SetTimer(h_main_wnd, (UINT_PTR)REMOTE_DISCONNECT, 1000, (TIMERPROC)NULL);
 		else if (!bCurrentlyConnected && bConnect)
-			SetTimer(hMainWnd, (UINT_PTR)REMOTE_CONNECT, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
+			SetTimer(h_main_wnd, (UINT_PTR)REMOTE_CONNECT, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
 	}
 	return;
 }
@@ -1742,14 +1567,14 @@ void RawInput_AddToCache(const std::wstring& devicePath) {
 		return;
 	}
 
-	g_deviceCache[devicePath] = { hDevice, ppd, caps };
+	g_device_cache[devicePath] = { hDevice, ppd, caps };
 }
 
 void RawInput_ClearCache() {
-	for (auto it = g_deviceCache.begin(); it != g_deviceCache.end(); ++it) {
+	for (auto it = g_device_cache.begin(); it != g_device_cache.end(); ++it) {
 		HidD_FreePreparsedData(it->second.ppd);
 		CloseHandle(it->second.hDevice);
 		it->second.axis_value.clear();
 	}
-	g_deviceCache.clear();
+	g_device_cache.clear();
 }
