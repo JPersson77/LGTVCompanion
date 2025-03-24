@@ -316,11 +316,12 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		if(screensaver_active_)
 			DEBUG("Screensaver is active during DIMMED event");
 	}
-
+/*
 	//stop io_context when system is resuming when needed to purge lingering work
 	if ((event.getType() == EVENT_SYSTEM_RESUME 
 		|| event.getType() == EVENT_SYSTEM_RESUMEAUTO) 
-		&& time(0) - time_last_resume_or_boot_time > 5
+		&& time(0) - time_last_resume_or_boot_time > 7
+		&& time(0) - time_last_power_on > 7
 		&& isBusy())
 	{
 		ERR("I/O Context did not finish work during the previous system suspend.");
@@ -333,7 +334,7 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		ioc_.stop();
 		DEBUG("I/O Context purged and stopped!");
 	}
-
+*/
 	// process event for ALL devices
 	if (event.getDevices().size() == 0)
 		for (auto& session : sessions_)

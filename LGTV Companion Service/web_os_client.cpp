@@ -180,28 +180,35 @@ void WebOsClient::Impl::enqueueWork(Work& work)
 			//optimisations
 			if (unit.type_ == WORK_POWER_ON ) //&& !unit.forced_)
 			{
-				// Discard if already trying to power on
-				if(self->work_.type_ == WORK_POWER_ON)
-					return;
+				// dequeue all currently queued WORK_POWER_ON/OFF
+				self->workQueue_.remove_if([](const Work& a) {
+					return (a.type_ == WORK_POWER_OFF || a.type_ == WORK_POWER_ON); // && !a.forced_;
+					});
 
-				// dequeue all currently queued WORK_POWER_OFF
-				self->workQueue_.erase(std::remove_if(self->workQueue_.begin(), self->workQueue_.end(), [](Work a) {
-					return a.type_ == WORK_POWER_OFF; // && !a.forced_;
-					}), self->workQueue_.end());
-				// dequeue all currently queued WORK_POWER_ON
-				self->workQueue_.erase(std::remove_if(self->workQueue_.begin(), self->workQueue_.end(), [](Work a) {
-					return a.type_ == WORK_POWER_ON; // && !a.forced_;
-					}), self->workQueue_.end());
+				// Discard if already trying to power on
+				if (self->work_.type_ == WORK_POWER_ON)
+					return;
 			}
-			if (unit.type_ == WORK_REQUEST_DELAYED) //&& !unit.forced_)
+			else if (unit.type_ == WORK_POWER_OFF) //&& !unit.forced_)
+			{
+				// dequeue all currently queued WORK_POWER_ON/OFF
+				self->workQueue_.remove_if([](const Work& a) {
+					return (a.type_ == WORK_POWER_OFF || a.type_ == WORK_POWER_ON); // && !a.forced_;
+					});
+
+				// Discard if already trying to power off
+				if (self->work_.type_ == WORK_POWER_OFF)
+					return;
+			}
+			else if (unit.type_ == WORK_REQUEST_DELAYED) //&& !unit.forced_)
 			{
 				if (self->work_.type_ == WORK_REQUEST_DELAYED)
 					return;
 
 				// dequeue all currently queued WORK_REQUEST_DELAYED
-				self->workQueue_.erase(std::remove_if(self->workQueue_.begin(), self->workQueue_.end(), [](Work a) {
-					return a.type_ == WORK_REQUEST_DELAYED; // && !a.forced_;
-					}), self->workQueue_.end());
+				self->workQueue_.remove_if([](const Work& a) {
+					return (a.type_ == WORK_REQUEST_DELAYED); // && !a.forced_;
+					});
 			}
 
 			self->workQueue_.emplace_back(std::move(unit));
