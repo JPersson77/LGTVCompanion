@@ -1,61 +1,141 @@
 ﻿<!-- When publishing updated version, make sure to update "ProductCode" GUID and "Version" -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-  <Package Name="LGTV Companion" Language="1033" Version="4.4.5" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A" InstallerVersion="500" ProductCode="{10ECECE8-6E3E-4FE1-BC18-75A6B537212D}">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui" >
+  <Package Name="LGTV Companion" Language="1033" 
+           Version="4.4.4" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A" InstallerVersion="500" 
+           ProductCode="{F9D4DB79-0680-49AA-AE79-AFF783D1DAA2}">
     <SummaryInformation Description="LGTV Companion installer" />
-    <Media Id="1" Cabinet="LGTVapp.cab" EmbedCab="yes" />
-
+    <Media Id="1" Cabinet="LGTVapp.cab" EmbedCab="yes" />   
     <MajorUpgrade DowngradeErrorMessage="A newer version of LGTV Companion is already installed." />
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.ProjectDir)installerbackground.bmp"/>
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.ProjectDir)installerbanner.bmp"/>
 
-    <!--
-    This will set the WIX_NATIVE_MACHINE property, for which:
-    34404 = 0x8664 = IMAGE_FILE_MACHINE_AMD64
-    43620 = 0xAA64 = IMAGE_FILE_MACHINE_ARM64
-    -->
-    <util:QueryNativeMachine />
+    <!-- Show checkbox to launch application on the Exit-page-->
+    <SetProperty Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch LGTV Companion Configuration" After="FindRelatedProducts" Sequence="ui" Condition="NOT Installed"/>
+    <CustomAction Id="LaunchApplication" Directory="INSTALLFOLDER" ExeCommand="[INSTALLFOLDER]LGTV Companion.exe" Execute="immediate" Return="asyncNoWait" Impersonate="yes" />
+    <UI>
+      <Publish Dialog="ExitDialog"
+          Control="Finish"
+          Event="DoAction"
+          Value="LaunchApplication"
+          Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed">
+      </Publish>
+    </UI>
 
-    <?if $(sys.BUILDARCH) = "x64" ?>
-    <Launch
-      Condition="WIX_NATIVE_MACHINE = 34404"
-      Message="This application requires Windows for x64 processors." />
-    <?endif ?>
+    <!--Custom actions which are executed silently-->
+    <Property Id="InstallService" Value=" " />
+    <CustomAction Id="PropInstallService" Property="InstallService" Value="&quot;[INSTALLFOLDER]LGTVsvc.exe&quot; -install"/>
+    <CustomAction Id="InstallService" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec" Execute="deferred" Return="ignore" Impersonate="no"/>
 
-    <?if $(sys.BUILDARCH) = "arm64" ?>
-    <Launch
-      Condition="WIX_NATIVE_MACHINE = 43620"
-      Message="This application requires Windows for Arm64 processors." />
-    <?endif ?>
+    <Property Id="CreateTaskUpdaterSilent" Value=" " />
+    <CustomAction Id="PropCreateTaskUpdaterSilent" Property="CreateTaskUpdaterSilent" Value="&quot;schtasks.exe&quot; /CREATE /XML &quot;[INSTALLFOLDER]XML\LGTVCother.xml&quot; /TN &quot;LGTV Companion\LGTVC Silent Update Task&quot; /F"/>
+    <CustomAction Id="CreateTaskUpdaterSilent" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec" Execute="deferred" Return="ignore" Impersonate="no"/>
 
-    <CustomAction Id="EXECUTE_BEFORE_FINALIZE_INSTALL" Execute="deferred" Impersonate="no" Return="ignore" ExeCommand="-install" FileRef="LGTVsvcEXE" />
-    <CustomAction Id="EXECUTE_AFTER_FINALIZE" Execute="immediate" Impersonate="no" Return="asyncNoWait" ExeCommand="-firstrun" FileRef="LGTVdaemonEXE" />
+    <Property Id="UpdateTaskUpdaterSilent" Value=" " />
+    <CustomAction Id="PropUpdateTaskUpdaterSilent" Property="UpdateTaskUpdaterSilent" Value="&quot;schtasks.exe&quot; /CHANGE /TN &quot;LGTV Companion\LGTVC Silent Update Task&quot; /TR &quot;'[INSTALLFOLDER]LGTVupdater.exe' -silent&quot;"/>
+    <CustomAction Id="UpdateTaskUpdaterSilent" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec" Execute="deferred" Return="ignore" Impersonate="no"/>
+
+    <Property Id="CreateTaskDaemon" Value=" " />
+    <CustomAction Id="PropCreateTaskDaemon" Property="CreateTaskDaemon" Value="&quot;schtasks.exe&quot; /CREATE /XML &quot;[INSTALLFOLDER]XML\LGTVCdaemon.xml&quot; /TN &quot;LGTV Companion\LGTVC Run Daemon Task&quot; /F"/>
+    <CustomAction Id="CreateTaskDaemon" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec" Execute="deferred" Return="ignore" Impersonate="no"/>
+
+    <Property Id="UpdateTaskDaemon" Value=" " />
+    <CustomAction Id="PropUpdateTaskDaemon" Property="UpdateTaskDaemon" Value="&quot;schtasks.exe&quot; /CHANGE /TN &quot;LGTV Companion\LGTVC Run Daemon Task&quot; /TR &quot;'[INSTALLFOLDER]LGTVdaemon.exe' -run_hidden&quot;"/>
+    <CustomAction Id="UpdateTaskDaemon" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec" Execute="deferred" Return="ignore" Impersonate="no"/>
+
+    <Property Id="CreateTaskDaemonShown" Value=" " />
+    <CustomAction Id="PropCreateTaskDaemonShown" Property="CreateTaskDaemonShown" Value="&quot;schtasks.exe&quot; /CREATE /XML &quot;[INSTALLFOLDER]XML\LGTVCother.xml&quot; /TN &quot;LGTV Companion\LGTVC Run Daemon Visible Task&quot; /F"/>
+    <CustomAction Id="CreateTaskDaemonShown" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec" Execute="deferred" Return="check" Impersonate="no"/>
+
+    <Property Id="UpdateTaskDaemonShown" Value=" " />
+    <CustomAction Id="PropUpdateTaskDaemonShown" Property="UpdateTaskDaemonShown" Value="&quot;schtasks.exe&quot; /CHANGE /TN &quot;LGTV Companion\LGTVC Run Daemon Visible Task&quot; /TR &quot;'[INSTALLFOLDER]LGTVdaemon.exe' -run_visible&quot;"/>
+    <CustomAction Id="UpdateTaskDaemonShown" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec" Execute="deferred" Return="ignore" Impersonate="no"/>
+
+    <Property Id="RunDaemonTask" Value=" " />
+    <CustomAction Id="PropRunDaemonTask" Property="RunDaemonTask" Value="&quot;schtasks.exe&quot; /RUN /TN &quot;LGTV Companion\LGTVC Run Daemon Task&quot;"/>
+    <CustomAction Id="RunDaemonTask" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec" Execute="deferred" Return="ignore" Impersonate="no"/>
+
+    <!--Custom Actions-->
+    <CustomAction Id="StopTaskDaemon" Execute="immediate" Impersonate="yes" Return="ignore" ExeCommand="&quot;schtasks.exe&quot; /END /TN &quot;LGTV Companion\LGTVC Run Daemon Task&quot;" Directory="INSTALLFOLDER" />
+    <CustomAction Id="StopTaskDaemonVisible" Execute="immediate" Impersonate="yes" Return="ignore" ExeCommand="&quot;schtasks.exe&quot; /END /TN &quot;LGTV Companion\LGTVC Run Daemon Visible Task&quot;" Directory="INSTALLFOLDER" />
+    <CustomAction Id="StopTaskUpdater" Execute="immediate" Impersonate="yes" Return="ignore" ExeCommand="&quot;schtasks.exe&quot; /END /TN &quot;LGTV Companion\LGTVC Silent Update Task&quot;" Directory="INSTALLFOLDER" />
+
+    <CustomAction Id="DeleteTaskDaemon" Execute="deferred" Impersonate="no" Return="ignore" ExeCommand="&quot;schtasks.exe&quot; /DELETE /TN &quot;LGTV Companion\LGTVC Run Daemon Task&quot; /F" Directory="INSTALLFOLDER" />
+    <CustomAction Id="DeleteTaskDaemonVisible" Execute="deferred" Impersonate="no" Return="ignore" ExeCommand="&quot;schtasks.exe&quot; /DELETE /TN &quot;LGTV Companion\LGTVC Run Daemon Visible Task&quot; /F" Directory="INSTALLFOLDER" />
+    <CustomAction Id="DeleteTaskUpdater" Execute="deferred" Impersonate="no" Return="ignore" ExeCommand="&quot;schtasks.exe&quot; /DELETE /TN &quot;LGTV Companion\LGTVC Silent Update Task&quot; /F" Directory="INSTALLFOLDER" />
+    
+    <CustomAction Id="LaunchUpdaterFirstRun" Execute="immediate" Impersonate="no" Return="asyncNoWait" ExeCommand="-firstrun" FileRef="LGTVupdaterEXE" />
+    <CustomAction Id="CloseDaemonAndUpdater" Execute="immediate" Impersonate="no" Return="asyncNoWait" ExeCommand="-prepare_for_uninstall" FileRef="LGTVCompanionEXE" />
+
+    <!--Attempt to close (WM_CLOSE) application dialogs.-->
     <util:CloseApplication Id="StopDaemon" CloseMessage="yes" Target="LGTVdaemon.exe" RebootPrompt="no" />
+    <util:CloseApplication Id="StopUpdater" CloseMessage="yes"  Target="LGTVupdater.exe" RebootPrompt="no" />
+    <util:CloseApplication Id="StopUI"  CloseMessage="yes" Target="LGTV Companion.exe" RebootPrompt="no" />
 
+    <!--Sequence custom actions-->
     <InstallExecuteSequence>
-      <Custom Action="override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" Before="InstallValidate" />
-      <Custom Action="EXECUTE_BEFORE_FINALIZE_INSTALL" Before="InstallFinalize" Condition="NOT Installed" />
-      <Custom Action="EXECUTE_AFTER_FINALIZE" After="InstallFinalize" Condition="NOT Installed" />
+      <Custom Action="CloseDaemonAndUpdater" Before="InstallValidate" />
+      <Custom Action="override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" After="CloseDaemonAndUpdater" />
+      <Custom Action="PropInstallService" Before="InstallFinalize" Condition ="NOT Installed"/>
+      <Custom Action="InstallService" After="PropInstallService" Condition ="NOT Installed"/>
+      <Custom Action="PropCreateTaskUpdaterSilent" After="InstallFiles" Condition ="NOT Installed"/>
+      <Custom Action="CreateTaskUpdaterSilent" After="PropCreateTaskUpdaterSilent" Condition ="NOT Installed"/>
+      <Custom Action="PropUpdateTaskUpdaterSilent" After="CreateTaskUpdaterSilent" Condition ="NOT Installed"/>
+      <Custom Action="UpdateTaskUpdaterSilent" After="PropUpdateTaskUpdaterSilent" Condition ="NOT Installed"/>
+      <Custom Action="PropCreateTaskDaemon" After="UpdateTaskUpdaterSilent" Condition ="NOT Installed"/>
+      <Custom Action="CreateTaskDaemon" After="PropCreateTaskDaemon" Condition ="NOT Installed"/>
+      <Custom Action="PropUpdateTaskDaemon" After="CreateTaskDaemon" Condition ="NOT Installed"/>
+      <Custom Action="UpdateTaskDaemon" After="PropUpdateTaskDaemon" Condition ="NOT Installed"/>
+      <Custom Action="PropCreateTaskDaemonShown" After="UpdateTaskDaemon" Condition ="NOT Installed"/>
+      <Custom Action="CreateTaskDaemonShown" After="PropCreateTaskDaemonShown" Condition ="NOT Installed"/>
+      <Custom Action="PropUpdateTaskDaemonShown" After="CreateTaskDaemonShown" Condition ="NOT Installed"/>
+      <Custom Action="UpdateTaskDaemonShown" After="PropUpdateTaskDaemonShown" Condition ="NOT Installed"/>
+      <Custom Action="PropRunDaemonTask" After="InstallService" Condition="NOT Installed" />
+      <Custom Action="RunDaemonTask" After="PropRunDaemonTask" Condition="NOT Installed" />
+      <Custom Action="StopTaskDaemon" Before="InstallValidate" Condition="Installed AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="StopTaskDaemonVisible" Before="InstallValidate" Condition="Installed AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="StopTaskUpdater" Before="InstallValidate" Condition="Installed AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="DeleteTaskDaemon" After="InstallInitialize" Condition='REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE' />
+      <Custom Action="DeleteTaskDaemonVisible" After="InstallInitialize" Condition='REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE' />
+      <Custom Action="DeleteTaskUpdater" After="InstallInitialize" Condition='REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE' />
+      <Custom Action="LaunchUpdaterFirstRun" After="InstallFinalize" Condition="NOT Installed" />
     </InstallExecuteSequence>
 
+    <!--Feature is set and components are referenced-->
     <Feature Id="MainProgram" Title="LGTV Companion Setup" Level="1" ConfigurableDirectory="INSTALLFOLDER">
       <ComponentRef Id="LGTVService" />
       <ComponentRef Id="LGTVCompanionUI" />
       <ComponentRef Id="LGTVCompanionDaemon" />
       <ComponentRef Id="LGTVCompanionIcon" />
       <ComponentRef Id="LGTVcli" />
+      <ComponentRef Id="LGTVupdater" />
+      <ComponentRef Id="DaemonTaskXmlComponent"/>
+      <ComponentRef Id="OtherTaskXmlComponent"/>
+      <ComponentRef Id="ApplicationShortcut" />
       <!--<ComponentRef Id='RemoveOrphanFiles' />-->
     </Feature>
 
     <Icon Id="LGTVCompanion.exe" SourceFile="LGTV Companion.exe" />
-    <Icon Id="LGTVdaemon.exe" SourceFile="LGTVdaemon.exe" />
 
     <Property Id="ARPPRODUCTICON" Value="LGTVCompanion.exe" />
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-    <ui:WixUI Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="ProgramFiles64Folder" />
+    <ui:WixUI Id="WixUI_Minimal" />
     <Property Id="ARPNOREPAIR" Value="yes" Secure="yes" />
 
-    <StandardDirectory Id="ProgramMenuFolder" />
-    <StandardDirectory Id="StartupFolder" />
+    <!--Create shortcuts on the start menu-->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="ApplicationShortcut" Guid="{BC5AF362-1A28-4D0F-9A29-8B3E1E700411}">
+        <Shortcut Id="ApplicationStartMenuShortcut"
+                  Name="LGTV Companion"
+                  Description="Automatic Power Management for LG WebOS devices"
+                  Target="[INSTALLFOLDER]LGTV Companion.exe"
+                  WorkingDirectory="INSTALLFOLDER">
+        </Shortcut>
+        <RegistryValue Root="HKCU" Key="Software\JPersson\LGTVCompanion" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+      </Component>
+    </StandardDirectory>
 
+    <!--Declare the program folder structure and binaries and files-->
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="LGTV Companion">
         <Component Id="LGTVService" Guid="5949e7ba-212c-4cfc-8489-ee8b81daa541" Bitness="always64">
@@ -63,25 +143,33 @@
           <ServiceControl Id="StopService" Stop="both" Remove="uninstall" Name="LGTVsvc" Wait="yes" />
         </Component>
         <Component Id="LGTVCompanionUI" Guid="08090141-ca74-4529-927e-ce4b7e1d95c6" Bitness="always64">
-          <File Id="LGTVCompanionEXE" Name="LGTV Companion.exe" Source="LGTV Companion.exe" KeyPath="yes">
-            <Shortcut Id="startmenuicon" Directory="ProgramMenuFolder" Name="LGTV Companion" WorkingDirectory="INSTALLFOLDER" Icon="LGTVCompanion.exe" IconIndex="0" Advertise="yes" />
-          </File>
+          <File Id="LGTVCompanionEXE" Name="LGTV Companion.exe" Source="LGTV Companion.exe" KeyPath="yes"/>
         </Component>
         <Component Id="LGTVCompanionDaemon" Guid="3C10ADE5-5D3E-4F5A-A31F-86D29D8317A6" Bitness="always64">
           <File Id="LGTVdaemonEXE" Name="LGTVdaemon.exe" Source="LGTVdaemon.exe" KeyPath="yes" />
-          <Shortcut Id="daemonstart" Directory="StartupFolder" Name="LGTV Companion (Daemon)" Arguments="-hide" Icon="LGTVdaemon.exe" IconIndex="0" Advertise="yes" />
         </Component>
         <Component Id="LGTVcli" Guid="D7F686C9-0AC3-4ADC-8428-B41C77ACEB05" Bitness="always64">
           <File Id="LGTVcliEXE" Name="LGTVcli.exe" Source="LGTVcli.exe" KeyPath="yes" />
         </Component>
+        <Component Id="LGTVupdater" Guid="831EFA16-C42D-497E-96C8-E60A84E6D15A" Bitness="always64">
+          <File Id="LGTVupdaterEXE" Name="LGTVupdater.exe" Source="LGTVupdater.exe" KeyPath="yes" />
+        </Component>
         <Component Id="LGTVCompanionIcon" Guid="4720E7B3-AC16-41F4-B961-148D4EFFB28A" Bitness="always64">
           <File Id="mainicon" Name="mainicon.ico" Source="mainicon.ico" KeyPath="yes" />
         </Component>
+        <Directory Id="XMLDIR" Name="XML">
+          <Component Id="DaemonTaskXmlComponent" Guid="{980752EF-BDC7-475E-87DB-75604B74F904}" Bitness="always64" >
+            <File Id="DaemonTaskXmlFile" Source="$(var.ProjectDir)LGTVCdaemon.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="OtherTaskXmlComponent" Guid="{E93BC632-32F4-4B56-9DEF-BEA47F3C5B6D}" Bitness="always64" >
+            <File Id="OtherTaskXmlFile" Source="$(var.ProjectDir)LGTVCother.xml" KeyPath="yes"/>
+          </Component>
+        </Directory>
       </Directory>
     </StandardDirectory>
 
-    <!--<StandardDirectory Id="CommonAppDataFolder">
-      <Directory Id="DataDir" Name="LGTV Companion">
+    <!--StandardDirectory Id="ProgramMenuFolder">
+       <Directory Id="DataDir" Name="LGTV Companion">
         <Component Id="RemoveOrphanFiles" Guid="3B1B816B-471B-4D3B-B73B-B97802405A47" Bitness="always64">
           <RemoveFile Id='LogFile' On='uninstall' Name='Log.txt' />
           <RemoveFile Id='ConfigFile' On='uninstall' Name='Config.json' />
