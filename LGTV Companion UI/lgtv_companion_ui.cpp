@@ -74,6 +74,8 @@ COPYRIGHT
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='ia64' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #elif defined _M_X64
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='amd64' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#elif defined _M_ARM64
+#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='arm64' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #else
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #endif
@@ -104,6 +106,7 @@ COPYRIGHT
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "urlmon.lib")
 #pragma comment(lib, "Iphlpapi.lib")
+#pragma comment(lib, "Shell32.lib")
 
 #define									APPNAME_SHORT					L"LGTVcomp"
 #define									DEVICEWINDOW_TITLE_ADD          L"Add device"
@@ -133,35 +136,39 @@ COPYRIGHT
 #define									APP_LISTBOX_ADD					WM_USER+15
 #define									APP_LISTBOX_DELETE	            WM_USER+16
 #define									APP_LISTBOX_REDRAW				WM_USER+17
-#define									APP_USER_IDLE_ON                WM_USER+20
-#define									APP_USER_IDLE_OFF               WM_USER+21
+
 
 // Global Variables:
-HINSTANCE								hInstance;  // current instance
-HWND									hMainWnd = NULL;
-HWND									hDeviceWindow = NULL;
-HWND									hOptionsWindow = NULL;
-HWND									hTopologyWindow = NULL;
-HWND									hUserIdleConfWindow = NULL;
-HWND									hWhitelistConfWindow = NULL;
-HBRUSH									hBackbrush;
-HFONT									hLargeEditfont;
-HFONT									hEditfont;
-HFONT									hEditMediumfont;
-HFONT									hEditSmallfont;
-HFONT									hEditMediumBoldfont;
-HMENU									hPopupMeuMain;
-HICON									hOptionsIcon;
-HICON									hTopologyIcon;
-HICON									hCogIcon;
+HINSTANCE								h_instance;  // current instance
+HWND									h_main_wnd = NULL;
+HWND									h_device_wnd = NULL;
+HWND									h_options_wnd = NULL;
+HWND									h_topology_wnd = NULL;
+HWND									h_user_idle_mode_wnd = NULL;
+HWND									h_whitelist_wnd = NULL;
+HBRUSH									h_backbrush;
+HFONT									h_large_edit_font;
+HFONT									h_edit_font;
+HFONT									h_edit_medium_font;
+HFONT									h_edit_small_font;
+HFONT									h_edit_medium_bold_font;
+HMENU									h_popup_menu;
+HICON									h_icon_options;
+HICON									h_icon_topology;
+HICON									h_icon_cog;
 WSADATA									WSAData;
-int										iTopConfPhase;
-int										iTopConfDisplay;
-bool									ResetAPIkeys = false;
-std::vector<Preferences::ProcessList>	WhitelistTemp;
-std::vector<Preferences::ProcessList>	ExclusionsTemp;
-std::shared_ptr<IpcClient>				pPipeClient;
+int										i_top_configuration_phase;
+int										i_top_configuration_display;
+bool									reset_api_keys = false;
+std::vector<Preferences::ProcessList>	whitelist_temp;
+std::vector<Preferences::ProcessList>	exclusions_temp;
+std::shared_ptr<IpcClient>				p_pipe_client;
 std::shared_ptr<Logging>				logger;
+UINT									custom_daemon_restart_message;
+UINT									custom_daemon_idle_message;
+UINT									custom_daemon_unidle_message;
+UINT									custom_daemon_close_message;
+UINT									custom_updater_close_message;
 
 Preferences								Prefs(CONFIG_FILE);
 
@@ -181,15 +188,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 {
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(nCmdShow);
-	hInstance = Instance;
 	MSG msg;
-	std::wstring WindowTitle;
 	std::wstring CommandLineParameters;
-	WindowTitle = APPNAME;
-	WindowTitle += L" v";
-	WindowTitle += APP_VERSION;
+	h_instance = Instance;
+
+	custom_daemon_close_message = RegisterWindowMessage(CUSTOM_MESSAGE_CLOSE);
+	custom_updater_close_message = RegisterWindowMessage(CUSTOM_MESSAGE_UPD_CLOSE);
+	custom_daemon_restart_message = RegisterWindowMessage(CUSTOM_MESSAGE_RESTART);
+	custom_daemon_idle_message = RegisterWindowMessage(CUSTOM_MESSAGE_IDLE);
+	custom_daemon_unidle_message = RegisterWindowMessage(CUSTOM_MESSAGE_UNIDLE);
+
 	if (lpCmdLine)
 		CommandLineParameters = lpCmdLine;
+	if (CommandLineParameters == L"-prepare_for_uninstall")
+	{
+		prepareForUninstall();
+		return false;
+	}
 	// if commandline directed towards daemon
 	if (messageDaemon(CommandLineParameters))
 		return false;
@@ -215,84 +230,86 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	logger = std::make_shared<Logging>(0, file);
 
 	// Initiate PipeClient IPC
-	pPipeClient = std::make_shared<IpcClient>(PIPENAME, ipcCallback, (LPVOID)NULL);
+	p_pipe_client = std::make_shared<IpcClient>(PIPENAME, ipcCallback, (LPVOID)NULL);
 
 	//parse and execute command line parameters when applicable and then exit
 	if (Prefs.devices_.size() > 0 && CommandLineParameters.size() > 0)
 	{
 		int max_wait = 1000;
-		while (!pPipeClient->isRunning() && max_wait > 0)
+		while (!p_pipe_client->isRunning() && max_wait > 0)
 		{
 			Sleep(25);
 			max_wait -= 25;
 		}
 		communicateWithService(CommandLineParameters);
 		std::stringstream temp;
-		pPipeClient->terminate();
+		p_pipe_client->terminate();
 		return false;
 	}
 
-	hBackbrush = CreateSolidBrush(0x00ffffff);
-	hLargeEditfont = CreateFont(32, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
-	hEditfont = CreateFont(26, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
-	hEditMediumfont = CreateFont(22, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
-	hEditSmallfont = CreateFont(18, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
-	hEditMediumBoldfont = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
-	hPopupMeuMain = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_BUTTONMENU));
+	h_backbrush = CreateSolidBrush(0x00ffffff);
+	h_large_edit_font = CreateFont(32, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
+	h_edit_font = CreateFont(26, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
+	h_edit_medium_font = CreateFont(22, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
+	h_edit_small_font = CreateFont(18, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
+	h_edit_medium_bold_font = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
+	h_popup_menu = LoadMenu(h_instance, MAKEINTRESOURCE(IDR_BUTTONMENU));
 
 	INITCOMMONCONTROLSEX icex;           // Structure for control initialization.
 	icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
 	icex.dwICC = ICC_LISTVIEW_CLASSES | ICC_UPDOWN_CLASS | ICC_STANDARD_CLASSES | ICC_USEREX_CLASSES;
 	InitCommonControlsEx(&icex);
 
-	hOptionsIcon = (HICON)LoadImageW(hInstance, MAKEINTRESOURCE(IDI_ICON2), IMAGE_ICON, 25, 25, LR_DEFAULTCOLOR | LR_DEFAULTSIZE | LR_SHARED);
-	hTopologyIcon = (HICON)LoadImageW(hInstance, MAKEINTRESOURCE(IDI_ICON4), IMAGE_ICON, 48, 48, LR_DEFAULTCOLOR | LR_DEFAULTSIZE | LR_SHARED);
-	hCogIcon = (HICON)LoadImageW(hInstance, MAKEINTRESOURCE(IDI_ICON3), IMAGE_ICON, 25, 25, LR_DEFAULTCOLOR | LR_DEFAULTSIZE | LR_SHARED);
+	h_icon_options = (HICON)LoadImageW(h_instance, MAKEINTRESOURCE(IDI_ICON2), IMAGE_ICON, 25, 25, LR_DEFAULTCOLOR | LR_DEFAULTSIZE | LR_SHARED);
+	h_icon_topology = (HICON)LoadImageW(h_instance, MAKEINTRESOURCE(IDI_ICON4), IMAGE_ICON, 48, 48, LR_DEFAULTCOLOR | LR_DEFAULTSIZE | LR_SHARED);
+	h_icon_cog = (HICON)LoadImageW(h_instance, MAKEINTRESOURCE(IDI_ICON3), IMAGE_ICON, 25, 25, LR_DEFAULTCOLOR | LR_DEFAULTSIZE | LR_SHARED);
 
 	WSAStartup(MAKEWORD(2, 2), &WSAData);
 
 	// create main window (dialog)
-	hMainWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndMainProc);
-	SetWindowText(hMainWnd, WindowTitle.c_str());
-	ShowWindow(hMainWnd, SW_SHOW);
-	UpdateWindow(hMainWnd);
-
+	std::wstring window_title;
+	window_title = APPNAME;
+	window_title += L" v";
+	window_title += APP_VERSION;
+	h_main_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndMainProc);
+	SetWindowText(h_main_wnd, window_title.c_str());
+	ShowWindow(h_main_wnd, SW_SHOW);
+	UpdateWindow(h_main_wnd);
 	// spawn thread to check for updated version of the app.
-	if (Prefs.notify_update_)
+	if (Prefs.updater_mode_ != PREFS_UPDATER_OFF)
 	{
-		std::thread thread_obj(threadVersionCheck, hMainWnd);
+		std::thread thread_obj(threadVersionCheck, h_main_wnd);
 		thread_obj.detach();
 	}
-
 	// message loop:
 	// don't call DefWindowProc for modeless dialogs. Return true for handled messages or false otherwise
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
-		if (!IsDialogMessage(hMainWnd, &msg) &&
-			!IsDialogMessage(hDeviceWindow, &msg) &&
-			!IsDialogMessage(hOptionsWindow, &msg) &&
-			!IsDialogMessage(hTopologyWindow, &msg) &&
-			!IsDialogMessage(hUserIdleConfWindow, &msg) &&
-			!IsDialogMessage(hWhitelistConfWindow, &msg) &&
-			!IsDialogMessage(hUserIdleConfWindow, &msg))
+		if (!IsDialogMessage(h_main_wnd, &msg) &&
+			!IsDialogMessage(h_device_wnd, &msg) &&
+			!IsDialogMessage(h_options_wnd, &msg) &&
+			!IsDialogMessage(h_topology_wnd, &msg) &&
+			!IsDialogMessage(h_user_idle_mode_wnd, &msg) &&
+			!IsDialogMessage(h_whitelist_wnd, &msg) &&
+			!IsDialogMessage(h_user_idle_mode_wnd, &msg))
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
 	}
 
-	pPipeClient->terminate();
+	p_pipe_client->terminate();
 
 	//clean up
-	DeleteObject(hBackbrush);
-	DeleteObject(hEditMediumBoldfont);
-	DeleteObject(hEditfont);
-	DeleteObject(hEditMediumfont);
-	DeleteObject(hEditSmallfont);
-	DestroyMenu(hPopupMeuMain);
-	DestroyIcon(hOptionsIcon);
-	DestroyIcon(hTopologyIcon);
-	DestroyIcon(hCogIcon);
+	DeleteObject(h_backbrush);
+	DeleteObject(h_edit_medium_bold_font);
+	DeleteObject(h_edit_font);
+	DeleteObject(h_edit_medium_font);
+	DeleteObject(h_edit_small_font);
+	DestroyMenu(h_popup_menu);
+	DestroyIcon(h_icon_options);
+	DestroyIcon(h_icon_topology);
+	DestroyIcon(h_icon_cog);
 
 	WSACleanup();
 
@@ -307,13 +324,15 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	{
 	case WM_INITDIALOG:
 	{
-		SendDlgItemMessage(hWnd, IDC_COMBO, WM_SETFONT, (WPARAM)hLargeEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_CHECK_ENABLE, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_NEWVERSION, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_DONATE, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_SPLIT, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDOK, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_OPTIONS, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
+
+		SendDlgItemMessage(hWnd, IDC_COMBO, WM_SETFONT, (WPARAM)h_large_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_CHECK_ENABLE, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_NEWVERSION, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_DONATE, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_SPLIT, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDOK, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_OPTIONS, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)-1, (LPARAM)0);
@@ -337,7 +356,8 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			EnableWindow(GetDlgItem(hWnd, IDC_COMBO), false);
 			SetDlgItemText(hWnd, IDC_SPLIT, L"&Scan");
 		}
-		SendMessageW(GetDlgItem(hWnd, IDC_OPTIONS), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hOptionsIcon);
+		SendMessageW(GetDlgItem(hWnd, IDC_OPTIONS), BM_SETIMAGE, IMAGE_ICON, (LPARAM)h_icon_options);
+		SetForegroundWindow(hWnd);
 	}break;
 	case APP_NEW_VERSION:
 	{
@@ -345,32 +365,32 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	}break;
 	case APP_MESSAGE_ADD:
 	{
-		hDeviceWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEVICE), hWnd, (DLGPROC)WndDeviceProc);
-		SetWindowText(hDeviceWindow, DEVICEWINDOW_TITLE_ADD);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDOK), L"&Add");
-		CheckDlgButton(hDeviceWindow, IDC_RADIO2, BST_CHECKED);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), false);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SUBNET), tools::widen(WOL_DEFAULT_SUBNET).c_str());
+		h_device_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_DEVICE), hWnd, (DLGPROC)WndDeviceProc);
+		SetWindowText(h_device_wnd, DEVICEWINDOW_TITLE_ADD);
+		SetWindowText(GetDlgItem(h_device_wnd, IDOK), L"&Add");
+		CheckDlgButton(h_device_wnd, IDC_RADIO2, BST_CHECKED);
+		EnableWindow(GetDlgItem(h_device_wnd, IDC_SUBNET), false);
+		SetWindowText(GetDlgItem(h_device_wnd, IDC_SUBNET), tools::widen(WOL_DEFAULT_SUBNET).c_str());
 
-		CheckDlgButton(hDeviceWindow, IDC_CHECK_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
+		CheckDlgButton(h_device_wnd, IDC_CHECK_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
 
-		CheckDlgButton(hDeviceWindow, IDC_SET_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_DELAY), false);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_DELAY), L"1");
-		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_PERSISTENCE), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
-		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_WOL), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
-		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
-		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SOURCE), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+		CheckDlgButton(h_device_wnd, IDC_SET_HDMI_INPUT_CHECKBOX, BST_UNCHECKED);
+		EnableWindow(GetDlgItem(h_device_wnd, IDC_SET_HDMI_DELAY), false);
+		SetWindowText(GetDlgItem(h_device_wnd, IDC_SET_HDMI_DELAY), L"1");
+		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_PERSISTENCE), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_WOL), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_SSL), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_SOURCE), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_RADIO1), false);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_RADIO2), false);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_RADIO3), false);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), false);
+		EnableWindow(GetDlgItem(h_device_wnd, IDC_RADIO1), false);
+		EnableWindow(GetDlgItem(h_device_wnd, IDC_RADIO2), false);
+		EnableWindow(GetDlgItem(h_device_wnd, IDC_RADIO3), false);
+		EnableWindow(GetDlgItem(h_device_wnd, IDC_SUBNET), false);
 
-		EnableWindow(GetDlgItem(hDeviceWindow, IDOK), false);
+		EnableWindow(GetDlgItem(h_device_wnd, IDOK), false);
 
 		EnableWindow(hWnd, false);
-		ShowWindow(hDeviceWindow, SW_SHOW);
+		ShowWindow(h_device_wnd, SW_SHOW);
 	}break;
 	case APP_MESSAGE_MANAGE:
 	{
@@ -378,20 +398,20 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		if (sel == CB_ERR)
 			break;
 
-		hDeviceWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DEVICE), hWnd, (DLGPROC)WndDeviceProc);
-		SetWindowText(hDeviceWindow, DEVICEWINDOW_TITLE_MANAGE);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDOK), L"&Save");
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_DEVICENAME), tools::widen(Prefs.devices_[sel].name).c_str());
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_DEVICEIP), tools::widen(Prefs.devices_[sel].ip).c_str());
+		h_device_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_DEVICE), hWnd, (DLGPROC)WndDeviceProc);
+		SetWindowText(h_device_wnd, DEVICEWINDOW_TITLE_MANAGE);
+		SetWindowText(GetDlgItem(h_device_wnd, IDOK), L"&Save");
+		SetWindowText(GetDlgItem(h_device_wnd, IDC_DEVICENAME), tools::widen(Prefs.devices_[sel].name).c_str());
+		SetWindowText(GetDlgItem(h_device_wnd, IDC_DEVICEIP), tools::widen(Prefs.devices_[sel].ip).c_str());
 
-		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SOURCE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.devices_[sel].sourceHdmiInput -1, (LPARAM)0);
+		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_SOURCE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.devices_[sel].sourceHdmiInput -1, (LPARAM)0);
 
-		CheckDlgButton(hDeviceWindow, IDC_CHECK_HDMI_INPUT_CHECKBOX, Prefs.devices_[sel].check_hdmi_input_when_power_off);
+		CheckDlgButton(h_device_wnd, IDC_CHECK_HDMI_INPUT_CHECKBOX, Prefs.devices_[sel].check_hdmi_input_when_power_off);
 	
-		CheckDlgButton(hDeviceWindow, IDC_SET_HDMI_INPUT_CHECKBOX, Prefs.devices_[sel].set_hdmi_input_on_power_on);
-		EnableWindow(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_DELAY), Prefs.devices_[sel].set_hdmi_input_on_power_on ? true : false);
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SET_HDMI_DELAY), tools::widen(std::to_string(Prefs.devices_[sel].set_hdmi_input_on_power_on_delay)).c_str());
-		SendDlgItemMessage(hDeviceWindow, IDC_SET_HDMI_DELAY_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.devices_[sel].set_hdmi_input_on_power_on_delay);
+		CheckDlgButton(h_device_wnd, IDC_SET_HDMI_INPUT_CHECKBOX, Prefs.devices_[sel].set_hdmi_input_on_power_on);
+		EnableWindow(GetDlgItem(h_device_wnd, IDC_SET_HDMI_DELAY), Prefs.devices_[sel].set_hdmi_input_on_power_on ? true : false);
+		SetWindowText(GetDlgItem(h_device_wnd, IDC_SET_HDMI_DELAY), tools::widen(std::to_string(Prefs.devices_[sel].set_hdmi_input_on_power_on_delay)).c_str());
+		SendDlgItemMessage(h_device_wnd, IDC_SET_HDMI_DELAY_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.devices_[sel].set_hdmi_input_on_power_on_delay);
 
 		str = L"";
 		for (const auto& item : Prefs.devices_[sel].mac_addresses)
@@ -400,42 +420,42 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			if (item != Prefs.devices_[sel].mac_addresses.back())
 				str += L"\r\n";
 		}
-		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_PERSISTENCE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.devices_[sel].persistent_connection_level, (LPARAM)0);
-		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_SSL), (UINT)CB_SETCURSEL, (WPARAM)Prefs.devices_[sel].ssl ? 0 : 1, (LPARAM)0);
-		SendMessage(GetDlgItem(hDeviceWindow, IDC_COMBO_WOL), (UINT)CB_SETCURSEL, (WPARAM)Prefs.devices_[sel].wake_method == WOL_TYPE_AUTO ? 0 : 1, (LPARAM)0);
+		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_PERSISTENCE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.devices_[sel].persistent_connection_level, (LPARAM)0);
+		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_SSL), (UINT)CB_SETCURSEL, (WPARAM)Prefs.devices_[sel].ssl ? 0 : 1, (LPARAM)0);
+		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_WOL), (UINT)CB_SETCURSEL, (WPARAM)Prefs.devices_[sel].wake_method == WOL_TYPE_AUTO ? 0 : 1, (LPARAM)0);
 
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_DEVICEMACS), str.c_str());
-		EnableWindow(GetDlgItem(hDeviceWindow, IDOK), false);
+		SetWindowText(GetDlgItem(h_device_wnd, IDC_DEVICEMACS), str.c_str());
+		EnableWindow(GetDlgItem(h_device_wnd, IDOK), false);
 
 		switch (Prefs.devices_[sel].wake_method)
 		{
 		case WOL_TYPE_NETWORKBROADCAST:
 		{
-			CheckDlgButton(hDeviceWindow, IDC_RADIO1, BST_CHECKED);
-			EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), false);
+			CheckDlgButton(h_device_wnd, IDC_RADIO1, BST_CHECKED);
+			EnableWindow(GetDlgItem(h_device_wnd, IDC_SUBNET), false);
 		}break;
 		case WOL_TYPE_IP:
 		{
-			CheckDlgButton(hDeviceWindow, IDC_RADIO2, BST_CHECKED);
-			EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), false);
+			CheckDlgButton(h_device_wnd, IDC_RADIO2, BST_CHECKED);
+			EnableWindow(GetDlgItem(h_device_wnd, IDC_SUBNET), false);
 		}break;
 		case WOL_TYPE_SUBNETBROADCAST:
 		{
-			CheckDlgButton(hDeviceWindow, IDC_RADIO3, BST_CHECKED);
-			EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), true);
+			CheckDlgButton(h_device_wnd, IDC_RADIO3, BST_CHECKED);
+			EnableWindow(GetDlgItem(h_device_wnd, IDC_SUBNET), true);
 		}break;
 		default:
 		{
-			EnableWindow(GetDlgItem(hDeviceWindow, IDC_RADIO1), false);
-			EnableWindow(GetDlgItem(hDeviceWindow, IDC_RADIO2), false);
-			EnableWindow(GetDlgItem(hDeviceWindow, IDC_RADIO3), false);
-			EnableWindow(GetDlgItem(hDeviceWindow, IDC_SUBNET), false);
+			EnableWindow(GetDlgItem(h_device_wnd, IDC_RADIO1), false);
+			EnableWindow(GetDlgItem(h_device_wnd, IDC_RADIO2), false);
+			EnableWindow(GetDlgItem(h_device_wnd, IDC_RADIO3), false);
+			EnableWindow(GetDlgItem(h_device_wnd, IDC_SUBNET), false);
 		}break;
 		}
-		SetWindowText(GetDlgItem(hDeviceWindow, IDC_SUBNET), tools::widen(Prefs.devices_[sel].subnet).c_str());
-		EnableWindow(GetDlgItem(hDeviceWindow, IDOK), false);
+		SetWindowText(GetDlgItem(h_device_wnd, IDC_SUBNET), tools::widen(Prefs.devices_[sel].subnet).c_str());
+		EnableWindow(GetDlgItem(h_device_wnd, IDOK), false);
 		EnableWindow(hWnd, false);
-		ShowWindow(hDeviceWindow, SW_SHOW);
+		ShowWindow(h_device_wnd, SW_SHOW);
 	}break;
 	case APP_MESSAGE_SCAN:
 	{
@@ -678,17 +698,31 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				MessageBox(hWnd, L"The LGTV Companion service is not installed. Please reinstall the application", L"Error", MB_OK | MB_ICONEXCLAMATION);
 			CloseServiceHandle(serviceDbHandle);
 		}
+
 		//restart the daemon
-		TCHAR buffer[MAX_PATH] = { 0 };
-		GetModuleFileName(NULL, buffer, MAX_PATH);
-		std::wstring path = buffer;
-		std::wstring exe;
-		std::wstring::size_type pos = path.find_last_of(L"\\/");
-		path = path.substr(0, pos + 1);
-		exe = path;
-		exe += L"LGTVdaemon.exe";
-		ShellExecute(NULL, L"open", exe.c_str(), L"-hide", path.c_str(), SW_SHOWNORMAL);
-		pPipeClient->init();
+		std::wstring window_title;
+		window_title = APPNAME;
+		window_title += L" Daemon v";
+		window_title += APP_VERSION;
+		std::wstring sWinSearch = window_title;
+		HWND daemon_hWnd = FindWindow(NULL, sWinSearch.c_str());
+		if (daemon_hWnd)
+		{
+			PostMessage(daemon_hWnd, custom_daemon_restart_message, NULL, NULL);
+		}
+		else
+		{
+			TCHAR buffer[MAX_PATH] = { 0 };
+			GetModuleFileName(NULL, buffer, MAX_PATH);
+			std::wstring path = buffer;
+			std::wstring exe;
+			std::wstring::size_type pos = path.find_last_of(L"\\/");
+			path = path.substr(0, pos + 1);
+			exe = path;
+			exe += L"LGTVdaemon.exe";
+			ShellExecute(NULL, L"open", exe.c_str(), L"-restart", path.c_str(), SW_HIDE);
+		}
+		p_pipe_client->init();
 		EnableWindow(hWnd, true);
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
 	}break;
@@ -711,7 +745,6 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			case IDOK:
 			{
 				EnableWindow(hWnd, false);
-				//EnableWindow(GetDlgItem(hWnd, IDOK), false);
 				PostMessage(hWnd, APP_MESSAGE_APPLY, (WPARAM)NULL, NULL);
 			}break;
 			case IDC_TEST:
@@ -732,10 +765,10 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			}break;
 			case IDC_OPTIONS:
 			{
-				hOptionsWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_OPTIONS), hWnd, (DLGPROC)WndOptionsProc);
-				SetWindowText(hOptionsWindow, L"Global settings");
+				h_options_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_OPTIONS), hWnd, (DLGPROC)WndOptionsProc);
+				SetWindowText(h_options_wnd, L"Global settings");
 				EnableWindow(hWnd, false);
-				ShowWindow(hOptionsWindow, SW_SHOW);
+				ShowWindow(h_options_wnd, SW_SHOW);
 			}break;
 			default:break;
 			}
@@ -766,7 +799,14 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			//download new version
 			if (wParam == IDC_NEWVERSION)
 			{
-				ShellExecute(0, 0, NEWRELEASELINK, 0, 0, SW_SHOW);
+				TCHAR buffer[MAX_PATH] = { 0 };
+				GetModuleFileName(NULL, buffer, MAX_PATH);
+				std::wstring path = buffer;
+				std::wstring::size_type pos = path.find_last_of(L"\\/");
+				path = path.substr(0, pos + 1);
+				std::wstring exe = path;
+				exe += L"LGTVupdater.exe";
+				ShellExecute(NULL, L"open", exe.c_str(), NULL, path.c_str(), SW_SHOW);
 			}
 			//care to support your coder
 			if (wParam == IDC_DONATE)
@@ -799,20 +839,20 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				else
 					mi.fState = MFS_DISABLED;
 
-				SetMenuItemInfo(hPopupMeuMain, ID_M_MANAGE, false, &mi);
-				SetMenuItemInfo(hPopupMeuMain, ID_M_REMOVE, false, &mi);
-				SetMenuItemInfo(hPopupMeuMain, ID_M_REMOVEALL, false, &mi);
+				SetMenuItemInfo(h_popup_menu, ID_M_MANAGE, false, &mi);
+				SetMenuItemInfo(h_popup_menu, ID_M_REMOVE, false, &mi);
+				SetMenuItemInfo(h_popup_menu, ID_M_REMOVEALL, false, &mi);
 
 				if (Prefs.devices_.size() > 0 && !IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
 					mi.fState = MFS_ENABLED;
 				else
 					mi.fState = MFS_DISABLED;
 
-				SetMenuItemInfo(hPopupMeuMain, ID_M_TEST, false, &mi);
-				SetMenuItemInfo(hPopupMeuMain, ID_M_TURNON, false, &mi);
-				SetMenuItemInfo(hPopupMeuMain, ID_M_TURNOFF, false, &mi);
+				SetMenuItemInfo(h_popup_menu, ID_M_TEST, false, &mi);
+				SetMenuItemInfo(h_popup_menu, ID_M_TURNON, false, &mi);
+				SetMenuItemInfo(h_popup_menu, ID_M_TURNOFF, false, &mi);
 
-				switch (TrackPopupMenu(GetSubMenu(hPopupMeuMain, 0), TPM_TOPALIGN | TPM_RIGHTALIGN | TPM_RETURNCMD, pt.x, pt.y, 0, hWnd, NULL))
+				switch (TrackPopupMenu(GetSubMenu(h_popup_menu, 0), TPM_TOPALIGN | TPM_RIGHTALIGN | TPM_RETURNCMD, pt.x, pt.y, 0, hWnd, NULL))
 				{
 				case ID_M_REMOVE:
 				{
@@ -910,7 +950,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		{
 			SetBkMode(hdcStatic, TRANSPARENT);
 		}
-		return(INT_PTR)hBackbrush;
+		return(INT_PTR)h_backbrush;
 	}break;
 	case WM_COPYDATA:
 	{
@@ -951,7 +991,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		int savedDC = SaveDC(backbuffDC);
 		SelectObject(backbuffDC, backbuffer);
 
-		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+		FillRect(backbuffDC, &rc, (HBRUSH)h_backbrush);
 //		DrawIcon(backbuffDC, 0, 0, hCogIcon);
 		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
 		RestoreDC(backbuffDC, savedDC);
@@ -998,16 +1038,17 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 	{
 	case WM_INITDIALOG:
 	{
-		SendDlgItemMessage(hWnd, IDC_DEVICENAME, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_DEVICEIP, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_SET_HDMI_DELAY, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
+		SendDlgItemMessage(hWnd, IDC_DEVICENAME, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_DEVICEIP, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_SET_HDMI_DELAY, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SET_HDMI_DELAY_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(30, 0));
-		SendDlgItemMessage(hWnd, IDC_DEVICEMACS, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_SUBNET, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_COMBO_PERSISTENCE, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_COMBO_SSL, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_COMBO_WOL, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_COMBO_SOURCE, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_DEVICEMACS, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_SUBNET, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_PERSISTENCE, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_SSL, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_WOL, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_SOURCE, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		std::wstring s;
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_WOL), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
 		s = L"Automatic";
@@ -1366,7 +1407,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		{
 			SetBkMode(hdcStatic, TRANSPARENT);
 		}
-		return(INT_PTR)hBackbrush;
+		return(INT_PTR)h_backbrush;
 	}break;
 
 	case WM_PAINT:
@@ -1386,7 +1427,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		int savedDC = SaveDC(backbuffDC);
 		SelectObject(backbuffDC, backbuffer);
 
-		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+		FillRect(backbuffDC, &rc, (HBRUSH)h_backbrush);
 
 		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
 		RestoreDC(backbuffDC, savedDC);
@@ -1409,7 +1450,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 	}break;
 	case WM_DESTROY:
 	{
-		hDeviceWindow = NULL;
+		h_device_wnd = NULL;
 	}break;
 	default:
 		return false;
@@ -1424,6 +1465,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	{
 	case WM_INITDIALOG:
 	{
+		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
 		LVCOLUMN lvC;
 		LVITEM lvi;
 		DWORD status = ERROR_SUCCESS;
@@ -1432,13 +1474,14 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		std::wstring query = L"Event/System[EventID=1074]";
 		std::vector<std::wstring> str;
 
-		SendDlgItemMessage(hWnd, IDC_STATIC_C, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_COMBO_MODE, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_COMBO_LOG, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_C, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_MODE, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_LOG, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_UPDATE, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 
-		SendDlgItemMessage(hWnd, IDC_TIMEOUT, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_COMBO_TIMING, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_TIMEOUT, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_TIMING, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		std::wstring s;
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
 		s = L"Default";
@@ -1448,6 +1491,14 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		s = L"Delayed";
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_SETCURSEL, (WPARAM)Prefs.shutdown_timing_, (LPARAM)0);
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		s = L"Off";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		s = L"Notify Only";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		s = L"Silent Install";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.updater_mode_, (LPARAM)0);
 
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
 		s = L"Off";
@@ -1563,7 +1614,6 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			ListView_SetItemText(GetDlgItem(hWnd, IDC_LIST), row, 0, (LPWSTR)s.c_str());
 			EnableWindow(GetDlgItem(hWnd, IDC_LIST), false);
 		}
-		CheckDlgButton(hWnd, IDC_AUTOUPDATE, Prefs.notify_update_ ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_BLANK, Prefs.user_idle_mode_ ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_REMOTE, Prefs.remote_streaming_host_support_ ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, Prefs.topology_support_ ? BST_CHECKED : BST_UNCHECKED);
@@ -1592,7 +1642,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			{
 			case IDC_CHECK_BLANK:
 			{
-				if (Prefs.version_loaded_ < 2 && !ResetAPIkeys)
+				if (Prefs.version_loaded_ < 2 && !reset_api_keys)
 				{
 					int mess = MessageBox(hWnd, L"Enabling this option will enforce re-pairing of all your devices.\n\n Do you want to enable this option?", L"Device pairing", MB_YESNO | MB_ICONQUESTION);
 					if (mess == IDNO)
@@ -1603,7 +1653,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					{
 						CheckDlgButton(hWnd, IDC_CHECK_BLANK, BST_CHECKED);
 						Prefs.resetSessionKeys(true);
-						ResetAPIkeys = true;
+						reset_api_keys = true;
 						EnableWindow(GetDlgItem(hWnd, IDOK), true);
 					}
 				}
@@ -1614,7 +1664,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			}break;
 			case IDC_CHECK_TOPOLOGY:
 			{
-				if (Prefs.version_loaded_ < 2 && !ResetAPIkeys)
+				if (Prefs.version_loaded_ < 2 && !reset_api_keys)
 				{
 					int mess = MessageBox(hWnd, L"Enabling this option will enforce re-pairing of all your devices.\n\n Do you want to enable this option?", L"Device pairing", MB_YESNO | MB_ICONQUESTION);
 					if (mess == IDNO)
@@ -1625,7 +1675,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					{
 						CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, BST_CHECKED);
 						Prefs.resetSessionKeys(true);
-						ResetAPIkeys = true;
+						reset_api_keys = true;
 						EnableWindow(GetDlgItem(hWnd, IDOK), true);
 					}
 				}
@@ -1651,9 +1701,9 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 						}
 						else
 						{
-							hTopologyWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)WndTopologyProc);
+							h_topology_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)WndTopologyProc);
 							EnableWindow(hWnd, false);
-							ShowWindow(hTopologyWindow, SW_SHOW);
+							ShowWindow(h_topology_wnd, SW_SHOW);
 						}
 					}
 				}
@@ -1679,13 +1729,13 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					int sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 					Prefs.log_level_ = sel;
 
-					bool TempAutoUpdate = IsDlgButtonChecked(hWnd, IDC_AUTOUPDATE);
-					if (TempAutoUpdate && !Prefs.notify_update_)
+					int temp_updater_mode = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+					if (temp_updater_mode != PREFS_UPDATER_OFF && Prefs.updater_mode_ == PREFS_UPDATER_OFF)
 					{
-						std::thread thread_obj(threadVersionCheck, hMainWnd);
+						std::thread thread_obj(threadVersionCheck, h_main_wnd);
 						thread_obj.detach();
 					}
-					Prefs.notify_update_ = IsDlgButtonChecked(hWnd, IDC_AUTOUPDATE);
+					Prefs.updater_mode_ = temp_updater_mode;
 					Prefs.user_idle_mode_ = IsDlgButtonChecked(hWnd, IDC_CHECK_BLANK) == BST_CHECKED;
 					Prefs.remote_streaming_host_support_ = IsDlgButtonChecked(hWnd, IDC_CHECK_REMOTE) == BST_CHECKED;
 					Prefs.topology_support_ = IsDlgButtonChecked(hWnd, IDC_CHECK_TOPOLOGY) == BST_CHECKED;
@@ -1735,7 +1785,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 			case IDCANCEL:
 			{
-				ResetAPIkeys = false;
+				reset_api_keys = false;
 				Prefs.resetSessionKeys(false);
 
 				EndDialog(hWnd, 0);
@@ -1840,7 +1890,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"Please consider increasing this value if your PC needs more time to establish contact with the WebOS-devices during system boot.\n\n"
 					"The option to enable logging is very useful for troubleshooting issues. If you are experiencing issues with the operations of this app please configure the "
 					"log level to \"Debug\" to properly capture any issues.\n\n"
-					"The option to automatically notify when a new version is available ensure that you are always notified when a new version of LGTV Companion is available for download.",
+					"The option to automatically notify of-, or silently install, new versions of the application ensure that LGTV Companion is up-to-date.",
 					L"Global options", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the power saving options
@@ -1890,6 +1940,18 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				}
 				
 			}
+			else if (wParam == IDC_SYSLINK12)
+			{
+
+				TCHAR buffer[MAX_PATH] = { 0 };
+				GetModuleFileName(NULL, buffer, MAX_PATH);
+				std::wstring path = buffer;
+				std::wstring::size_type pos = path.find_last_of(L"\\/");
+				path = path.substr(0, pos + 1);
+				std::wstring exe = path;
+				exe += L"LGTVupdater.exe";
+				ShellExecute(NULL, L"open", exe.c_str(), NULL, path.c_str(), SW_SHOW);
+			}
 			else if (wParam == IDC_SYSLINK_CONF)
 			{
 				if (Prefs.devices_.size() == 0)
@@ -1899,16 +1961,16 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				}
 				else
 				{
-					hTopologyWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)WndTopologyProc);
+					h_topology_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_CONFIGURE_TOPOLOGY), hWnd, (DLGPROC)WndTopologyProc);
 					EnableWindow(hWnd, false);
-					ShowWindow(hTopologyWindow, SW_SHOW);
+					ShowWindow(h_topology_wnd, SW_SHOW);
 				}
 			}
 			else if (wParam == IDC_SYSLINK_CONF2)
 			{
-				hUserIdleConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_ADVANCEDIDLE), hWnd, (DLGPROC)WndUserIdleProc);
+				h_user_idle_mode_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_ADVANCEDIDLE), hWnd, (DLGPROC)WndUserIdleProc);
 				EnableWindow(hWnd, false);
-				ShowWindow(hUserIdleConfWindow, SW_SHOW);
+				ShowWindow(h_user_idle_mode_wnd, SW_SHOW);
 			}
 		}break;
 		case LVN_ITEMCHANGED:
@@ -1942,7 +2004,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		{
 			SetBkMode(hdcStatic, TRANSPARENT);
 		}
-		return(INT_PTR)hBackbrush;
+		return(INT_PTR)h_backbrush;
 	}break;
 
 	case WM_PAINT:
@@ -1962,7 +2024,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		int savedDC = SaveDC(backbuffDC);
 		SelectObject(backbuffDC, backbuffer);
 
-		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+		FillRect(backbuffDC, &rc, (HBRUSH)h_backbrush);
 
 		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
 		RestoreDC(backbuffDC, savedDC);
@@ -1985,7 +2047,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	}break;
 	case WM_DESTROY:
 	{
-		hOptionsWindow = NULL;
+		h_options_wnd = NULL;
 	}	break;
 	default:
 		return false;
@@ -2000,22 +2062,23 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	{
 	case WM_INITDIALOG:
 	{
-		SendDlgItemMessage(hWnd, IDC_COMBO, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_1, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_2, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_3, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_4, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_5, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_NO_6, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
+		SendDlgItemMessage(hWnd, IDC_COMBO, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_1, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_2, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_3, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_4, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_5, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_NO_6, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
 
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_11, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_12, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_13, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_14, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_15, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_T_16, WM_SETFONT, (WPARAM)hEditSmallfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_STATUS_1, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_STATIC_STATUS_2, WM_SETFONT, (WPARAM)hEditMediumBoldfont, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_11, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_12, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_13, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_14, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_15, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_T_16, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_STATUS_1, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_STATIC_STATUS_2, WM_SETFONT, (WPARAM)h_edit_medium_bold_font, MAKELPARAM(TRUE, 0));
 		SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"Not configured!");
 		for (auto& k : Prefs.devices_)
 		{
@@ -2039,7 +2102,7 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 		}
 		SendMessage(hWnd, APP_TOP_PHASE_1, NULL, NULL);
-		iTopConfDisplay = 0;
+		i_top_configuration_display = 0;
 	}break;
 	case APP_TOP_PHASE_1:
 	{
@@ -2057,7 +2120,7 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_NO_6), false);
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_T_16), false);
 		SetWindowText(GetDlgItem(hWnd, IDOK), L"&Start");
-		iTopConfPhase = 1;
+		i_top_configuration_phase = 1;
 	}break;
 	case APP_TOP_PHASE_2:
 	{
@@ -2076,7 +2139,7 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_T_16), false);
 		SetWindowText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2), L"Updating configuration!");
 		SetWindowText(GetDlgItem(hWnd, IDOK), L"&Next");
-		iTopConfPhase = 2;
+		i_top_configuration_phase = 2;
 	}break;
 	case APP_TOP_PHASE_3:
 	{
@@ -2094,7 +2157,7 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_NO_6), true);
 		EnableWindow(GetDlgItem(hWnd, IDC_STATIC_T_16), true);
 		SetWindowText(GetDlgItem(hWnd, IDOK), L"&Finish");
-		iTopConfPhase = 3;
+		i_top_configuration_phase = 3;
 		for (auto& k : Prefs.devices_)
 		{
 			if (k.uniqueDeviceKeyTemporary != "")
@@ -2106,12 +2169,12 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	case APP_TOP_NEXT_DISPLAY:
 	{
 		std::vector<DisplayInfo> displays = queryDisplays();
-		if (displays.size() > iTopConfDisplay)
+		if (displays.size() > i_top_configuration_display)
 		{
 			RECT DialogRect;
 			RECT DisplayRect;
 			GetWindowRect(hWnd, &DialogRect);
-			DisplayRect = displays[iTopConfDisplay].monitorinfo.rcWork;
+			DisplayRect = displays[i_top_configuration_display].monitorinfo.rcWork;
 
 			int x = DisplayRect.left + (DisplayRect.right - DisplayRect.left) / 2 - (DialogRect.right - DialogRect.left) / 2;
 			int y = DisplayRect.top + (DisplayRect.bottom - DisplayRect.top) / 2 - (DialogRect.bottom - DialogRect.top) / 2;
@@ -2131,7 +2194,7 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			{
 			case IDOK:
 			{
-				switch (iTopConfPhase) // three phases - intro, match displays, finalise
+				switch (i_top_configuration_phase) // three phases - intro, match displays, finalise
 				{
 				case 1:
 				{
@@ -2162,10 +2225,10 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					int sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 					if (sel == CB_ERR || Prefs.devices_.size() <= sel)
 						break;
-					Prefs.devices_[sel].uniqueDeviceKeyTemporary = tools::narrow(displays[iTopConfDisplay].target.monitorDevicePath);
+					Prefs.devices_[sel].uniqueDeviceKeyTemporary = tools::narrow(displays[i_top_configuration_display].target.monitorDevicePath);
 
-					iTopConfDisplay++;
-					if (iTopConfDisplay >= displays.size()) // all displays iterated
+					i_top_configuration_display++;
+					if (i_top_configuration_display >= displays.size()) // all displays iterated
 					{
 						SendMessage(hWnd, APP_TOP_PHASE_3, NULL, NULL);
 					}
@@ -2250,7 +2313,7 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		else
 			SetTextColor(hdcStatic, COLORREF(COLOR_STATIC));
 
-		return(INT_PTR)hBackbrush;
+		return(INT_PTR)h_backbrush;
 	}break;
 
 	case WM_PAINT:
@@ -2270,7 +2333,7 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		int savedDC = SaveDC(backbuffDC);
 		SelectObject(backbuffDC, backbuffer);
 
-		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+		FillRect(backbuffDC, &rc, (HBRUSH)h_backbrush);
 
 		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
 		RestoreDC(backbuffDC, savedDC);
@@ -2294,7 +2357,7 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	}break;
 	case  WM_DESTROY:
 	{
-		hTopologyWindow = NULL;
+		h_topology_wnd = NULL;
 	}break;
 	default:
 		return false;
@@ -2309,14 +2372,15 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	{
 	case WM_INITDIALOG:
 	{
-		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_LIST2, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_EDIT_TIME, WM_SETFONT, (WPARAM)hEditMediumfont, MAKELPARAM(TRUE, 0));
+		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
+		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_LIST2, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_EDIT_TIME, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(240, 1));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.user_idle_mode_delay_);
 
-		WhitelistTemp = Prefs.user_idle_mode_whitelist_processes_;
-		ExclusionsTemp = Prefs.user_idle_mode_exclude_fullscreen_whitelist_processes_;
+		whitelist_temp = Prefs.user_idle_mode_whitelist_processes_;
+		exclusions_temp = Prefs.user_idle_mode_exclude_fullscreen_whitelist_processes_;
 		SendMessage(hWnd, APP_LISTBOX_REDRAW, 1, 0);
 		SendMessage(hWnd, APP_LISTBOX_REDRAW, 2, 0);
 
@@ -2348,15 +2412,15 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			if (index != LB_ERR)
 			{
 				int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETITEMDATA, index, 0);
-				if (data != LB_ERR && data < WhitelistTemp.size())
+				if (data != LB_ERR && data < whitelist_temp.size())
 				{
-					hWhitelistConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
-					SetWindowText(hWhitelistConfWindow, L"Edit whitelisted process");
-					SetWindowText(GetDlgItem(hWhitelistConfWindow, IDOK), L"Change");
-					SetWindowText(GetDlgItem(hWhitelistConfWindow, IDC_EDIT_NAME), WhitelistTemp[data].friendly_name.c_str());
-					SetWindowText(GetDlgItem(hWhitelistConfWindow, IDC_EDIT_PROCESS), WhitelistTemp[data].binary.c_str());
+					h_whitelist_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
+					SetWindowText(h_whitelist_wnd, L"Edit whitelisted process");
+					SetWindowText(GetDlgItem(h_whitelist_wnd, IDOK), L"Change");
+					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_NAME), whitelist_temp[data].friendly_name.c_str());
+					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_PROCESS), whitelist_temp[data].binary.c_str());
 					EnableWindow(hWnd, false);
-					ShowWindow(hWhitelistConfWindow, SW_SHOW);
+					ShowWindow(h_whitelist_wnd, SW_SHOW);
 				}
 			}
 		}break;
@@ -2366,15 +2430,15 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			if (index != LB_ERR)
 			{
 				int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_GETITEMDATA, index, 0);
-				if (data != LB_ERR && data < ExclusionsTemp.size())
+				if (data != LB_ERR && data < exclusions_temp.size())
 				{
-					hWhitelistConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
-					SetWindowText(hWhitelistConfWindow, L"Edit fullscreen exclusion process");
-					SetWindowText(GetDlgItem(hWhitelistConfWindow, IDOK), L"Change");
-					SetWindowText(GetDlgItem(hWhitelistConfWindow, IDC_EDIT_NAME), ExclusionsTemp[data].friendly_name.c_str());
-					SetWindowText(GetDlgItem(hWhitelistConfWindow, IDC_EDIT_PROCESS), ExclusionsTemp[data].binary.c_str());
+					h_whitelist_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
+					SetWindowText(h_whitelist_wnd, L"Edit fullscreen exclusion process");
+					SetWindowText(GetDlgItem(h_whitelist_wnd, IDOK), L"Change");
+					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_NAME), exclusions_temp[data].friendly_name.c_str());
+					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_PROCESS), exclusions_temp[data].binary.c_str());
 					EnableWindow(hWnd, false);
-					ShowWindow(hWhitelistConfWindow, SW_SHOW);
+					ShowWindow(h_whitelist_wnd, SW_SHOW);
 				}
 			}
 		}break;
@@ -2388,19 +2452,19 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		{
 		case 1:
 		{
-			hWhitelistConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
-			SetWindowText(hWhitelistConfWindow, L"Add whitelisted process");
-			SetWindowText(GetDlgItem(hWhitelistConfWindow, IDOK), L"Add");
+			h_whitelist_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
+			SetWindowText(h_whitelist_wnd, L"Add whitelisted process");
+			SetWindowText(GetDlgItem(h_whitelist_wnd, IDOK), L"Add");
 			EnableWindow(hWnd, false);
-			ShowWindow(hWhitelistConfWindow, SW_SHOW);
+			ShowWindow(h_whitelist_wnd, SW_SHOW);
 		}break;
 		case 2:
 		{
-			hWhitelistConfWindow = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
-			SetWindowText(hWhitelistConfWindow, L"Add fullscreen exclusion process");
-			SetWindowText(GetDlgItem(hWhitelistConfWindow, IDOK), L"Add");
+			h_whitelist_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
+			SetWindowText(h_whitelist_wnd, L"Add fullscreen exclusion process");
+			SetWindowText(GetDlgItem(h_whitelist_wnd, IDOK), L"Add");
 			EnableWindow(hWnd, false);
-			ShowWindow(hWhitelistConfWindow, SW_SHOW);
+			ShowWindow(h_whitelist_wnd, SW_SHOW);
 		}break;
 		default:break;
 		}
@@ -2425,9 +2489,9 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					if (MessageBox(hWnd, s.c_str(), L"Delete item", MB_YESNO | MB_ICONQUESTION) == IDYES)
 					{
 						int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETITEMDATA, index, 0);
-						if (data != LB_ERR && data < WhitelistTemp.size())
+						if (data != LB_ERR && data < whitelist_temp.size())
 						{
-							WhitelistTemp.erase(WhitelistTemp.begin() + data);
+							whitelist_temp.erase(whitelist_temp.begin() + data);
 							SendMessage(hWnd, APP_LISTBOX_REDRAW, 1, 0);
 							EnableWindow(GetDlgItem(hWnd, IDOK), true);
 						}
@@ -2459,9 +2523,9 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					if (MessageBox(hWnd, s.c_str(), L"Delete item", MB_YESNO | MB_ICONQUESTION) == IDYES)
 					{
 						int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_GETITEMDATA, index, 0);
-						if (data != LB_ERR && data < ExclusionsTemp.size())
+						if (data != LB_ERR && data < exclusions_temp.size())
 						{
-							ExclusionsTemp.erase(ExclusionsTemp.begin() + data);
+							exclusions_temp.erase(exclusions_temp.begin() + data);
 							SendMessage(hWnd, APP_LISTBOX_REDRAW, 2, 0);
 							EnableWindow(GetDlgItem(hWnd, IDOK), true);
 						}
@@ -2489,7 +2553,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		{
 			int i = 0;
 			SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_RESETCONTENT, 0, 0);
-			for (auto& w : WhitelistTemp)
+			for (auto& w : whitelist_temp)
 			{
 				if (w.binary != L"" && w.friendly_name != L"")
 				{
@@ -2514,7 +2578,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		{
 			int i = 0;
 			SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_RESETCONTENT, 0, 0);
-			for (auto& w : ExclusionsTemp)
+			for (auto& w : exclusions_temp)
 			{
 				if (w.binary != L"" && w.friendly_name != L"")
 				{
@@ -2598,8 +2662,8 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				Prefs.user_idle_mode_whitelist_ = IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST);
 				Prefs.user_idle_mode_exclude_fullscreen_whitelist_ = IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS);
 				Prefs.user_idle_mode_mute_speakers_ = IsDlgButtonChecked(hWnd, IDC_CHECK_MUTE);
-				Prefs.user_idle_mode_whitelist_processes_ = WhitelistTemp;
-				Prefs.user_idle_mode_exclude_fullscreen_whitelist_processes_ = ExclusionsTemp;
+				Prefs.user_idle_mode_whitelist_processes_ = whitelist_temp;
+				Prefs.user_idle_mode_exclude_fullscreen_whitelist_processes_ = exclusions_temp;
 				EndDialog(hWnd, 0);
 				EnableWindow(GetParent(hWnd), true);
 				EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
@@ -2686,7 +2750,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		{
 			SetBkMode(hdcStatic, TRANSPARENT);
 		}
-		return(INT_PTR)hBackbrush;
+		return(INT_PTR)h_backbrush;
 	}break;
 
 	case WM_PAINT:
@@ -2706,7 +2770,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		int savedDC = SaveDC(backbuffDC);
 		SelectObject(backbuffDC, backbuffer);
 
-		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+		FillRect(backbuffDC, &rc, (HBRUSH)h_backbrush);
 
 		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
 		RestoreDC(backbuffDC, savedDC);
@@ -2730,7 +2794,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	}break;
 	case WM_DESTROY:
 	{
-		hUserIdleConfWindow = NULL;
+		h_user_idle_mode_wnd = NULL;
 	}break;
 	default:
 		return false;
@@ -2745,8 +2809,9 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 	{
 	case WM_INITDIALOG:
 	{
-		SendDlgItemMessage(hWnd, IDC_EDIT_NAME, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_EDIT_PROCESS, WM_SETFONT, (WPARAM)hEditfont, MAKELPARAM(TRUE, 0));
+		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
+		SendDlgItemMessage(hWnd, IDC_EDIT_NAME, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_EDIT_PROCESS, WM_SETFONT, (WPARAM)h_edit_font, MAKELPARAM(TRUE, 0));
 	}break;
 
 	case WM_COMMAND:
@@ -2783,40 +2848,40 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 						w.binary = proc;
 						if (wnd.find(L"fullscreen") == std::wstring::npos)
 						{
-							WhitelistTemp.push_back(w);
+							whitelist_temp.push_back(w);
 						}
 						else
 						{
-							ExclusionsTemp.push_back(w);
+							exclusions_temp.push_back(w);
 						}
 					}
 					else //change item
 					{
-						if (hUserIdleConfWindow)
+						if (h_user_idle_mode_wnd)
 						{
 							if (wnd.find(L"fullscreen") == std::wstring::npos)
 							{
-								int index = (int)SendMessage(GetDlgItem(hUserIdleConfWindow, IDC_LIST), LB_GETCURSEL, 0, 0);
+								int index = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST), LB_GETCURSEL, 0, 0);
 								if (index != LB_ERR)
 								{
-									int data = (int)SendMessage(GetDlgItem(hUserIdleConfWindow, IDC_LIST), LB_GETITEMDATA, index, 0);
-									if (data != LB_ERR && data < WhitelistTemp.size())
+									int data = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST), LB_GETITEMDATA, index, 0);
+									if (data != LB_ERR && data < whitelist_temp.size())
 									{
-										WhitelistTemp[data].binary = proc;
-										WhitelistTemp[data].friendly_name = name;
+										whitelist_temp[data].binary = proc;
+										whitelist_temp[data].friendly_name = name;
 									}
 								}
 							}
 							else
 							{
-								int index = (int)SendMessage(GetDlgItem(hUserIdleConfWindow, IDC_LIST2), LB_GETCURSEL, 0, 0);
+								int index = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST2), LB_GETCURSEL, 0, 0);
 								if (index != LB_ERR)
 								{
-									int data = (int)SendMessage(GetDlgItem(hUserIdleConfWindow, IDC_LIST2), LB_GETITEMDATA, index, 0);
-									if (data != LB_ERR && data < ExclusionsTemp.size())
+									int data = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST2), LB_GETITEMDATA, index, 0);
+									if (data != LB_ERR && data < exclusions_temp.size())
 									{
-										ExclusionsTemp[data].binary = proc;
-										ExclusionsTemp[data].friendly_name = name;
+										exclusions_temp[data].binary = proc;
+										exclusions_temp[data].friendly_name = name;
 									}
 								}
 							}
@@ -2924,7 +2989,7 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 	{
 		HDC hdcStatic = (HDC)wParam;
 		SetTextColor(hdcStatic, COLORREF(COLOR_STATIC));
-		return(INT_PTR)hBackbrush;
+		return(INT_PTR)h_backbrush;
 	}break;
 
 	case WM_PAINT:
@@ -2944,7 +3009,7 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 		int savedDC = SaveDC(backbuffDC);
 		SelectObject(backbuffDC, backbuffer);
 
-		FillRect(backbuffDC, &rc, (HBRUSH)hBackbrush);
+		FillRect(backbuffDC, &rc, (HBRUSH)h_backbrush);
 
 		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
 		RestoreDC(backbuffDC, savedDC);
@@ -2968,7 +3033,7 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 	}break;
 	case WM_DESTROY:
 	{
-		hWhitelistConfWindow = NULL;
+		h_whitelist_wnd = NULL;
 	}break;
 	default:
 		return false;
@@ -3001,8 +3066,8 @@ bool messageExistingProcess(std::wstring CmdLine)
 //   Send the commandline to the service
 void communicateWithService(std::wstring sData)
 {
-	if(!pPipeClient->send(sData))
-		MessageBox(hMainWnd, L"Failed to connect to named pipe. Service may be stopped.", L"Error", MB_OK | MB_ICONEXCLAMATION);
+	if(!p_pipe_client->send(sData))
+		MessageBox(h_main_wnd, L"Failed to connect to named pipe. Service may be stopped.", L"Error", MB_OK | MB_ICONEXCLAMATION);
 }
 void threadVersionCheck(HWND hWnd)
 {
@@ -3010,6 +3075,7 @@ void threadVersionCheck(HWND hWnd)
 	char buff[100];
 	std::string s;
 	unsigned long bytesRead;
+	nlohmann::json json_data;
 
 	if (URLOpenBlockingStream(0, VERSIONCHECKLINK, &stream, 0, 0))
 		return;// error
@@ -3022,37 +3088,36 @@ void threadVersionCheck(HWND hWnd)
 			break;
 		s.append(buff, bytesRead);
 	};
-
 	stream->Release();
 
-	size_t find = s.find("\"tag_name\":", 0);
-	if (find != std::string::npos)
+	try
 	{
-		size_t begin = s.find_first_of("0123456789", find);
-		if (begin != std::string::npos)
+		json_data = nlohmann::json::parse(s);
+	}
+	catch (...)
+	{
+		return;
+	}
+	if (!json_data["tag_name"].empty() && json_data["tag_name"].is_string())
+	{
+		std::string remote = json_data["tag_name"];
+		std::vector <std::string> local_ver = tools::stringsplit(tools::narrow(APP_VERSION), ".");
+		std::vector <std::string> remote_ver = tools::stringsplit(remote, "v.");
+
+		if (local_ver.size() < 3 || remote_ver.size() < 3)
+			return;
+		int local_ver_major = atoi(local_ver[0].c_str());
+		int local_ver_minor = atoi(local_ver[1].c_str());
+		int local_ver_patch = atoi(local_ver[2].c_str());
+
+		int remote_ver_major = atoi(remote_ver[0].c_str());
+		int remote_ver_minor = atoi(remote_ver[1].c_str());
+		int remote_ver_patch = atoi(remote_ver[2].c_str());
+		if ((remote_ver_major > local_ver_major) ||
+			(remote_ver_major == local_ver_major) && (remote_ver_minor > local_ver_minor) ||
+			(remote_ver_major == local_ver_major) && (remote_ver_minor == local_ver_minor) && (remote_ver_patch > local_ver_patch))
 		{
-			size_t end = s.find("\"", begin);
-			std::string lastver = s.substr(begin, end - begin);
-
-			std::vector <std::string> local_ver = tools::stringsplit(tools::narrow(APP_VERSION), ".");
-			std::vector <std::string> remote_ver = tools::stringsplit(lastver, ".");
-
-			if (local_ver.size() < 3 || remote_ver.size() < 3)
-				return;
-			int local_ver_major = atoi(local_ver[0].c_str());
-			int local_ver_minor = atoi(local_ver[1].c_str());
-			int local_ver_patch = atoi(local_ver[2].c_str());
-
-			int remote_ver_major = atoi(remote_ver[0].c_str());
-			int remote_ver_minor = atoi(remote_ver[1].c_str());
-			int remote_ver_patch = atoi(remote_ver[2].c_str());
-
-			if ((remote_ver_major > local_ver_major) ||
-				(remote_ver_major == local_ver_major) && (remote_ver_minor > local_ver_minor) ||
-				(remote_ver_major == local_ver_major) && (remote_ver_minor == local_ver_minor) && (remote_ver_patch > local_ver_patch))
-			{
-				PostMessage(hWnd, APP_NEW_VERSION, 0, 0);
-			}
+			PostMessage(hWnd, APP_NEW_VERSION, 0, 0);
 		}
 	}
 	return;
@@ -3149,27 +3214,29 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 bool messageDaemon(std::wstring cmdline)
 {
 	std::wstring cmd = tools::tolower(cmdline);
-	bool bIdle = (cmd.find(L"-idle")) != std::wstring::npos;
-	bool bPresent = (cmd.find(L"-unidle")) != std::wstring::npos;
+	bool idle = (cmd.find(L"-idle")) != std::wstring::npos;
+	bool busy = (cmd.find(L"-unidle")) != std::wstring::npos;
 
-	if (bIdle && bPresent)
+	if (idle && busy)
 		return false;
-	if (!(bIdle || bPresent))
+	if (!(idle || busy))
 		return false;
 
-	std::wstring WindowTitle;
-	WindowTitle = APPNAME;
-	WindowTitle += L" Daemon v";
-	WindowTitle += APP_VERSION;
-	std::wstring sWinSearch = WindowTitle;
-	HWND Daemon_hWnd = FindWindow(NULL, sWinSearch.c_str());
-	if (Daemon_hWnd)
+	std::wstring window_title;
+	window_title = APPNAME;
+	window_title += L" Daemon v";
+	window_title += APP_VERSION;
+	std::wstring sWinSearch = window_title;
+	HWND daemon_hWnd = FindWindow(NULL, sWinSearch.c_str());
+	if (daemon_hWnd)
 	{
-		if (bIdle)
-			SendMessage(Daemon_hWnd, APP_USER_IDLE_ON, NULL, NULL);
-		else if (bPresent)
-			SendMessage(Daemon_hWnd, APP_USER_IDLE_OFF, NULL, NULL);
+		if (idle)
+			PostMessage(daemon_hWnd, custom_daemon_idle_message, NULL, NULL);
+		else if (busy)
+			PostMessage(daemon_hWnd, custom_daemon_unidle_message, NULL, NULL);
+		return true;
 	}
+
 	return false;
 }
 
@@ -3186,4 +3253,11 @@ std::wstring getWndText(HWND hWnd)
 	GetWindowText(hWnd, &buf[0], len);
 	std::wstring text = &buf[0];
 	return text;
+}
+
+void prepareForUninstall(void)
+{
+	SendMessage(HWND_BROADCAST, custom_daemon_close_message, NULL, NULL);
+	SendMessage(HWND_BROADCAST, custom_updater_close_message, NULL, (LPARAM)1);
+	return;
 }

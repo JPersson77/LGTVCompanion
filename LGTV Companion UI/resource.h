@@ -37,6 +37,7 @@
 #define IDC_CHECK_BLANK                 1013
 #define IDC_SYSLINK                     1014
 #define IDC_EDIT_BLANK                  1015
+#define IDC_SYSLINK12                   1015
 #define IDC_SPIN2                       1016
 #define IDC_CHECK_RDPBLANK              1017
 #define IDC_CHECK_REMOTE                1017
@@ -110,6 +111,8 @@
 #define IDC_CHECK_API                   1064
 #define IDC_COMBO_WOL                   1064
 #define IDC_COMBO_PERSISTENCE           1065
+#define IDC_COMBO_LOG2                  1065
+#define IDC_COMBO_UPDATE                1065
 #define IDC_CHECK1                      1066
 #define IDC_CHECK_MUTE                  1066
 #define IDC_COMBO_SOURCE                1066
