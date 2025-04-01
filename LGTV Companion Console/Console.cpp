@@ -1606,6 +1606,7 @@ void Thread_WOL(Device device)
 				LANDestination.sin_addr.s_addr = 0xFFFFFFFF;
 
 			WOLsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
 			if (WOLsocket != INVALID_SOCKET)
 			{
 				const bool optval = TRUE;
@@ -1613,6 +1614,22 @@ void Thread_WOL(Device device)
 					closesocket(WOLsocket);
 				else
 				{
+					sockaddr_in localEndpoint;
+					std::string l_ip;
+					if (device.network_interface_luid != 0)
+					{
+						l_ip = tools::getIPfromLUIDandEndpoint(device.network_interface_luid, device.ip);
+						if (l_ip == "")
+							l_ip = tools::getIPfromLUID(device.network_interface_luid);
+						if (l_ip != "")
+						{
+
+							localEndpoint.sin_family = AF_INET;
+							localEndpoint.sin_addr.s_addr = inet_addr(l_ip.c_str());
+							localEndpoint.sin_port = htons(0);
+							bind(WOLsocket, (sockaddr*)&localEndpoint, sizeof(localEndpoint));
+						}
+					}
 					for (auto& MAC : device.mac_addresses)
 					{
 						//remove filling from MAC
@@ -1633,7 +1650,7 @@ void Thread_WOL(Device device)
 								memcpy(&Message[i * 6], &MACstr, 6 * sizeof(unsigned char));
 							
 							std::unique_ptr<NetEntryDeleter> netEntryDeleter;
-							if (device.wake_method == WOL_TYPE_IP)
+							if (device.wake_method == WOL_TYPE_IP || device.wake_method == WOL_TYPE_AUTO)
 								netEntryDeleter = CreateTransientLocalNetEntry(reinterpret_cast<const SOCKADDR_INET&>(LANDestination), MACstr);
 
 							// Send Wake On LAN packet

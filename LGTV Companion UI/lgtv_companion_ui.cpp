@@ -1069,7 +1069,10 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			if (mess == IDCANCEL)
 				break;
 			if (mess == IDYES)
-				SendMessage(hWnd, WM_COMMAND, MAKEWPARAM(IDOK, BN_CLICKED), NULL);
+			{
+				EnableWindow(hWnd, false);
+				SendMessage(hWnd, APP_MESSAGE_APPLY, (WPARAM)NULL, NULL);
+			}
 		}
 		DestroyWindow(hWnd);
 	}break;
