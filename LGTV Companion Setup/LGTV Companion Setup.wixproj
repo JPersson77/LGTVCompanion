@@ -13,6 +13,13 @@
     <SuppressIces>ICE91</SuppressIces>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="LGTVCdaemon.xml" />
+    <Content Include="LGTVCother.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="license.rtf" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\LGTV Companion Console\Console.vcxproj" />
     <ProjectReference Include="..\LGTV Companion Service\LGTV Companion Service.vcxproj">
       <Name>LGTV Companion Service</Name>

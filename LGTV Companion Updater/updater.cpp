@@ -1,6 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
-#define WINVER 0x0603
-#define _WIN32_WINNT 0x0603
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #if defined _M_IX86
@@ -488,7 +488,8 @@ bool showWinNotification(int type)
 	if (WinToastLib::WinToast::instance()->isInitialized())
 	{
 		TCHAR buffer[MAX_PATH] = { 0 };
-		GetModuleFileName(NULL, buffer, MAX_PATH);
+		if (!GetModuleFileName(NULL, buffer, MAX_PATH))
+			return false;
 		std::wstring imgpath = buffer;
 		std::wstring::size_type pos = imgpath.find_last_of(L"\\/");
 		imgpath = imgpath.substr(0, pos + 1);
@@ -543,7 +544,8 @@ void log(std::wstring input, bool clear)
 	int TextLen = (int)SendMessage(GetDlgItem(h_main_wnd, IDC_LOG), WM_GETTEXTLENGTH, 0, 0);
 	SendMessage(GetDlgItem(h_main_wnd, IDC_LOG), EM_SETSEL, (WPARAM)TextLen, (LPARAM)TextLen);
 	SendMessage(GetDlgItem(h_main_wnd, IDC_LOG), EM_REPLACESEL, FALSE, (LPARAM)log_message.c_str());
-
+	InvalidateRect(GetDlgItem(h_main_wnd, IDC_LOG), NULL, true);
+	UpdateWindow(GetDlgItem(h_main_wnd, IDC_LOG));
 	return;
 }
 void threadVersionCheck(HWND hWnd)
@@ -723,7 +725,7 @@ bool isAnythingPreventingSilentUpdate(void)
 }
 bool isOtherUpdaterWindowShown(bool focus, bool update )
 {
-	SendMessage(HWND_BROADCAST, custom_updater_close_message, NULL, NULL);
+	PostMessage(HWND_BROADCAST, custom_updater_close_message, NULL, NULL);
 	Sleep(100);
 	std::wstring window_title;
 	window_title = APPNAME_FULL;
@@ -736,10 +738,10 @@ bool isOtherUpdaterWindowShown(bool focus, bool update )
 		if (focus)
 		{
 			AllowSetForegroundWindow(ASFW_ANY);
-			SendMessage(HWND_BROADCAST, custom_updater_focus_message, NULL, NULL);
+			PostMessage(HWND_BROADCAST, custom_updater_focus_message, NULL, NULL);
 		}
 		if (update)
-			SendMessage(HWND_BROADCAST, custom_updater_update_message, NULL, NULL);
+			PostMessage(HWND_BROADCAST, custom_updater_update_message, NULL, NULL);
 		return true;
 	}
 	return false;

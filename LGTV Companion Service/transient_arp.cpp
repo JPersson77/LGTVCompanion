@@ -1,18 +1,20 @@
 #define WIN32_LEAN_AND_MEAN
-#define WINVER 0x0603
-#define _WIN32_WINNT 0x0603
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "transient_arp.h"
 #include <sstream>
 
-std::optional<NET_LUID> TransientArp::getLocalInterface(SOCKADDR_INET destination, std::string& arpStatus) {
+std::optional<NET_LUID> TransientArp::getLocalInterface(SOCKADDR_INET destination, NET_LUID& nic_luid, std::string& arpStatus) {
 	MIB_IPFORWARD_ROW2 row;
 	SOCKADDR_INET bestSourceAddress;
 	std::stringstream arp;
-	const auto result = GetBestRoute2(NULL, 0, NULL, &destination, 0, &row, &bestSourceAddress);
+	const auto result = GetBestRoute2(&nic_luid, 0, NULL, &destination, 0, &row, &bestSourceAddress);
 
 	if (result != NO_ERROR) {
+		arp << "Failed to create transient ARP. ";
+		arpStatus = arp.str();
 		return {};
 	}
 	char* source_ip = inet_ntoa(bestSourceAddress.Ipv4.sin_addr);
@@ -26,16 +28,16 @@ std::optional<NET_LUID> TransientArp::getLocalInterface(SOCKADDR_INET destinatio
 
 	return row.InterfaceLuid;
 }
-void TransientArp::createTransientLocalNetEntry(std::string ip, unsigned char mac[6], std::string& arpStatus) {
+void TransientArp::createTransientLocalNetEntry(std::string ip, unsigned char mac[6], NET_LUID& nic_luid, std::string& arpStatus) {
 	MIB_IPNET_ROW2 row;
 	struct sockaddr_in destination {};
 	destination.sin_family = AF_INET;
 	destination.sin_port = htons(9);
 	destination.sin_addr.s_addr = inet_addr(ip.c_str());
-	const auto luid = getLocalInterface(reinterpret_cast<const SOCKADDR_INET&>(destination), arpStatus);
+	const auto luid = getLocalInterface(reinterpret_cast<const SOCKADDR_INET&>(destination), nic_luid, arpStatus);
 	if (!luid.has_value())
 		return;
-
+	
 	row.Address = reinterpret_cast<const SOCKADDR_INET&>(destination);
 	row.InterfaceLuid = *luid;
 	memcpy(row.PhysicalAddress, mac, sizeof(mac));

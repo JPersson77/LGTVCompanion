@@ -1,6 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
-#define WINVER 0x0603
-#define _WIN32_WINNT 0x0603
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "web_os_client.h"
@@ -1090,20 +1090,11 @@ void WebOsClient::Impl::runWOL(void) {
 	boost::system::error_code error;
 	if (!udp_socket_.is_open())
 	{
-//		DEBUG("Starting to send magic packets (WOL)");
-		udp_socket_.open(udp::v4(), error);
-		if (error)
-			DEBUG("Failed to open UDP socket for WOL");
-		udp_socket_.set_option(boost::asio::socket_base::broadcast(true), error);
-		if (error)
-			DEBUG("Failed to set options for UDP socket");
 		wol_timer_.expires_from_now(boost::posix_time::milliseconds(200));
 		wol_timer_.async_wait(beast::bind_front_handler(&Impl::onWOL, shared_from_this()));
 	}
 	else
 		DEBUG("Magic packets (WOL) are already being sent out"); //  i.e. WOL routine is already running 
-
-
 }
 void WebOsClient::Impl::onWOL(beast::error_code ec) {
 	BYTE buf[102];
@@ -1124,6 +1115,8 @@ void WebOsClient::Impl::onWOL(beast::error_code ec) {
 			if (makeMagicPacket(mac_str, buf, mac))
 			{
 				TransientArp transient_arp;
+				NET_LUID nl;
+				nl.Value = device_settings_.network_interface_luid;
 				
 				std::vector<std::string> endpoint_ips;
 				if (device_settings_.wake_method == WOL_TYPE_NETWORKBROADCAST || device_settings_.wake_method == WOL_TYPE_AUTO)
@@ -1131,8 +1124,8 @@ void WebOsClient::Impl::onWOL(beast::error_code ec) {
 				if (device_settings_.wake_method == WOL_TYPE_IP || device_settings_.wake_method == WOL_TYPE_AUTO)
 				{
 					std::string arp_status;
-					endpoint_ips.push_back(device_settings_.ip);
-					transient_arp.createTransientLocalNetEntry(device_settings_.ip, mac, arp_status);
+					endpoint_ips.push_back(device_settings_.ip);					
+					transient_arp.createTransientLocalNetEntry(device_settings_.ip, mac, nl, arp_status);
 					if(arp_status != work_.status_arp_override_for_wol_)
 					{
 						work_.status_arp_override_for_wol_ = arp_status;
@@ -1160,41 +1153,75 @@ void WebOsClient::Impl::onWOL(beast::error_code ec) {
 						endpoint_ips.push_back(broadcastaddress.str());
 					}	
 				}
-				for (auto& ip : endpoint_ips)
+				udp::endpoint local_endpoint;
+				std::string l_ip;
+				if (device_settings_.network_interface_luid != 0)
 				{
-					std::string logmsg;
-					try
+					l_ip = tools::getIPfromLUIDandEndpoint(device_settings_.network_interface_luid, device_settings_.ip);
+					if (l_ip == "")
+						l_ip = tools::getIPfromLUID(device_settings_.network_interface_luid);
+					if(l_ip != "")
 					{
-						udp::endpoint endpoint_(boost::asio::ip::make_address(ip, error), 9);
+						local_endpoint.address(boost::asio::ip::make_address(l_ip));
+						local_endpoint.port(0);
+					}
+				}
+				if (udp_socket_.is_open())
+					udp_socket_.close();
+				udp_socket_.open(udp::v4(), error);
+				if (error)
+					DEBUG("Failed to open UDP socket for WOL");
+				else
+				{
+					udp_socket_.set_option(boost::asio::socket_base::broadcast(true), error);
+					if (error)
+						DEBUG("Failed to set options for UDP socket");
+					if (l_ip != "")
+					{
+						udp_socket_.bind(local_endpoint, error);
 						if (error)
-							logmsg = "Function call make_address failed in WOL routine";
-						else
 						{
-							size_t n = udp_socket_.send_to(boost::asio::buffer(buf, 102), endpoint_);
-							if (n == 102)
-							{
-								logmsg = "WOL-tastic packet > ";
-								logmsg += ip;
-								while (logmsg.size() < 36)
-									logmsg += " ";
-								logmsg += " - OK";
-							}
-							else
-							{
-								logmsg = "WOL-tastic packet > ";
-								logmsg += ip;
-								while (logmsg.size() < 36)
-									logmsg += " ";
-								logmsg += " - FAIL";
-							}
+							std::string log = "Failed to bind local endpoint ";
+							log += l_ip;
+							DEBUG(log);
 						}
 					}
-					catch (std::exception const& e)
+					for (auto& ip : endpoint_ips)
 					{
-						logmsg = "Exception raised in WOL routine - ";
-						logmsg += e.what();
+						std::string logmsg;
+						try
+						{
+
+							udp::endpoint endpoint_(boost::asio::ip::make_address(ip, error), 9);
+							if (!error)
+							{
+								size_t n = udp_socket_.send_to(boost::asio::buffer(buf, 102), endpoint_);
+								if (n == 102)
+								{
+									logmsg = "WOL-tastic packet > ";
+									logmsg += ip;
+									while (logmsg.size() < 36)
+										logmsg += " ";
+									logmsg += " - OK";
+								}
+								else
+								{
+									logmsg = "WOL-tastic packet > ";
+									logmsg += ip;
+									while (logmsg.size() < 36)
+										logmsg += " ";
+									logmsg += " - FAIL";
+								}
+							}
+						}
+						catch (std::exception const& e)
+						{
+							logmsg = "Exception raised in WOL routine - ";
+							logmsg += e.what();
+						}
+						DEBUG(logmsg);
 					}
-					DEBUG(logmsg);
+//					udp_socket_.close();
 				}
 			}
 			else
@@ -1206,7 +1233,8 @@ void WebOsClient::Impl::onWOL(beast::error_code ec) {
 	else
 	{
 //		DEBUG("Stopped sending magic packets (WOL)");
-		udp_socket_.close();	
+		if (udp_socket_.is_open())
+			udp_socket_.close();	
 	}
 }
 //   Write key to configuration file when a thread has received a pairing key. Thread safe

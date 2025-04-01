@@ -29,10 +29,10 @@ class TransientArp
 {
 private:
 	std::unique_ptr<NetEntryDeleter> net_entry_deleter_;
-	std::optional<NET_LUID> getLocalInterface(SOCKADDR_INET, std::string&);
+	std::optional<NET_LUID> getLocalInterface(SOCKADDR_INET, NET_LUID&, std::string&);
 public:
 	TransientArp() {};
 	~TransientArp() {};
-	void createTransientLocalNetEntry(std::string, unsigned char mac[6], std::string&);
+	void createTransientLocalNetEntry(std::string, unsigned char mac[6], NET_LUID&, std::string&);
 };
 

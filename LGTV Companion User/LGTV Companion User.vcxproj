@@ -172,6 +172,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>
       </AdditionalLibraryDirectories>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>Copy /Y "$(ProjectDir)mainicon.ico*" "$(TargetDir)"</Command>
@@ -199,6 +200,7 @@
       <AdditionalLibraryDirectories>
       </AdditionalLibraryDirectories>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>Copy /Y "$(ProjectDir)mainicon.ico*" "$(TargetDir)"</Command>
@@ -257,6 +259,7 @@
     <ClInclude Include="..\Common\ipc.h" />
     <ClInclude Include="..\Common\preferences.h" />
     <ClInclude Include="..\Common\tools.h" />
+    <ClInclude Include="user_idle_mode.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="daemon.h" />
   </ItemGroup>
@@ -265,6 +268,7 @@
     <ClCompile Include="..\Common\preferences.cpp" />
     <ClCompile Include="..\Common\tools.cpp" />
     <ClCompile Include="daemon.cpp" />
+    <ClCompile Include="user_idle_mode.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="LGTV Companion User.rc" />

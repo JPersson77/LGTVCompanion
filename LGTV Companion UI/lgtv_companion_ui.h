@@ -21,7 +21,6 @@ static BOOL CALLBACK								meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, L
 std::vector<DisplayInfo>							queryDisplays();
 bool												messageDaemon(std::wstring);
 void												ipcCallback(std::wstring message, LPVOID pt);
-std::wstring										getWndText(HWND);
 void												prepareForUninstall(void);
 
 

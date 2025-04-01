@@ -14,15 +14,15 @@ static BOOL	CALLBACK		meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM 
 bool						checkDisplayTopology(void);
 int							verifyTopology();
 DWORD						checkRemoteStreamingProcesses(void);
-bool						isFullscreenApplicationRunning(void);
 void						remoteStreamingEvent(DWORD dwType);
-void						workaroundFalseFullscreenWindows(void);
-static BOOL	CALLBACK		enumWindowsProc(HWND hWnd, LPARAM lParam);
 DWORD						sunshine_CheckLog(void);
 std::string					sunshine_GetConfVal(std::string, std::string);
 std::string					sunshine_GetLogFile();
 void						ipcCallback(std::wstring, LPVOID);
-std::wstring				getWndText(HWND);
 bool						IsWindowElevated(HWND);
-void						RawInput_AddToCache(const std::wstring& devicePath);
+bool						RawInput_AddToCache(const std::wstring& devicePath);
 void						RawInput_ClearCache();
+bool						isFullscreenApplicationRunning(void);
+void						workaroundFalseFullscreenWindows(void);
+static BOOL	CALLBACK		enumWindowsProc(HWND hWnd, LPARAM lParam);
+

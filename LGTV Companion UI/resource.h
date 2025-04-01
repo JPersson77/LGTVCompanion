@@ -43,7 +43,6 @@
 #define IDC_CHECK_REMOTE                1017
 #define IDC_LIST                        1018
 #define IDC_SYSLINK3                    1019
-#define IDC_LIST2                       1019
 #define IDC_SYSLINK5                    1020
 #define IDC_NEWVERSION                  1021
 #define IDC_SYSLINK2                    1021
@@ -53,6 +52,7 @@
 #define IDC_RADIO2                      1023
 #define IDC_SYSLINK7                    1023
 #define IDC_RADIO3                      1024
+#define IDC_SYSLINK13                   1024
 #define IDC_SYSLINK4                    1025
 #define IDC_SYSLINK11                   1025
 #define IDC_CHECK_HDMI_INPUT_CHECKBOX   1026
@@ -88,25 +88,20 @@
 #define IDC_SYSLINK_CONF                1044
 #define IDC_GO2                         1045
 #define IDC_SYSLINK_CONF2               1045
-#define IDC_CHECK_FULLSCREEN            1045
 #define IDC_STATIC_NO_5                 1046
 #define IDC_EDIT_TIME                   1046
-#define IDC_CHECK_WHITELIST             1049
-#define IDC_CHECK_FS_EXCLUSIONS         1050
+#define IDC_CHECK_PROCESS_CONTROL       1049
 #define IDC_SYSLINK_ADD                 1055
 #define IDC_SYSLINK_DELETE              1056
 #define IDC_SYSLINK_EDIR                1057
 #define IDC_EDIT_NAME                   1057
 #define IDC_SYSLINK_INFO_2              1058
 #define IDC_EDIT_PROCESS                1058
-#define IDC_SYSLINK_INFO_3              1059
 #define IDC_SYSLINK_BROWSE              1059
 #define IDC_SYSLINK_INFO_1              1060
+#define IDC_SYSLINK_WILDCARD            1060
 #define IDC_COMBO_MODE                  1061
-#define IDC_SYSLINK_ADD2                1061
-#define IDC_SYSLINK_EDIR2               1062
 #define IDC_COMBO_SSL                   1063
-#define IDC_SYSLINK_DELETE2             1063
 #define IDC_COMBO_LOG                   1063
 #define IDC_CHECK_API                   1064
 #define IDC_COMBO_WOL                   1064
@@ -116,7 +111,16 @@
 #define IDC_CHECK1                      1066
 #define IDC_CHECK_MUTE                  1066
 #define IDC_COMBO_SOURCE                1066
+#define IDC_PC_CHECK_ISRUNNING          1066
 #define IDC_COMBO_TIMING                1067
+#define IDC_CHECK_FULLSCREEN            1067
+#define IDC_COMBO_NIC                   1067
+#define IDC_PC_CHECK_ISFULLSCREEN       1067
+#define IDC_CHECK_VWL                   1068
+#define IDC_PC_CHECK_ISFOREGROUND       1069
+#define IDC_CHECK_VWL_FG                1070
+#define IDC_CHECK_VWL_FULLSCREEN        1071
+#define IDC_PC_CHECK_VWL                1071
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -143,7 +147,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        155
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1068
+#define _APS_NEXT_CONTROL_VALUE         1072
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

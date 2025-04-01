@@ -85,6 +85,8 @@ COPYRIGHT
 #include "../Common/ipc.h"
 #include "../Common/common_app_define.h"
 #include "../Common/tools.h"
+#include "../Common/log.h"
+
 #include <Shlobj_core.h>
 #include <sstream>
 #include <winevt.h>
@@ -93,12 +95,11 @@ COPYRIGHT
 #include <initguid.h>
 #include <functiondiscoverykeys.h>
 #include <SetupAPI.h>
-#include <devpkey.h>
 #include <urlmon.h>
-#include <Iphlpapi.h>
 #include <ws2tcpip.h>
+#include <iphlpapi.h>
+
 #include "resource.h"
-#include "../Common/log.h"
 
 #pragma comment(lib, "Comctl32.lib")
 #pragma comment(lib, "wevtapi.lib")
@@ -160,8 +161,7 @@ WSADATA									WSAData;
 int										i_top_configuration_phase;
 int										i_top_configuration_display;
 bool									reset_api_keys = false;
-std::vector<Preferences::ProcessList>	whitelist_temp;
-std::vector<Preferences::ProcessList>	exclusions_temp;
+std::vector<Preferences::ProcessList>	process_list_temp;
 std::shared_ptr<IpcClient>				p_pipe_client;
 std::shared_ptr<Logging>				logger;
 UINT									custom_daemon_restart_message;
@@ -169,6 +169,7 @@ UINT									custom_daemon_idle_message;
 UINT									custom_daemon_unidle_message;
 UINT									custom_daemon_close_message;
 UINT									custom_updater_close_message;
+UINT									custom_UI_close_message;
 
 Preferences								Prefs(CONFIG_FILE);
 
@@ -197,12 +198,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	custom_daemon_restart_message = RegisterWindowMessage(CUSTOM_MESSAGE_RESTART);
 	custom_daemon_idle_message = RegisterWindowMessage(CUSTOM_MESSAGE_IDLE);
 	custom_daemon_unidle_message = RegisterWindowMessage(CUSTOM_MESSAGE_UNIDLE);
+	custom_UI_close_message = RegisterWindowMessage(CUSTOM_MESSAGE_LGTVC_CLOSE);
 
 	if (lpCmdLine)
 		CommandLineParameters = lpCmdLine;
 	if (CommandLineParameters == L"-prepare_for_uninstall")
 	{
 		prepareForUninstall();
+		PostMessage(HWND_BROADCAST, custom_UI_close_message, NULL, NULL);
 		return false;
 	}
 	// if commandline directed towards daemon
@@ -322,6 +325,23 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	std::wstring str;
 	switch (message)
 	{
+		if(message == custom_UI_close_message)
+		{
+			if (h_whitelist_wnd)
+				DestroyWindow(h_whitelist_wnd);
+			if (h_user_idle_mode_wnd)
+				DestroyWindow(h_user_idle_mode_wnd);
+			if (h_topology_wnd)
+				DestroyWindow(h_topology_wnd);
+			if (h_options_wnd)
+				DestroyWindow(h_options_wnd);
+			if (h_device_wnd)
+				DestroyWindow(h_device_wnd);
+			if (h_main_wnd)
+				DestroyWindow(h_main_wnd);
+			PostQuitMessage(0);
+		}
+
 	case WM_INITDIALOG:
 	{
 		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
@@ -381,6 +401,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_WOL), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_SSL), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_SOURCE), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+		SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_NIC), (UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 
 		EnableWindow(GetDlgItem(h_device_wnd, IDC_RADIO1), false);
 		EnableWindow(GetDlgItem(h_device_wnd, IDC_RADIO2), false);
@@ -453,6 +474,29 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		}break;
 		}
 		SetWindowText(GetDlgItem(h_device_wnd, IDC_SUBNET), tools::widen(Prefs.devices_[sel].subnet).c_str());
+
+
+		LRESULT itemCount = SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_NIC), CB_GETCOUNT, 0, 0);
+		if (itemCount != CB_ERR)
+		{
+			// Iterate over all items
+			bool found = false;
+			for (int i = 0; i < itemCount; ++i) {
+				// Retrieve the stored 64-bit NET_LUID value for the current item
+				uint64_t itemLuid = static_cast<uint64_t>(SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_NIC), CB_GETITEMDATA, i, 0));
+				if (itemLuid == CB_ERR)
+					continue; // Skip this item
+				if (itemLuid == Prefs.devices_[sel].network_interface_luid) {
+					found = true;
+					SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_NIC), CB_SETCURSEL, i, 0);
+					break;
+				}
+			}
+			if (!found)
+			{
+				SendMessage(GetDlgItem(h_device_wnd, IDC_COMBO_NIC), CB_SETCURSEL, 0, 0);
+			}
+		}
 		EnableWindow(GetDlgItem(h_device_wnd, IDOK), false);
 		EnableWindow(hWnd, false);
 		ShowWindow(h_device_wnd, SW_SHOW);
@@ -537,6 +581,12 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 							{
 								Device temp;
 								temp.name = tools::narrow(FriendlyName);
+								std::string prefix = "[LG] webOS TV ";
+								if (temp.name.find(prefix) == 0)
+								{
+									if (temp.name.size() > 18)
+										temp.name.erase(0, prefix.length());
+								}
 								temp.ip = tools::narrow(IP);
 								temp.mac_addresses.push_back(MAC);
 								temp.subnet = tools::getSubnetMask(temp.ip);
@@ -713,14 +763,16 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		else
 		{
 			TCHAR buffer[MAX_PATH] = { 0 };
-			GetModuleFileName(NULL, buffer, MAX_PATH);
-			std::wstring path = buffer;
-			std::wstring exe;
-			std::wstring::size_type pos = path.find_last_of(L"\\/");
-			path = path.substr(0, pos + 1);
-			exe = path;
-			exe += L"LGTVdaemon.exe";
-			ShellExecute(NULL, L"open", exe.c_str(), L"-restart", path.c_str(), SW_HIDE);
+			if(GetModuleFileName(NULL, buffer, MAX_PATH))
+			{
+				std::wstring path = buffer;
+				std::wstring exe;
+				std::wstring::size_type pos = path.find_last_of(L"\\/");
+				path = path.substr(0, pos + 1);
+				exe = path;
+				exe += L"LGTVdaemon.exe";
+				ShellExecute(NULL, L"open", exe.c_str(), L"-restart", path.c_str(), SW_HIDE);
+			}
 		}
 		p_pipe_client->init();
 		EnableWindow(hWnd, true);
@@ -800,13 +852,15 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			if (wParam == IDC_NEWVERSION)
 			{
 				TCHAR buffer[MAX_PATH] = { 0 };
-				GetModuleFileName(NULL, buffer, MAX_PATH);
-				std::wstring path = buffer;
-				std::wstring::size_type pos = path.find_last_of(L"\\/");
-				path = path.substr(0, pos + 1);
-				std::wstring exe = path;
-				exe += L"LGTVupdater.exe";
-				ShellExecute(NULL, L"open", exe.c_str(), NULL, path.c_str(), SW_SHOW);
+				if(GetModuleFileName(NULL, buffer, MAX_PATH))
+				{
+					std::wstring path = buffer;
+					std::wstring::size_type pos = path.find_last_of(L"\\/");
+					path = path.substr(0, pos + 1);
+					std::wstring exe = path;
+					exe += L"LGTVupdater.exe";
+					ShellExecute(NULL, L"open", exe.c_str(), NULL, path.c_str(), SW_SHOW);
+				}
 			}
 			//care to support your coder
 			if (wParam == IDC_DONATE)
@@ -1049,6 +1103,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		SendDlgItemMessage(hWnd, IDC_COMBO_SSL, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_COMBO_WOL, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_COMBO_SOURCE, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_COMBO_NIC, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		std::wstring s;
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_WOL), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
 		s = L"Automatic";
@@ -1076,6 +1131,67 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
 		s = L"HDMI 4";
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+		s = L"Automatic";
+		LRESULT t = SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), CB_SETITEMDATA, static_cast<WPARAM>(t), static_cast<LPARAM>(0));
+
+		ULONG outBufLen = 0;
+		DWORD dwRetVal = 0;
+		PIP_ADAPTER_ADDRESSES pAddresses = nullptr;
+		// Get the required buffer size
+		dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, pAddresses, &outBufLen);
+		if (dwRetVal == ERROR_BUFFER_OVERFLOW) 
+		{
+			pAddresses = (PIP_ADAPTER_ADDRESSES)malloc(outBufLen);
+			if (!pAddresses) 
+				break;
+		}
+		else if (dwRetVal != ERROR_SUCCESS) 
+			break;
+		// Retrieve the adapter addresses
+		dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, pAddresses, &outBufLen);
+		if (dwRetVal == NO_ERROR) 
+		{
+			for (PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses; pCurrAddresses != NULL; pCurrAddresses = pCurrAddresses->Next) 
+			{
+				// Print adapter name
+//					std::wcout << L"Adapter: " << pCurrAddresses->FriendlyName << std::endl;
+				if (pCurrAddresses->OperStatus != IfOperStatusUp)
+					continue;
+
+				bool hasIPv4Address = false;
+				bool localhost = false;
+				char ipStringBuffer[INET6_ADDRSTRLEN];
+				for (PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrAddresses->FirstUnicastAddress; pUnicast != NULL; pUnicast = pUnicast->Next) 
+				{
+					LPSOCKADDR sockaddr = pUnicast->Address.lpSockaddr;
+					DWORD ipBufferLength = sizeof(ipStringBuffer);
+
+					// Convert the address to a readable string
+					if (sockaddr->sa_family == AF_INET) // IPv4
+					{
+						hasIPv4Address = true;
+						sockaddr_in* ipv4 = (sockaddr_in*)sockaddr;
+						InetNtopA(AF_INET, &(ipv4->sin_addr), ipStringBuffer, ipBufferLength);
+						if (strcmp(ipStringBuffer, "127.0.0.1") == 0)
+							localhost = true;
+					}
+				}
+
+				if (!hasIPv4Address || localhost)
+					continue; // Skip adapters without IPv4 addresses
+
+				std::wstring text = pCurrAddresses->FriendlyName;
+				uint64_t nl = static_cast<uint64_t>(pCurrAddresses->Luid.Value);
+				LRESULT index = SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)text.c_str());
+				SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), CB_SETITEMDATA, static_cast<WPARAM>(index), static_cast<LPARAM>(nl));
+			}
+		}
+		// Free memory
+		if (pAddresses) 
+			free(pAddresses);
+
 	}break;
 	case WM_NOTIFY:
 	{
@@ -1102,7 +1218,8 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 					"go to \"Manual\" mode and adjust the settings.\n\n"
 					"The manual method \"Send to device IP-address\" method (no 2) sends unicast packets directly to the device IP, while the other two send to the network broadcast address or subnet broadcast address respectively.\n\n"
 					"Between the two broadcast options, the subnet approach is the most likely to work. The global network broadcast approach is prone to issues when multiple network interfaces are present (VPN, etc.), because the packet might be sent using the wrong interface.\n\n"
-					"The current subnet mask of the subnet(s) of your PC can be found by using the \"IPCONFIG /all\" command in the command prompt if it is not correctly detected automatically.",
+					"The current subnet mask of the subnet(s) of your PC can be found by using the \"IPCONFIG /all\" command in the command prompt if it is not correctly detected automatically.\r\n\r\n"
+					"If needed, it is also possible to manually specify the Network Adapter to use for sending Wake-On-Lan packets",
 					L"Network options", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the source input settings
@@ -1166,7 +1283,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 				if (hParentWnd)
 				{
 					std::vector<std::string> maclines;
-					std::wstring edittext = getWndText(GetDlgItem(hWnd, IDC_DEVICEMACS));
+					std::wstring edittext = tools::getWndText(GetDlgItem(hWnd, IDC_DEVICEMACS));
 
 					//verify the user supplied information
 					if (edittext != L"")
@@ -1199,24 +1316,24 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 									mac.insert(ind * 2 + 2, ":");
 						}
 						//verify IP
-						if (tools::narrow(getWndText(GetDlgItem(hWnd, IDC_DEVICEIP))) == "0.0.0.0")
+						if (tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_DEVICEIP))) == "0.0.0.0")
 						{
 							MessageBox(hWnd, L"The IP-address is invalid.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
 							return 0;
 						}
 					}
 
-					if (maclines.size() > 0 && getWndText(GetDlgItem(hWnd, IDC_DEVICENAME)) != L"" && getWndText(GetDlgItem(hWnd, IDC_DEVICEIP)) != L"")
+					if (maclines.size() > 0 && tools::getWndText(GetDlgItem(hWnd, IDC_DEVICENAME)) != L"" && tools::getWndText(GetDlgItem(hWnd, IDC_DEVICEIP)) != L"")
 					{
-						if (getWndText(hWnd) == DEVICEWINDOW_TITLE_MANAGE) //configuring existing device
+						if (tools::getWndText(hWnd) == DEVICEWINDOW_TITLE_MANAGE) //configuring existing device
 						{
 							int sel = (int)(SendMessage(GetDlgItem(hParentWnd, IDC_COMBO), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 							if (sel == CB_ERR)
 								break;
 
 							Prefs.devices_[sel].mac_addresses = maclines;
-							Prefs.devices_[sel].name = tools::narrow(getWndText(GetDlgItem(hWnd, IDC_DEVICENAME)));
-							Prefs.devices_[sel].ip = tools::narrow(getWndText(GetDlgItem(hWnd, IDC_DEVICEIP)));
+							Prefs.devices_[sel].name = tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_DEVICENAME)));
+							Prefs.devices_[sel].ip = tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_DEVICEIP)));
 
 							int source = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 							if (source != CB_ERR)
@@ -1224,7 +1341,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							Prefs.devices_[sel].check_hdmi_input_when_power_off = IsDlgButtonChecked(hWnd, IDC_CHECK_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
 
 							Prefs.devices_[sel].set_hdmi_input_on_power_on = IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
-							Prefs.devices_[sel].set_hdmi_input_on_power_on_delay = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_SET_HDMI_DELAY))).c_str());
+							Prefs.devices_[sel].set_hdmi_input_on_power_on_delay = atoi(tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_SET_HDMI_DELAY))).c_str());
 
 							int wol_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_WOL), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 
@@ -1240,11 +1357,14 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							if (wol_selection == 0)
 								Prefs.devices_[sel].subnet = tools::getSubnetMask(Prefs.devices_[sel].ip);
 							else
-								Prefs.devices_[sel].subnet = tools::narrow(getWndText(GetDlgItem(hWnd, IDC_SUBNET)));
+								Prefs.devices_[sel].subnet = tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_SUBNET)));
 
 							int SSL_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_SSL), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 							if (SSL_selection != CB_ERR)
 								Prefs.devices_[sel].ssl = SSL_selection == 0 ? true : false;
+							int luid_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+							if (luid_selection != CB_ERR)
+								Prefs.devices_[sel].network_interface_luid = (uint64_t)SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_GETITEMDATA, (WPARAM)luid_selection, (LPARAM)0);
 							int persistence_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_PERSISTENCE), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 							if (persistence_selection != CB_ERR)
 								Prefs.devices_[sel].persistent_connection_level = persistence_selection;
@@ -1263,8 +1383,8 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							strs << Prefs.devices_.size() + 1;
 							sess.id = strs.str();
 							sess.mac_addresses = maclines;
-							sess.name = tools::narrow(getWndText(GetDlgItem(hWnd, IDC_DEVICENAME)));
-							sess.ip = tools::narrow(getWndText(GetDlgItem(hWnd, IDC_DEVICEIP)));
+							sess.name = tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_DEVICENAME)));
+							sess.ip = tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_DEVICEIP)));
 
 							int wol_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_WOL), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 							if (wol_selection == 0)
@@ -1279,7 +1399,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							if (wol_selection == 0)
 								sess.subnet = tools::getSubnetMask(sess.ip);
 							else
-								sess.subnet = tools::narrow(getWndText(GetDlgItem(hWnd, IDC_SUBNET)));
+								sess.subnet = tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_SUBNET)));
 
 							int source = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_SOURCE), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 							if (source != CB_ERR)
@@ -1287,7 +1407,11 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
 							sess.check_hdmi_input_when_power_off = IsDlgButtonChecked(hWnd, IDC_CHECK_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
 							sess.set_hdmi_input_on_power_on = IsDlgButtonChecked(hWnd, IDC_SET_HDMI_INPUT_CHECKBOX) == BST_CHECKED;
-							sess.set_hdmi_input_on_power_on_delay = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_SET_HDMI_DELAY))).c_str());
+							sess.set_hdmi_input_on_power_on_delay = atoi(tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_SET_HDMI_DELAY))).c_str());
+							
+							int luid_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
+							if (luid_selection != CB_ERR)
+								sess.network_interface_luid = (uint64_t)SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_GETITEMDATA, (WPARAM)luid_selection, (LPARAM)0);
 
 							int SSL_selection = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_SSL), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 							if (SSL_selection != CB_ERR)
@@ -1725,7 +1849,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				HWND hParentWnd = GetParent(hWnd);
 				if (hParentWnd)
 				{
-					Prefs.power_on_timeout_ = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_TIMEOUT))).c_str());
+					Prefs.power_on_timeout_ = atoi(tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_TIMEOUT))).c_str());
 					int sel = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 					Prefs.log_level_ = sel;
 
@@ -1944,13 +2068,15 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			{
 
 				TCHAR buffer[MAX_PATH] = { 0 };
-				GetModuleFileName(NULL, buffer, MAX_PATH);
-				std::wstring path = buffer;
-				std::wstring::size_type pos = path.find_last_of(L"\\/");
-				path = path.substr(0, pos + 1);
-				std::wstring exe = path;
-				exe += L"LGTVupdater.exe";
-				ShellExecute(NULL, L"open", exe.c_str(), NULL, path.c_str(), SW_SHOW);
+				if(GetModuleFileName(NULL, buffer, MAX_PATH))
+				{
+					std::wstring path = buffer;
+					std::wstring::size_type pos = path.find_last_of(L"\\/");
+					path = path.substr(0, pos + 1);
+					std::wstring exe = path;
+					exe += L"LGTVupdater.exe";
+					ShellExecute(NULL, L"open", exe.c_str(), NULL, path.c_str(), SW_SHOW);
+				}
 			}
 			else if (wParam == IDC_SYSLINK_CONF)
 			{
@@ -2293,7 +2419,7 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		}
 		if ((HWND)lParam == GetDlgItem(hWnd, IDC_STATIC_STATUS_2))
 		{
-			std::wstring s = getWndText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2));
+			std::wstring s = tools::getWndText(GetDlgItem(hWnd, IDC_STATIC_STATUS_2));
 			if (s.find(L"OK!") != std::wstring::npos)
 				SetTextColor(hdcStatic, COLORREF(COLOR_GREEN));
 			else if (s.find(L"Updating") != std::wstring::npos)
@@ -2374,32 +2500,27 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	{
 		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
 		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
-		SendDlgItemMessage(hWnd, IDC_LIST2, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_EDIT_TIME, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(240, 1));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.user_idle_mode_delay_);
 
-		whitelist_temp = Prefs.user_idle_mode_whitelist_processes_;
-		exclusions_temp = Prefs.user_idle_mode_exclude_fullscreen_whitelist_processes_;
+		process_list_temp = Prefs.user_idle_mode_process_control_list_;
 		SendMessage(hWnd, APP_LISTBOX_REDRAW, 1, 0);
-		SendMessage(hWnd, APP_LISTBOX_REDRAW, 2, 0);
 
-		CheckDlgButton(hWnd, IDC_CHECK_WHITELIST, Prefs.user_idle_mode_whitelist_ ? BST_CHECKED : BST_UNCHECKED);
-		CheckDlgButton(hWnd, IDC_CHECK_FULLSCREEN, !Prefs.user_idle_mode_exclude_fullscreen_ ? BST_CHECKED : BST_UNCHECKED);
-		CheckDlgButton(hWnd, IDC_CHECK_FS_EXCLUSIONS, Prefs.user_idle_mode_exclude_fullscreen_whitelist_ ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_PROCESS_CONTROL, Prefs.user_idle_mode_process_control_ ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_FULLSCREEN, Prefs.user_idle_mode_disable_while_fullscreen_ ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_VWL, Prefs.user_idle_mode_disable_while_video_wake_lock_ ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_VWL_FG, Prefs.user_idle_mode_disable_while_video_wake_lock_foreground_ ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_VWL_FULLSCREEN, Prefs.user_idle_mode_disable_while_video_wake_lock_fullscreen_ ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_MUTE, Prefs.user_idle_mode_mute_speakers_ ? BST_CHECKED : BST_UNCHECKED);
 
-		EnableWindow(GetDlgItem(hWnd, IDC_LIST), Prefs.user_idle_mode_whitelist_);
-		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD), Prefs.user_idle_mode_whitelist_);
-		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), Prefs.user_idle_mode_whitelist_);
-		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), Prefs.user_idle_mode_whitelist_);
+		EnableWindow(GetDlgItem(hWnd, IDC_LIST), Prefs.user_idle_mode_process_control_);
+		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD), Prefs.user_idle_mode_process_control_);
+		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), Prefs.user_idle_mode_process_control_);
+		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), Prefs.user_idle_mode_process_control_);
+		EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FG), Prefs.user_idle_mode_disable_while_video_wake_lock_);
+		EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FULLSCREEN), Prefs.user_idle_mode_disable_while_video_wake_lock_);
 
-		EnableWindow(GetDlgItem(hWnd, IDC_CHECK_FS_EXCLUSIONS), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN));
-		EnableWindow(GetDlgItem(hWnd, IDC_LIST2), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN) ? IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS) : false);
-		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD2), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN) ? IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS) : false);
-		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR2), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN) ? IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS) : false);
-		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE2), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN) ? IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS) : false);
-		
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
 	}break;
 	case APP_LISTBOX_EDIT:
@@ -2412,36 +2533,26 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			if (index != LB_ERR)
 			{
 				int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETITEMDATA, index, 0);
-				if (data != LB_ERR && data < whitelist_temp.size())
+				if (data != LB_ERR && data < process_list_temp.size())
 				{
 					h_whitelist_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
-					SetWindowText(h_whitelist_wnd, L"Edit whitelisted process");
+					SetWindowText(h_whitelist_wnd, L"Edit process control");
 					SetWindowText(GetDlgItem(h_whitelist_wnd, IDOK), L"Change");
-					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_NAME), whitelist_temp[data].friendly_name.c_str());
-					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_PROCESS), whitelist_temp[data].binary.c_str());
+					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_NAME), process_list_temp[data].friendly_name.c_str());
+					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_PROCESS), process_list_temp[data].binary.c_str());
+					CheckDlgButton(h_whitelist_wnd, IDC_PC_CHECK_ISRUNNING, process_list_temp[data].process_control_disable_while_running ? BST_CHECKED : BST_UNCHECKED);
+					CheckDlgButton(h_whitelist_wnd, IDC_PC_CHECK_ISFOREGROUND, process_list_temp[data].process_control_disable_while_running_foreground ? BST_CHECKED : BST_UNCHECKED);
+					CheckDlgButton(h_whitelist_wnd, IDC_PC_CHECK_ISFULLSCREEN, process_list_temp[data].process_control_disable_while_running_fullscreen ? BST_CHECKED : BST_UNCHECKED);
+					CheckDlgButton(h_whitelist_wnd, IDC_PC_CHECK_VWL, process_list_temp[data].process_control_disable_while_running_display_lock ? BST_CHECKED : BST_UNCHECKED);
+					EnableWindow(GetDlgItem(h_whitelist_wnd, IDC_PC_CHECK_ISFOREGROUND), process_list_temp[data].process_control_disable_while_running);
+					EnableWindow(GetDlgItem(h_whitelist_wnd, IDC_PC_CHECK_ISFULLSCREEN), process_list_temp[data].process_control_disable_while_running);
+					EnableWindow(GetDlgItem(h_whitelist_wnd, IDC_PC_CHECK_VWL), process_list_temp[data].process_control_disable_while_running);
 					EnableWindow(hWnd, false);
 					ShowWindow(h_whitelist_wnd, SW_SHOW);
 				}
 			}
 		}break;
-		case 2:
-		{
-			int index = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_GETCURSEL, 0, 0);
-			if (index != LB_ERR)
-			{
-				int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_GETITEMDATA, index, 0);
-				if (data != LB_ERR && data < exclusions_temp.size())
-				{
-					h_whitelist_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
-					SetWindowText(h_whitelist_wnd, L"Edit fullscreen exclusion process");
-					SetWindowText(GetDlgItem(h_whitelist_wnd, IDOK), L"Change");
-					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_NAME), exclusions_temp[data].friendly_name.c_str());
-					SetWindowText(GetDlgItem(h_whitelist_wnd, IDC_EDIT_PROCESS), exclusions_temp[data].binary.c_str());
-					EnableWindow(hWnd, false);
-					ShowWindow(h_whitelist_wnd, SW_SHOW);
-				}
-			}
-		}break;
+
 		default:break;
 		}
 	}break;
@@ -2453,19 +2564,12 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		case 1:
 		{
 			h_whitelist_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
-			SetWindowText(h_whitelist_wnd, L"Add whitelisted process");
+			SetWindowText(h_whitelist_wnd, L"Add to process control");
 			SetWindowText(GetDlgItem(h_whitelist_wnd, IDOK), L"Add");
 			EnableWindow(hWnd, false);
 			ShowWindow(h_whitelist_wnd, SW_SHOW);
 		}break;
-		case 2:
-		{
-			h_whitelist_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_WHITELIST_EDIT), hWnd, (DLGPROC)WndWhitelistProc);
-			SetWindowText(h_whitelist_wnd, L"Add fullscreen exclusion process");
-			SetWindowText(GetDlgItem(h_whitelist_wnd, IDOK), L"Add");
-			EnableWindow(hWnd, false);
-			ShowWindow(h_whitelist_wnd, SW_SHOW);
-		}break;
+
 		default:break;
 		}
 	}break;
@@ -2485,13 +2589,13 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				{
 					std::wstring s = L"Do you want to delete '";
 					s += text;
-					s += L"' from the whitelist?";
+					s += L"' from process control?";
 					if (MessageBox(hWnd, s.c_str(), L"Delete item", MB_YESNO | MB_ICONQUESTION) == IDYES)
 					{
 						int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETITEMDATA, index, 0);
-						if (data != LB_ERR && data < whitelist_temp.size())
+						if (data != LB_ERR && data < process_list_temp.size())
 						{
-							whitelist_temp.erase(whitelist_temp.begin() + data);
+							process_list_temp.erase(process_list_temp.begin() + data);
 							SendMessage(hWnd, APP_LISTBOX_REDRAW, 1, 0);
 							EnableWindow(GetDlgItem(hWnd, IDOK), true);
 						}
@@ -2507,41 +2611,6 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				}
 			}
 		}break;
-		case 2:
-		{
-			int index = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_GETCURSEL, 0, 0);
-			if (index != LB_ERR)
-			{
-				TCHAR* text;
-				int len = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_GETTEXTLEN, index, 0);
-				text = new TCHAR[len + 1];
-				if (SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_GETTEXT, (WPARAM)index, (LPARAM)text) != LB_ERR)
-				{
-					std::wstring s = L"Do you want to delete '";
-					s += text;
-					s += L"' from the fullscreen exclusions?";
-					if (MessageBox(hWnd, s.c_str(), L"Delete item", MB_YESNO | MB_ICONQUESTION) == IDYES)
-					{
-						int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_GETITEMDATA, index, 0);
-						if (data != LB_ERR && data < exclusions_temp.size())
-						{
-							exclusions_temp.erase(exclusions_temp.begin() + data);
-							SendMessage(hWnd, APP_LISTBOX_REDRAW, 2, 0);
-							EnableWindow(GetDlgItem(hWnd, IDOK), true);
-						}
-						else
-						{
-							MessageBox(hWnd, L"Could not delete item!", L"Error", MB_OK | MB_ICONINFORMATION);
-						}
-					}
-				}
-				else
-				{
-					MessageBox(hWnd, L"There was an error when managing the listbox", L"Error", MB_OK | MB_ICONINFORMATION);
-				}
-			}
-
-		}break;
 		default:break;
 		}
 	}break;
@@ -2553,7 +2622,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		{
 			int i = 0;
 			SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_RESETCONTENT, 0, 0);
-			for (auto& w : whitelist_temp)
+			for (auto& w : process_list_temp)
 			{
 				if (w.binary != L"" && w.friendly_name != L"")
 				{
@@ -2574,31 +2643,6 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), SW_HIDE);
 			}
 		}break;
-		case 2:
-		{
-			int i = 0;
-			SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_RESETCONTENT, 0, 0);
-			for (auto& w : exclusions_temp)
-			{
-				if (w.binary != L"" && w.friendly_name != L"")
-				{
-					int index = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_ADDSTRING, 0, (LPARAM)(w.friendly_name.c_str()));
-					SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_SETITEMDATA, index, (LPARAM)i);
-					i++;
-				}
-			}
-			if (SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_GETCOUNT, 0, 0) > 0)
-			{
-				SendMessage(GetDlgItem(hWnd, IDC_LIST2), LB_SETCURSEL, 0, 0);
-				ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR2), SW_SHOW);
-				ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE2), SW_SHOW);
-			}
-			else
-			{
-				ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR2), SW_HIDE);
-				ShowWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE2), SW_HIDE);
-			}
-		}break;
 		default:break;
 		}
 	}break;
@@ -2614,10 +2658,6 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			{
 				PostMessage(hWnd, APP_LISTBOX_EDIT, 1, 0);
 			}break;
-			case IDC_LIST2:
-			{
-				PostMessage(hWnd, APP_LISTBOX_EDIT, 2, 0);
-			}break;
 			default:break;
 			}		
 		}break;
@@ -2626,44 +2666,36 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		{
 			switch (LOWORD(wParam))
 			{
-			case IDC_CHECK_WHITELIST:
+			case IDC_CHECK_PROCESS_CONTROL:
 			{
-				EnableWindow(GetDlgItem(hWnd, IDC_LIST), IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST));
-				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD), IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST));
-				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST));
-				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST));
+				EnableWindow(GetDlgItem(hWnd, IDC_LIST), IsDlgButtonChecked(hWnd, IDC_CHECK_PROCESS_CONTROL));
+				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD), IsDlgButtonChecked(hWnd, IDC_CHECK_PROCESS_CONTROL));
+				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR), IsDlgButtonChecked(hWnd, IDC_CHECK_PROCESS_CONTROL));
+				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), IsDlgButtonChecked(hWnd, IDC_CHECK_PROCESS_CONTROL));
 				EnableWindow(GetDlgItem(hWnd, IDOK), true);
 			}break;
-			case IDC_CHECK_FS_EXCLUSIONS:
+			case IDC_CHECK_VWL:
 			{
-				EnableWindow(GetDlgItem(hWnd, IDC_LIST2), IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS));
-				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD2), IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS));
-				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR2), IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS));
-				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE2), IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS));
-				EnableWindow(GetDlgItem(hWnd, IDOK), true);
-			}break;
+				EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FG), IsDlgButtonChecked(hWnd, IDC_CHECK_VWL));
+				EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FULLSCREEN), IsDlgButtonChecked(hWnd, IDC_CHECK_VWL));
+			}			
 			case IDC_CHECK_FULLSCREEN:
-			{
-				EnableWindow(GetDlgItem(hWnd, IDC_CHECK_FS_EXCLUSIONS), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN));
-				EnableWindow(GetDlgItem(hWnd, IDC_LIST2), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN)?IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS):false);
-				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD2), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN)? IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS):false);
-				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_EDIR2), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN)?IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS):false);
-				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE2), IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN)?IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS):false);
-				EnableWindow(GetDlgItem(hWnd, IDOK), true);
-			}break;
+			case IDC_CHECK_VWL_FG:
+			case IDC_CHECK_VWL_FULLSCREEN:
 			case IDC_CHECK_MUTE:
 			{
 				EnableWindow(GetDlgItem(hWnd, IDOK), true);
 			}break;
 			case IDOK:
 			{
-				Prefs.user_idle_mode_delay_ = atoi(tools::narrow(getWndText(GetDlgItem(hWnd, IDC_EDIT_TIME))).c_str());
-				Prefs.user_idle_mode_exclude_fullscreen_ = !IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN);
-				Prefs.user_idle_mode_whitelist_ = IsDlgButtonChecked(hWnd, IDC_CHECK_WHITELIST);
-				Prefs.user_idle_mode_exclude_fullscreen_whitelist_ = IsDlgButtonChecked(hWnd, IDC_CHECK_FS_EXCLUSIONS);
+				Prefs.user_idle_mode_delay_ = atoi(tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_EDIT_TIME))).c_str());
+				Prefs.user_idle_mode_process_control_ = IsDlgButtonChecked(hWnd, IDC_CHECK_PROCESS_CONTROL);
+				Prefs.user_idle_mode_disable_while_fullscreen_ = IsDlgButtonChecked(hWnd, IDC_CHECK_FULLSCREEN);
+				Prefs.user_idle_mode_disable_while_video_wake_lock_ = IsDlgButtonChecked(hWnd, IDC_CHECK_VWL);
+				Prefs.user_idle_mode_disable_while_video_wake_lock_foreground_ = IsDlgButtonChecked(hWnd, IDC_CHECK_VWL_FG);
+				Prefs.user_idle_mode_disable_while_video_wake_lock_fullscreen_ = IsDlgButtonChecked(hWnd, IDC_CHECK_VWL_FULLSCREEN);
 				Prefs.user_idle_mode_mute_speakers_ = IsDlgButtonChecked(hWnd, IDC_CHECK_MUTE);
-				Prefs.user_idle_mode_whitelist_processes_ = whitelist_temp;
-				Prefs.user_idle_mode_exclude_fullscreen_whitelist_processes_ = exclusions_temp;
+				Prefs.user_idle_mode_process_control_list_ = process_list_temp;
 				EndDialog(hWnd, 0);
 				EnableWindow(GetParent(hWnd), true);
 				EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
@@ -2699,17 +2731,14 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			if (wParam == IDC_SYSLINK_INFO_1)
 			{
 				MessageBox(hWnd, L"Please configure the time, in minutes, without user input from keyboard, mouse or game controllers before "
-					"triggering the user idle mode.", L"User idle time configuration", MB_OK | MB_ICONINFORMATION);
+					"User Idle Mode is triggered and the screen is blanked.\r\n\r\nScreen blanking can be globally disabled for "
+					"fullscreen applications and for web-browsers while a video or a game is playing. \r\n\r\nAlso select whether the built-in speakers "
+					"shall be muted while the screen is blanked", L"User Idle Mode configuration", MB_OK | MB_ICONINFORMATION);
 			}
 			else if (wParam == IDC_SYSLINK_INFO_2)
 			{
-				MessageBox(hWnd, L"Enable to ensure that when a whitelisted process is running the user idle mode will not be triggered. This can be useful to prevent user idle mode "
-					"while running a specific movie player, for example.", L"User idle mode whitelist configuration", MB_OK | MB_ICONINFORMATION);
-			}
-			else if (wParam == IDC_SYSLINK_INFO_3)
-			{
-				MessageBox(hWnd, L"Enable the fullscreen user idle mode to ensure that user idle mode triggers also when running an application or game in fullscreen."
-					"\n\nAdditionally, it is possible to configure processes which are excluded from the fullscreen user idle mode detection.", L"User idle mode fullscreen configuration", MB_OK | MB_ICONINFORMATION);
+				MessageBox(hWnd, L"Enable detailed process control to set rules and conditions for a specific process. E.g. to prevent "
+					"the screen blanking while running a specific movie player.", L"User Idle Mode process control", MB_OK | MB_ICONINFORMATION);
 			}
 			else if (wParam == IDC_SYSLINK_ADD)
 			{
@@ -2723,19 +2752,6 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			{
 				PostMessage(hWnd, APP_LISTBOX_DELETE, 1, 0);
 			}
-
-			else if (wParam == IDC_SYSLINK_ADD2)
-			{
-				PostMessage(hWnd, APP_LISTBOX_ADD, 2, 0);
-			}
-			else if (wParam == IDC_SYSLINK_EDIR2)
-			{
-				PostMessage(hWnd, APP_LISTBOX_EDIT, 2, 0);
-			}
-			else if (wParam == IDC_SYSLINK_DELETE2)
-			{
-				PostMessage(hWnd, APP_LISTBOX_DELETE, 2, 0);
-			}
 		}break;
 		default:break;
 		}
@@ -2744,9 +2760,9 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	{
 		HDC hdcStatic = (HDC)wParam;
 		SetTextColor(hdcStatic, COLORREF(COLOR_STATIC));
-		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_WHITELIST)
+		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_PROCESS_CONTROL)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_FULLSCREEN)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_FS_EXCLUSIONS))
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_VWL))
 		{
 			SetBkMode(hdcStatic, TRANSPARENT);
 		}
@@ -2822,11 +2838,24 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 		{
 			switch (LOWORD(wParam))
 			{
+			case IDC_PC_CHECK_ISRUNNING:
+			{
+				EnableWindow(GetDlgItem(hWnd, IDC_PC_CHECK_ISFULLSCREEN), IsDlgButtonChecked(hWnd, IDC_PC_CHECK_ISRUNNING));
+				EnableWindow(GetDlgItem(hWnd, IDC_PC_CHECK_ISFOREGROUND), IsDlgButtonChecked(hWnd, IDC_PC_CHECK_ISRUNNING));
+				EnableWindow(GetDlgItem(hWnd, IDC_PC_CHECK_VWL), IsDlgButtonChecked(hWnd, IDC_PC_CHECK_ISRUNNING));
+			}
+			case IDC_PC_CHECK_ISFULLSCREEN:
+			case IDC_PC_CHECK_ISFOREGROUND:
+			case IDC_PC_CHECK_VWL:
+			{
+				EnableWindow(GetDlgItem(hWnd, IDOK), true);
+			}break;
+
+
 			case IDOK:
 			{
-				std::wstring wnd = getWndText(hWnd);
-				std::wstring name = getWndText(GetDlgItem(hWnd, IDC_EDIT_NAME));
-				std::wstring proc = getWndText(GetDlgItem(hWnd, IDC_EDIT_PROCESS));
+				std::wstring name = tools::getWndText(GetDlgItem(hWnd, IDC_EDIT_NAME));
+				std::wstring proc = tools::tolower(tools::getWndText(GetDlgItem(hWnd, IDC_EDIT_PROCESS)));
 
 				if (name.find_last_of(L"\\/") != std::string::npos)
 				{
@@ -2841,48 +2870,33 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
 				if (name != L"" && proc != L"")
 				{
-					if (getWndText(GetDlgItem(hWnd, IDOK)) == L"Add") // add item
+					if (tools::getWndText(GetDlgItem(hWnd, IDOK)) == L"Add") // add item
 					{
 						Preferences::ProcessList w;
 						w.friendly_name = name;
 						w.binary = proc;
-						if (wnd.find(L"fullscreen") == std::wstring::npos)
-						{
-							whitelist_temp.push_back(w);
-						}
-						else
-						{
-							exclusions_temp.push_back(w);
-						}
+						w.process_control_disable_while_running = IsDlgButtonChecked(hWnd, IDC_PC_CHECK_ISRUNNING);
+						w.process_control_disable_while_running_foreground = IsDlgButtonChecked(hWnd, IDC_PC_CHECK_ISFOREGROUND);
+						w.process_control_disable_while_running_fullscreen = IsDlgButtonChecked(hWnd, IDC_PC_CHECK_ISFULLSCREEN);
+						w.process_control_disable_while_running_display_lock = IsDlgButtonChecked(hWnd, IDC_PC_CHECK_VWL);
+						process_list_temp.push_back(w);
 					}
 					else //change item
 					{
 						if (h_user_idle_mode_wnd)
 						{
-							if (wnd.find(L"fullscreen") == std::wstring::npos)
+							int index = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST), LB_GETCURSEL, 0, 0);
+							if (index != LB_ERR)
 							{
-								int index = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST), LB_GETCURSEL, 0, 0);
-								if (index != LB_ERR)
+								int data = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST), LB_GETITEMDATA, index, 0);
+								if (data != LB_ERR && data < process_list_temp.size())
 								{
-									int data = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST), LB_GETITEMDATA, index, 0);
-									if (data != LB_ERR && data < whitelist_temp.size())
-									{
-										whitelist_temp[data].binary = proc;
-										whitelist_temp[data].friendly_name = name;
-									}
-								}
-							}
-							else
-							{
-								int index = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST2), LB_GETCURSEL, 0, 0);
-								if (index != LB_ERR)
-								{
-									int data = (int)SendMessage(GetDlgItem(h_user_idle_mode_wnd, IDC_LIST2), LB_GETITEMDATA, index, 0);
-									if (data != LB_ERR && data < exclusions_temp.size())
-									{
-										exclusions_temp[data].binary = proc;
-										exclusions_temp[data].friendly_name = name;
-									}
+									process_list_temp[data].binary = proc;
+									process_list_temp[data].friendly_name = name;
+									process_list_temp[data].process_control_disable_while_running = IsDlgButtonChecked(hWnd, IDC_PC_CHECK_ISRUNNING);
+									process_list_temp[data].process_control_disable_while_running_foreground = IsDlgButtonChecked(hWnd, IDC_PC_CHECK_ISFOREGROUND);
+									process_list_temp[data].process_control_disable_while_running_fullscreen = IsDlgButtonChecked(hWnd, IDC_PC_CHECK_ISFULLSCREEN);
+									process_list_temp[data].process_control_disable_while_running_display_lock = IsDlgButtonChecked(hWnd, IDC_PC_CHECK_VWL);
 								}
 							}
 						}
@@ -2890,7 +2904,6 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
 					EndDialog(hWnd, 0);
 					SendMessage(GetParent(hWnd), APP_LISTBOX_REDRAW, 1, 0);
-					SendMessage(GetParent(hWnd), APP_LISTBOX_REDRAW, 2, 0);
 					EnableWindow(GetParent(hWnd), true);
 					EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
 				}
@@ -2930,7 +2943,27 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 		{
 		case NM_CLICK:
 		{
-			if (wParam == IDC_SYSLINK_BROWSE)
+			if (wParam == IDC_SYSLINK7)
+			{
+				MessageBox(hWnd, L"Please type display name and name of the executable for the process which should prevent Screen Blanking. "
+					"The name of the executable can contain wildcard characters (*) to match multiple processes.",
+					L"Process Control configuration", MB_OK | MB_ICONINFORMATION);
+
+			}
+			if (wParam == IDC_SYSLINK13)
+			{
+				MessageBox(hWnd, L"Please select the specific rules for the process by selecting the appropriate checkboxes. \r\n\r\n"
+					"Please note that Universal Windows Platform (UWP) apps are not always detected correctly.",
+					L"Process Control configuration", MB_OK | MB_ICONINFORMATION);
+			}
+			if (wParam == IDC_SYSLINK_WILDCARD)
+			{
+				MessageBox(hWnd, L"The name of the executable can contain wildcard characters (*) to match multiple processes.\r\n\r\n"
+					"It is for example possible to set the executable name to \"*player*.exe\" to match multiple media pleyers, e.g. \"Microsoft.Media.Player.exe\", \"PotPlayerMini64.exe\" and \"KMPlayer64.exe\"",
+					L"Process Control wildcards", MB_OK | MB_ICONINFORMATION);
+
+			}
+			else if (wParam == IDC_SYSLINK_BROWSE)
 			{
 				IFileOpenDialog* pfd;
 				DWORD dwOptions;
@@ -2948,33 +2981,35 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 							pfd->SetOptions(dwOptions | FOS_FILEMUSTEXIST);
 							pfd->SetFileTypes(_countof(aFileTypes), aFileTypes);
 							if (SUCCEEDED(pfd->Show(hWnd)))
+							{
 								if (SUCCEEDED(pfd->GetResult(&psi))) {
 									if (SUCCEEDED(psi->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, &Path)))
 									{
 										TCHAR buffer[MAX_PATH] = { 0 };
-										GetModuleFileName(NULL, buffer, MAX_PATH);
-
-										std::wstring path = Path;
-										std::wstring exe, name;
-										std::wstring::size_type pos = path.find_last_of(L"\\/");
-										if (pos != std::wstring::npos)
+										if (GetModuleFileName(NULL, buffer, MAX_PATH))
 										{
-											exe = path.substr(pos);
-											exe.erase(0, 1);
-											pos = exe.find_last_of(L".");
+											std::wstring path = Path;
+											std::wstring exe, name;
+											std::wstring::size_type pos = path.find_last_of(L"\\/");
 											if (pos != std::wstring::npos)
 											{
-												name = exe.substr(0, pos);
+												exe = path.substr(pos);
+												exe.erase(0, 1);
+												pos = exe.find_last_of(L".");
+												if (pos != std::wstring::npos)
+												{
+													name = exe.substr(0, pos);
+												}
+												if (tools::getWndText(GetDlgItem(hWnd, IDC_EDIT_NAME)) == L"")
+													SetWindowText(GetDlgItem(hWnd, IDC_EDIT_NAME), name.c_str());
+												SetWindowText(GetDlgItem(hWnd, IDC_EDIT_PROCESS), exe.c_str());
 											}
-											if (getWndText(GetDlgItem(hWnd, IDC_EDIT_NAME)) == L"")
-												SetWindowText(GetDlgItem(hWnd, IDC_EDIT_NAME), name.c_str());
-											SetWindowText(GetDlgItem(hWnd, IDC_EDIT_PROCESS), exe.c_str());
+											CoTaskMemFree(Path);
 										}
-
-										CoTaskMemFree(Path);
 									}
 									psi->Release();
 								}
+							}
 						}
 						pfd->Release();
 					}
@@ -3245,19 +3280,9 @@ void ipcCallback(std::wstring message, LPVOID pt)
 	return;
 }
 
-//   Get string from control
-std::wstring getWndText(HWND hWnd)
-{
-	int len = GetWindowTextLength(hWnd) + 1;
-	std::vector<wchar_t> buf(len);
-	GetWindowText(hWnd, &buf[0], len);
-	std::wstring text = &buf[0];
-	return text;
-}
-
 void prepareForUninstall(void)
 {
-	SendMessage(HWND_BROADCAST, custom_daemon_close_message, NULL, NULL);
-	SendMessage(HWND_BROADCAST, custom_updater_close_message, NULL, (LPARAM)1);
+	PostMessage(HWND_BROADCAST, custom_daemon_close_message, NULL, NULL);
+	PostMessage(HWND_BROADCAST, custom_updater_close_message, NULL, (LPARAM)1);
 	return;
 }
