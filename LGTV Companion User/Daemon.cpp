@@ -1036,7 +1036,7 @@ void log(std::wstring input)
 	{
 		std::wstring buf = tools::getWndText(GetDlgItem(h_main_wnd, IDC_EDIT));
 		buf = buf.substr(10000);
-		int find = buf.find_first_of('\n');
+		size_t find = buf.find_first_of('\n');
 		if (find != std::wstring::npos)
 			buf = buf.substr(find + 1);
 		SetWindowText(GetDlgItem(h_main_wnd, IDC_EDIT), buf.c_str());
