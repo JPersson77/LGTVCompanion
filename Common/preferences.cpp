@@ -1,6 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
-#define WINVER 0x0603
-#define _WIN32_WINNT 0x0603
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "common_app_define.h"
@@ -36,6 +36,12 @@ using			json = nlohmann::json;
 #define			JSON_MUTE_SPEAKERS				"MuteSpeakers"
 #define			JSON_TIMING_PRESHUTDOWN			"TimingPreshutdown"
 #define			JSON_TIMING_SHUTDOWN			"TimingShutdown"
+#define			JSON_UIM_FULLSCREEN_DISABLE		"BlankWhenIdleFullscreenDisable"
+#define			JSON_UIM_VIDEO_BROWSER_DISABLE	"BlankWhenIdleVWLDisable"
+#define			JSON_UIM_VIDEO_BROWSER_DISABLE2	"BlankWhenIdleVWLDisableFocus"
+#define			JSON_UIM_VIDEO_BROWSER_DISABLE3	"BlankWhenIdleVWLDisableFullscreen"
+#define			JSON_UIM_PROCESS_CONTROL		"BlankWhenIdleProcessControl"
+#define			JSON_UIM_PROCESS_LIST			"BlankWhenIdleProcessList"
 #define			JSON_DEVICE_NAME				"Name"
 #define			JSON_DEVICE_IP					"IP"
 #define			JSON_DEVICE_UNIQUEKEY			"UniqueDeviceKey"
@@ -54,6 +60,7 @@ using			json = nlohmann::json;
 #define			JSON_DEVICE_SETINPUTDELAY		"SetHdmiInputDelay"
 #define			JSON_DEVICE_MAC					"MAC"
 #define			JSON_DEVICE_PERSISTENT			"PersistentConnectionLevel"
+#define			JSON_DEVICE_LUID				"NicLuid"
 
 Preferences::Preferences(std::wstring configuration_file_name)
 {
@@ -124,6 +131,8 @@ Preferences::Preferences(std::wstring configuration_file_name)
 				j = jsonPrefs[JSON_PREFS_NODE][JSON_VERSION];
 				if (!j.empty() && j.is_number())
 				{
+					bool was_fullscreen_whitelist_enabled = false;
+					bool was_process_whitelist_enabled = false;
 					json_string_ = jsonPrefs.dump(4);
 					version_loaded_ = j.get<int>();
 					if (version_loaded_ < 3)
@@ -202,18 +211,44 @@ Preferences::Preferences(std::wstring configuration_file_name)
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_KEEPTOPOLOGYONBOOT];
 					if (!j.empty() && j.is_boolean())
 						topology_keep_on_boot_ = j.get<bool>();
-					// User idle mode whitelist enabled
+
+					// User idle mode - process control
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST];
 					if (!j.empty() && j.is_boolean())
-						user_idle_mode_whitelist_ = j.get<bool>();
-					// User idle mode fullscreen exclusions enabled
-					j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE];
-					if (!j.empty() && j.is_boolean())
-						user_idle_mode_exclude_fullscreen_whitelist_ = j.get<bool>();
-					// User idle mode, prohibit fullscreen
+					{
+						was_process_whitelist_enabled = j.get<bool>();
+					}
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN];
 					if (!j.empty() && j.is_boolean())
-						user_idle_mode_exclude_fullscreen_ = j.get<bool>();
+					{
+						user_idle_mode_disable_while_fullscreen_ = j.get<bool>();
+						was_fullscreen_whitelist_enabled = !user_idle_mode_disable_while_fullscreen_;  // !user_idle_mode_disable_while_fullscreen_ && was_fullscreen_whitelist_enabled;
+					}
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE];
+					if (!j.empty() && j.is_boolean())
+					{
+						was_fullscreen_whitelist_enabled = was_fullscreen_whitelist_enabled && j.get<bool>();
+					}
+					user_idle_mode_process_control_ = was_fullscreen_whitelist_enabled || was_process_whitelist_enabled;
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_CONTROL];
+					if (!j.empty() && j.is_boolean())
+						user_idle_mode_process_control_ = j.get<bool>();
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_UIM_FULLSCREEN_DISABLE];
+					if (!j.empty() && j.is_boolean())
+						user_idle_mode_disable_while_fullscreen_ = j.get<bool>();
+
+
+					// User idle mode - disable while video wake lock
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_UIM_VIDEO_BROWSER_DISABLE];
+					if (!j.empty() && j.is_boolean())
+						user_idle_mode_disable_while_video_wake_lock_ = j.get<bool>();
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_UIM_VIDEO_BROWSER_DISABLE2];
+					if (!j.empty() && j.is_boolean())
+						user_idle_mode_disable_while_video_wake_lock_foreground_ = j.get<bool>();
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_UIM_VIDEO_BROWSER_DISABLE3];
+					if (!j.empty() && j.is_boolean())
+						user_idle_mode_disable_while_video_wake_lock_fullscreen_ = j.get<bool>();
+
 					// Remote streaming host support
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM];
 					if (!j.empty() && j.is_boolean())
@@ -237,28 +272,78 @@ Preferences::Preferences(std::wstring configuration_file_name)
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_TIMING_SHUTDOWN];
 					if (!j.empty() && j.is_number())
 						shutdown_timing_ = j.get<int>();
-					// User idle mode whitelist
+					
+					// Process control - process list (old process whitelist)
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_WHITELIST];
 					if (!j.empty() && j.size() > 0)
 					{
 						for (auto& elem : j.items())
 						{
 							ProcessList w;
-							w.binary = tools::widen(elem.value().get<std::string>());
+							w.binary = tools::tolower(tools::widen(elem.value().get<std::string>()));
 							w.friendly_name = tools::widen(elem.key());
-							user_idle_mode_whitelist_processes_.push_back(w);
+							w.process_control_disable_while_running = was_process_whitelist_enabled;
+							w.process_control_disable_while_running_foreground = false;
+							w.process_control_disable_while_running_fullscreen = false;
+							w.process_control_disable_while_running_display_lock = false;
+							user_idle_mode_process_control_list_.push_back(w);
 						}
 					}
-					// User idle mode fullscreen exclusions
+					// Process control - process list (old fullscreen exclusions)
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS];
 					if (!j.empty() && j.size() > 0)
 					{
 						for (auto& elem : j.items())
 						{
+							bool found = false;
+							std::wstring elem_binary = tools::tolower(tools::widen(elem.value().get<std::string>()));
+							for (auto& proc : user_idle_mode_process_control_list_)
+							{
+								if (proc.binary == elem_binary)
+								{
+									proc.process_control_disable_while_running = was_process_whitelist_enabled || was_fullscreen_whitelist_enabled;
+									proc.process_control_disable_while_running_fullscreen = true;
+									found = true;
+								}
+							}
+							if(!found)
+							{
+								ProcessList w;
+								w.binary = tools::tolower(tools::widen(elem.value().get<std::string>()));
+								w.friendly_name = tools::widen(elem.key());
+								w.process_control_disable_while_running_display_lock = false;
+								w.process_control_disable_while_running_foreground = false;
+								w.process_control_disable_while_running_fullscreen = true;
+								w.process_control_disable_while_running = was_fullscreen_whitelist_enabled;
+								user_idle_mode_process_control_list_.push_back(w);
+							}
+						}
+					}
+					// Process control - process list 
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_LIST];
+					if (!j.empty() && j.size() > 0)
+					{
+						for (auto& elem : j.items())
+						{
 							ProcessList w;
-							w.binary = tools::widen(elem.value().get<std::string>());
+							nlohmann::json item;
 							w.friendly_name = tools::widen(elem.key());
-							user_idle_mode_exclude_fullscreen_whitelist_processes_.push_back(w);
+							item = elem.value()["Binary"];
+							if (!item.empty() && item.is_string())
+								w.binary = tools::tolower(tools::widen(item.get<std::string>())); 
+							item = elem.value()["Running"];
+							if (!item.empty() && item.is_boolean())
+								w.process_control_disable_while_running = item.get<bool>();
+							item = elem.value()["Fullscreen"];
+							if (!item.empty() && item.is_boolean())
+								w.process_control_disable_while_running_fullscreen = item.get<bool>();
+							item = elem.value()["VideoWakeLock"];
+							if (!item.empty() && item.is_boolean())
+								w.process_control_disable_while_running_display_lock = item.get<bool>();
+							item = elem.value()["Foreground"];
+							if (!item.empty() && item.is_boolean())
+								w.process_control_disable_while_running_foreground = item.get<bool>();
+							user_idle_mode_process_control_list_.push_back(w);
 						}
 					}
 					// initialize the configuration for WebOS devices
@@ -287,6 +372,12 @@ Preferences::Preferences(std::wstring configuration_file_name)
 
 						if (item.value()[JSON_DEVICE_NAME].is_string())
 							device.name = item.value()[JSON_DEVICE_NAME].get<std::string>();
+						std::string prefix = "[LG] webOS TV ";
+						if(device.name.find(prefix) == 0)
+						{
+							if (device.name.size() > 18)
+								device.name.erase(0, prefix.length());
+						}
 
 						if (item.value()[JSON_DEVICE_IP].is_string())
 							device.ip = item.value()[JSON_DEVICE_IP].get<std::string>();
@@ -321,6 +412,9 @@ Preferences::Preferences(std::wstring configuration_file_name)
 
 						if (item.value()[JSON_DEVICE_PERSISTENT].is_number())
 							device.persistent_connection_level = item.value()[JSON_DEVICE_PERSISTENT].get<int>();
+
+						if (item.value()[JSON_DEVICE_LUID].is_number_unsigned())
+							device.network_interface_luid = item.value()[JSON_DEVICE_LUID].get<uint64_t>();
 
 						if (item.value()[JSON_DEVICE_SOURCEINPUT].is_number())
 							device.sourceHdmiInput = item.value()[JSON_DEVICE_SOURCEINPUT].get<int>();
@@ -428,9 +522,11 @@ bool Preferences::Preferences::writeToDisk(void)
 	prefs[JSON_PREFS_NODE][JSON_IDLEBLANKDELAY] = (int)user_idle_mode_delay_;
 	prefs[JSON_PREFS_NODE][JSON_ADHERETOPOLOGY] = (bool)topology_support_;
 	prefs[JSON_PREFS_NODE][JSON_KEEPTOPOLOGYONBOOT] = (bool)topology_keep_on_boot_;
-	prefs[JSON_PREFS_NODE][JSON_IDLEWHITELIST] = (bool) user_idle_mode_whitelist_;
-	prefs[JSON_PREFS_NODE][JSON_IDLEFULLSCREEN] = (bool) user_idle_mode_exclude_fullscreen_;
-	prefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS_ENABLE] = (bool) user_idle_mode_exclude_fullscreen_whitelist_;
+	prefs[JSON_PREFS_NODE][JSON_UIM_FULLSCREEN_DISABLE] = (bool)user_idle_mode_disable_while_fullscreen_;
+	prefs[JSON_PREFS_NODE][JSON_UIM_VIDEO_BROWSER_DISABLE] = (bool)user_idle_mode_disable_while_video_wake_lock_;
+	prefs[JSON_PREFS_NODE][JSON_UIM_VIDEO_BROWSER_DISABLE2] = (bool)user_idle_mode_disable_while_video_wake_lock_foreground_;
+	prefs[JSON_PREFS_NODE][JSON_UIM_VIDEO_BROWSER_DISABLE3] = (bool)user_idle_mode_disable_while_video_wake_lock_fullscreen_;
+	prefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_CONTROL] = (bool)user_idle_mode_process_control_;
 	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM] = (bool)remote_streaming_host_support_;
 	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_MODE] = (bool)remote_streaming_host_prefer_power_off_;
 	prefs[JSON_PREFS_NODE][JSON_EXTERNAL_API] = (bool)external_api_support_;
@@ -443,12 +539,15 @@ bool Preferences::Preferences::writeToDisk(void)
 	if (event_log_shutdown_strings_custom_.size() > 0)
 		for (auto& item : event_log_shutdown_strings_custom_)
 			prefs[JSON_PREFS_NODE][JSON_EVENT_SHUTDOWN_STRINGS].push_back(item);
-	if (user_idle_mode_whitelist_processes_.size() > 0)
-		for (auto& w : user_idle_mode_whitelist_processes_)
-			prefs[JSON_PREFS_NODE][JSON_WHITELIST][tools::narrow(w.friendly_name)] = tools::narrow(w.binary);
-	if (user_idle_mode_exclude_fullscreen_whitelist_processes_.size() > 0)
-		for (auto& w : user_idle_mode_exclude_fullscreen_whitelist_processes_)
-			prefs[JSON_PREFS_NODE][JSON_IDLE_FS_EXCLUSIONS][tools::narrow(w.friendly_name)] = tools::narrow(w.binary);
+	if(user_idle_mode_process_control_list_.size() > 0)
+		for(auto& item : user_idle_mode_process_control_list_)
+		{
+			prefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_LIST][tools::narrow(item.friendly_name)]["Binary"] = tools::narrow(item.binary);
+			prefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_LIST][tools::narrow(item.friendly_name)]["Fullscreen"] = item.process_control_disable_while_running_fullscreen;
+			prefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_LIST][tools::narrow(item.friendly_name)]["Running"] = item.process_control_disable_while_running;
+			prefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_LIST][tools::narrow(item.friendly_name)]["Foreground"] = item.process_control_disable_while_running_foreground;
+			prefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_LIST][tools::narrow(item.friendly_name)]["VideoWakeLock"] = item.process_control_disable_while_running_display_lock;
+		}
 
 	//Iterate devices
 	int deviceid = 1;
@@ -482,6 +581,7 @@ bool Preferences::Preferences::writeToDisk(void)
 
 		prefs[id][JSON_DEVICE_WOLTYPE] = item.wake_method;
 		prefs[id][JSON_DEVICE_PERSISTENT] = (int)item.persistent_connection_level;
+		prefs[id][JSON_DEVICE_LUID] = (uint64_t)item.network_interface_luid;
 		prefs[id][JSON_DEVICE_ENABLED] = (bool)item.enabled;
 
 		for (auto& m : item.mac_addresses)

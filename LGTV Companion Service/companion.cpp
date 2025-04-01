@@ -1,7 +1,7 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define WIN32_LEAN_AND_MEAN
-#define WINVER 0x0603
-#define _WIN32_WINNT 0x0603
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
 
 #include "companion.h"
 #include "web_os_client.h"

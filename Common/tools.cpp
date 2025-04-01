@@ -1,10 +1,9 @@
 #define WIN32_LEAN_AND_MEAN
-#define WINVER 0x0603
-#define _WIN32_WINNT 0x0603
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "tools.h"
-#include <Windows.h>
 #include <WinSock2.h>
 #include <ws2tcpip.h>
 #include <algorithm>
@@ -12,6 +11,7 @@
 #include <taskschd.h>
 //#include <atlbase.h>
 #include <comdef.h>
+#include <iphlpapi.h>
 //#include <iostream>
 
 //#pragma comment(lib, "mstask.lib")
@@ -19,6 +19,7 @@
 //#pragma comment(lib, "comsupp.lib")
 
 #pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "Iphlpapi.lib")
 
 std::wstring tools::widen(std::string input) {
 	if (input == "")
@@ -111,6 +112,15 @@ std::vector<std::string> tools::stringsplit(std::string str, std::string token) 
 		}
 	}
 	return res;
+}
+//   Get string from control
+std::wstring tools::getWndText(HWND hWnd)
+{
+	int len = GetWindowTextLength(hWnd) + 1;
+	std::vector<wchar_t> buf(len);
+	GetWindowText(hWnd, &buf[0], len);
+	std::wstring text = &buf[0];
+	return text;
 }
 void tools::replaceAllInPlace(std::string& str, const std::string& from, const std::string& to)
 {
@@ -304,4 +314,113 @@ bool tools::startScheduledTask(std::wstring task_folder, std::wstring task_name)
 	pService->Release();
 	CoUninitialize();
 	return true;
+}
+bool tools::compareUsingWildcard(const std::wstring& text, const std::wstring& pattern) {
+	size_t text_index = 0;
+	size_t pattern_index = 0;
+	size_t star_position = std::wstring::npos;  // Position of '*' in pattern
+	size_t text_backtrack = 0;                  // Position to backtrack in text
+
+	while (text_index < text.size()) {
+		// Match characters or single wildcard '?'
+		if (pattern_index < pattern.size() &&
+			(pattern[pattern_index] == L'*')) {
+			// Remember star position and text position
+			star_position = pattern_index;
+			text_backtrack = text_index;
+			pattern_index++;
+		}
+		else if (pattern_index < pattern.size() &&
+			(pattern[pattern_index] == text[text_index])) {
+			// Simple match - advance both pointers
+			text_index++;
+			pattern_index++;
+		}
+		else {
+			if (star_position == std::wstring::npos) {
+				// No star to backtrack to - no match
+				return false;
+			}
+			// Backtrack: use star to match one more character
+			pattern_index = star_position + 1;
+			text_index = ++text_backtrack;
+		}
+	}
+
+	// Skip remaining '*' in pattern
+	while (pattern_index < pattern.size() && pattern[pattern_index] == L'*') {
+		pattern_index++;
+	}
+
+	// Match is successful only if both reached end
+	return pattern_index == pattern.size();
+}
+std::string tools::getIPfromLUID(uint64_t& luid)
+{
+	ULONG outBufLen = 0;
+	DWORD dwRetVal = 0;
+	PIP_ADAPTER_ADDRESSES pAddresses = nullptr;
+	// Get the required buffer size
+	dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, pAddresses, &outBufLen);
+	if (dwRetVal == ERROR_BUFFER_OVERFLOW)
+	{
+		pAddresses = (PIP_ADAPTER_ADDRESSES)malloc(outBufLen);
+		if (!pAddresses)
+			return "";
+	}
+	else if (dwRetVal != ERROR_SUCCESS)
+		return "";
+	// Retrieve the adapter addresses
+	dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, pAddresses, &outBufLen);
+	if (dwRetVal == NO_ERROR)
+	{
+		for (PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses; pCurrAddresses != NULL; pCurrAddresses = pCurrAddresses->Next)
+		{
+
+			if (pCurrAddresses->Luid.Value != luid)
+				continue;
+
+			char ipStringBuffer[INET6_ADDRSTRLEN];
+			for (PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrAddresses->FirstUnicastAddress; pUnicast != NULL; pUnicast = pUnicast->Next)
+			{
+				LPSOCKADDR sockaddr = pUnicast->Address.lpSockaddr;
+				DWORD ipBufferLength = sizeof(ipStringBuffer);
+
+				// Convert the address to a readable string
+				if (sockaddr->sa_family == AF_INET) // IPv4
+				{
+					sockaddr_in* ipv4 = (sockaddr_in*)sockaddr;
+					InetNtopA(AF_INET, &(ipv4->sin_addr), ipStringBuffer, ipBufferLength);
+					if (strcmp(ipStringBuffer, "127.0.0.1") != 0)
+					{
+						std::string out(ipStringBuffer);
+						return out;
+					}
+				}
+			}
+		}
+	}
+	// Free memory
+	if (pAddresses)
+		free(pAddresses);
+	return "";
+}
+std::string	tools::getIPfromLUIDandEndpoint(uint64_t& value, std::string& destinationIp)
+{
+	MIB_IPFORWARD_ROW2 route = {};
+	SOCKADDR_INET destAddress = {};
+	SOCKADDR_INET sourceAddress = {};
+	char ipBuffer[INET6_ADDRSTRLEN] = { 0 };
+	NET_LUID luid;
+	luid.Value = value;
+
+	// Set the destination address (can be IPv4 or IPv6)
+	if (InetPtonA(AF_INET, destinationIp.c_str(), &destAddress.Ipv4.sin_addr) != 1)
+		return "";
+	destAddress.si_family = AF_INET;
+	DWORD result = GetBestRoute2(&luid, 0, NULL, &destAddress, 0, &route, &sourceAddress);
+	if (result != NO_ERROR) 
+		return "";
+	InetNtopA(AF_INET, &sourceAddress.Ipv4.sin_addr, ipBuffer, INET_ADDRSTRLEN);
+	return std::string(ipBuffer);
 }

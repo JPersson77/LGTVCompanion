@@ -26,6 +26,10 @@ public:
 	struct ProcessList {
 		std::wstring					binary;
 		std::wstring					friendly_name;
+		bool							process_control_disable_while_running = false;
+		bool							process_control_disable_while_running_foreground = false;
+		bool							process_control_disable_while_running_fullscreen = false;
+		bool							process_control_disable_while_running_display_lock = false;
 	};
 
 	std::vector<std::string>			event_log_restart_strings_custom_; 
@@ -40,11 +44,19 @@ public:
 	bool								user_idle_mode_ = false;
 	int									user_idle_mode_delay_ = 10;
 	bool								user_idle_mode_mute_speakers_ = false;
+/*
 	bool								user_idle_mode_whitelist_ = false;
 	std::vector<ProcessList>			user_idle_mode_whitelist_processes_;
 	bool								user_idle_mode_exclude_fullscreen_ = false;
 	bool								user_idle_mode_exclude_fullscreen_whitelist_ = false;
 	std::vector<ProcessList>			user_idle_mode_exclude_fullscreen_whitelist_processes_;
+*/
+	bool								user_idle_mode_disable_while_fullscreen_ = false;
+	bool								user_idle_mode_disable_while_video_wake_lock_ = false;
+	bool								user_idle_mode_disable_while_video_wake_lock_foreground_ = false;
+	bool								user_idle_mode_disable_while_video_wake_lock_fullscreen_ = false;
+	bool								user_idle_mode_process_control_ = false;
+	std::vector<ProcessList>			user_idle_mode_process_control_list_;
 	bool								topology_support_ = false;
 	bool								topology_keep_on_boot_ = false;
 	bool								remote_streaming_host_support_ = false;
