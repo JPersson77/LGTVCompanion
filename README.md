@@ -118,6 +118,7 @@ Please use the Github issue tracker for potential bug reports and/or feature req
 - OpenSSL - https://www.openssl.org/
 - Vcpkg - https://github.com/microsoft/vcpkg
 - SignPath - Free code signing for OpenSource projects https://signpath.io
+- Winsider - Native API headers https://github.com/winsiderss/phnt
 - Contributors
 - Donors and supporters
 
