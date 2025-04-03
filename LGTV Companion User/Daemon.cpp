@@ -155,8 +155,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(nCmdShow);
 	MSG msg;
+	HPOWERNOTIFY					rsrn;
+	HPOWERNOTIFY					rpsn;
+	HDEVNOTIFY						dev_notify = NULL;
 	std::wstring window_title;
-	std::wstring log_message;
 	h_instance = Instance;
 
 	//commandline processing
@@ -177,16 +179,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		}
 		else // launched by user
 		{
+			daemon_is_visible = true;
+/*
 			if(!tools::startScheduledTask(TASK_FOLDER, TASK_DAEMON_VISIBLE))
 				MessageBox(NULL, L"Failed to launch the Daemon. The Microsoft Task Scheduler service may be stopped", L"Error", MB_OK | MB_ICONEXCLAMATION);
 			return 0;
+*/
 		}
 	}
 	else 
 	{
+		daemon_is_visible = true;
+/*
 		if (!tools::startScheduledTask(TASK_FOLDER, TASK_DAEMON_VISIBLE))
 			MessageBox(NULL, L"Failed to launch the Daemon. The Microsoft Task Scheduler service may be stopped", L"Error", MB_OK | MB_ICONEXCLAMATION);
 		return 0;
+*/
 	}
 	custom_shellhook_message = RegisterWindowMessage(L"SHELLHOOK");
 	custom_daemon_restart_message = RegisterWindowMessage(CUSTOM_MESSAGE_RESTART);
@@ -227,16 +235,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	h_main_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndProc);
 	SetWindowText(h_main_wnd, window_title.c_str());
 	SendMessage(h_main_wnd, WM_SETICON, ICON_BIG, (LPARAM)h_icon);
-	ShowWindow(h_main_wnd, daemon_is_visible ? SW_SHOW : SW_HIDE);
-	if(daemon_is_visible)
-		UpdateWindow(h_main_wnd);
 
 	// start timers
 	if (Prefs.updater_mode_ != PREFS_UPDATER_OFF)
 		SetTimer(h_main_wnd, TIMER_VERSIONCHECK, TIMER_VERSIONCHECK_DELAY, (TIMERPROC)NULL);
 	if (Prefs.topology_support_)
 		SetTimer(h_main_wnd, TIMER_TOPOLOGY, TIMER_TOPOLOGY_DELAY, (TIMERPROC)NULL);
-	if (Prefs.remote_streaming_host_support_ )
+	if (Prefs.remote_streaming_host_support_)
 		SetTimer(h_main_wnd, TIMER_CHECK_PROCESSES, TIMER_CHECK_PROCESSES_DELAY, (TIMERPROC)NULL);
 	if (Prefs.user_idle_mode_)
 	{
@@ -272,21 +277,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	}
 
 	// log some basic info
+	std::wstring log_message;
 	log_message = window_title;
 	log_message += L" is running.";
 	log(log_message);
-	communicateWithService("started");	
+	communicateWithService("started");
 	log_message = L"Session ID is: ";
 	log_message += tools::widen(session_id);
 	log(log_message);
 
 	// register to receive power notifications
-	HPOWERNOTIFY rsrn = RegisterSuspendResumeNotification(h_main_wnd, DEVICE_NOTIFY_WINDOW_HANDLE);
-	HPOWERNOTIFY rpsn = RegisterPowerSettingNotification(h_main_wnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
+	rsrn = RegisterSuspendResumeNotification(h_main_wnd, DEVICE_NOTIFY_WINDOW_HANDLE);
+	rpsn = RegisterPowerSettingNotification(h_main_wnd, &(GUID_CONSOLE_DISPLAY_STATE), DEVICE_NOTIFY_WINDOW_HANDLE);
 
 	// register to receive device attached/detached messages
 	DEV_BROADCAST_DEVICEINTERFACE NotificationFilter;
-	HDEVNOTIFY dev_notify = NULL;
 	if (Prefs.remote_streaming_host_support_)
 	{
 		ZeroMemory(&NotificationFilter, sizeof(NotificationFilter));
@@ -304,6 +309,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			Remote.Sunshine_Log_Size = std::filesystem::file_size(p);
 		}
 	}
+
 
 	// message loop:
 	while (GetMessage(&msg, NULL, 0, 0))
@@ -374,7 +380,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_INITDIALOG:
 	{
 		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
-		SetWindowPos(hWnd, NULL, 0, 0, 480, 300, SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
+		SetWindowPos(hWnd, NULL, 0, 0, 480, 300, SWP_NOMOVE );
 		PostMessage(hWnd, APP_SET_MESSAGEFILTER, NULL, NULL);
 
 	}break;
@@ -385,18 +391,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		ChangeWindowMessageFilterEx(hWnd, custom_daemon_unidle_message, MSGFLT_ALLOW, NULL);
 		ChangeWindowMessageFilterEx(hWnd, custom_daemon_close_message, MSGFLT_ALLOW, NULL);
 		if (daemon_is_visible)
-		{
-			SetForegroundWindow(hWnd);
-			SetWindowPos(hWnd, HWND_TOP, 0, 0, 481, 301, SWP_NOMOVE | SWP_FRAMECHANGED);
-		}
+			SetWindowPos(hWnd, HWND_TOP, 0, 0, 481, 301, SWP_NOMOVE);
+			ShowWindow(h_main_wnd, daemon_is_visible ? SW_SHOWNORMAL : SW_HIDE);
 	}break;
+
 	case WM_INPUT:
 	{
 		if (!lParam)
 			return 0;
 		DWORD tick_now = GetTickCount();
 		if ((tick_now - time_of_last_raw_input) < TIMER_MAIN_DELAY_WHEN_BUSY)
+		{
+	//		DefWindowProc(hWnd, message, wParam, lParam);
 			return 0;
+		}
 		HRAWINPUT h_raw_input = reinterpret_cast<HRAWINPUT>(lParam);
 		UINT size = 0;
 		if (GetRawInputData(h_raw_input, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) == -1)
@@ -539,10 +547,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}break;
 			case IDC_TESTBUTTON:
 			{
-				if (isFullscreenApplicationRunning())
-					log(L"fullscreen");
-				else
-					log(L"not fullscreen");
+				log(L"Attempting to unset Rude Overlay");
+				workaroundFalseFullscreenWindows();
 			}break;
 			default:break;
 			}
@@ -647,7 +653,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			if (manual_user_idle_mode == 0)
 			{
-				workaroundFalseFullscreenWindows();
+				if(Prefs.user_idle_mode_disable_while_fullscreen_
+					|| Prefs.user_idle_mode_process_control_)
+					workaroundFalseFullscreenWindows();
 				std::wstring log_message;
 				if (last_input != 0 && UIM::preventUIM(Prefs, log_message))
 				{

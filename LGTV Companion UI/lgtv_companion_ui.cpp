@@ -190,7 +190,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(nCmdShow);
 	MSG msg;
-	std::wstring CommandLineParameters;
+	std::wstring command_line;
 	h_instance = Instance;
 
 	custom_daemon_close_message = RegisterWindowMessage(CUSTOM_MESSAGE_CLOSE);
@@ -201,18 +201,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	custom_UI_close_message = RegisterWindowMessage(CUSTOM_MESSAGE_LGTVC_CLOSE);
 
 	if (lpCmdLine)
-		CommandLineParameters = lpCmdLine;
-	if (CommandLineParameters == L"-prepare_for_uninstall")
+		command_line = lpCmdLine;
+	if (command_line == L"-prepare_for_uninstall")
 	{
 		prepareForUninstall();
-		PostMessage(HWND_BROADCAST, custom_UI_close_message, NULL, NULL);
 		return false;
 	}
 	// if commandline directed towards daemon
-	if (messageDaemon(CommandLineParameters))
+	if (messageDaemon(command_line))
 		return false;
 	// if the app is already running as another process, send the command line parameters to that process and exit
-	if (messageExistingProcess(CommandLineParameters))
+	if (messageExistingProcess(command_line))
 		return false;
 	if(!Prefs.isInitialised())
 	{
@@ -236,7 +235,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	p_pipe_client = std::make_shared<IpcClient>(PIPENAME, ipcCallback, (LPVOID)NULL);
 
 	//parse and execute command line parameters when applicable and then exit
-	if (Prefs.devices_.size() > 0 && CommandLineParameters.size() > 0)
+	if (Prefs.devices_.size() > 0 && command_line.size() > 0)
 	{
 		int max_wait = 1000;
 		while (!p_pipe_client->isRunning() && max_wait > 0)
@@ -244,7 +243,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			Sleep(25);
 			max_wait -= 25;
 		}
-		communicateWithService(CommandLineParameters);
+		communicateWithService(command_line);
 		std::stringstream temp;
 		p_pipe_client->terminate();
 		return false;
@@ -323,25 +322,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	std::wstring str;
+	if (message == custom_UI_close_message)
+	{
+		if (h_whitelist_wnd)
+			DestroyWindow(h_whitelist_wnd);
+		if (h_user_idle_mode_wnd)
+			DestroyWindow(h_user_idle_mode_wnd);
+		if (h_topology_wnd)
+			DestroyWindow(h_topology_wnd);
+		if (h_options_wnd)
+			DestroyWindow(h_options_wnd);
+		if (h_device_wnd)
+			DestroyWindow(h_device_wnd);
+		if (h_main_wnd)
+			DestroyWindow(h_main_wnd);
+		PostQuitMessage(0);
+	}
+	
 	switch (message)
 	{
-		if(message == custom_UI_close_message)
-		{
-			if (h_whitelist_wnd)
-				DestroyWindow(h_whitelist_wnd);
-			if (h_user_idle_mode_wnd)
-				DestroyWindow(h_user_idle_mode_wnd);
-			if (h_topology_wnd)
-				DestroyWindow(h_topology_wnd);
-			if (h_options_wnd)
-				DestroyWindow(h_options_wnd);
-			if (h_device_wnd)
-				DestroyWindow(h_device_wnd);
-			if (h_main_wnd)
-				DestroyWindow(h_main_wnd);
-			PostQuitMessage(0);
-		}
-
 	case WM_INITDIALOG:
 	{
 		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
@@ -1008,7 +1007,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	}break;
 	case WM_COPYDATA:
 	{
-		std::wstring CmdLineExternal;
+		std::wstring received_command_line;
 		if (!lParam)
 			return true;
 
@@ -1021,10 +1020,10 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				SetForegroundWindow(hWnd);
 				return true;
 			}
-			CmdLineExternal = (WCHAR*)pcds->lpData;
-			if (CmdLineExternal.size() == 0)
+			received_command_line = (WCHAR*)pcds->lpData;
+			if (received_command_line.size() == 0)
 				return true;
-			communicateWithService(CmdLineExternal);
+			communicateWithService(received_command_line);
 		}
 		return true;
 	}break;
@@ -3080,7 +3079,7 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 }
 
 //   If the application is already running, send the command line parameters to that other process
-bool messageExistingProcess(std::wstring CmdLine)
+bool messageExistingProcess(std::wstring command_line)
 {
 	std::wstring WindowTitle;
 	WindowTitle = APPNAME;
@@ -3091,8 +3090,8 @@ bool messageExistingProcess(std::wstring CmdLine)
 	if (Other_hWnd)
 	{
 		COPYDATASTRUCT cds;
-		cds.cbData = CmdLine == L"" ? 0 : (DWORD)(CmdLine.size() * sizeof(WCHAR) + sizeof(WCHAR));
-		cds.lpData = CmdLine == L"" ? NULL : (PVOID)CmdLine.data();
+		cds.cbData = command_line == L"" ? 0 : (DWORD)(command_line.size() * sizeof(WCHAR) + sizeof(WCHAR));
+		cds.lpData = command_line == L"" ? NULL : (PVOID)command_line.data();
 		cds.dwData = NOTIFY_NEW_COMMANDLINE;
 		SendMessage(Other_hWnd, WM_COPYDATA, NULL, (LPARAM)&cds);
 
@@ -3287,5 +3286,6 @@ void prepareForUninstall(void)
 {
 	PostMessage(HWND_BROADCAST, custom_daemon_close_message, NULL, NULL);
 	PostMessage(HWND_BROADCAST, custom_updater_close_message, NULL, (LPARAM)1);
+	PostMessage(HWND_BROADCAST, custom_UI_close_message, NULL, NULL);
 	return;
 }
