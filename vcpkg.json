@@ -4,9 +4,10 @@
   "version": "0",
   "dependencies": [
     "nlohmann-json",
-	"boost-asio",
-	"boost-beast",
-	"openssl",
-	"wintoast"
+    "boost-asio",
+    "boost-beast",
+    "openssl",
+    "wintoast",
+    "phnt"
   ]
 }

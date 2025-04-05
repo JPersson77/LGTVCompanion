@@ -343,6 +343,7 @@ In addition to the above commands it is also possible to send various arbitrary 
 		audio/setVolume {"volume":volume}
 		com.webos.applicationManager/launch {"id": id, "params": params} 
 		com.webos.service.ime/insertText {"text":"text...","replace":true|false}
+  		settings/getSystemSettings {"category":"category","keys":["keys"]}   ---- lg_api_commands.h has a list of categories and keys
 		system.notifications/createToast {"message":"text...","iconData":"base64_encoded_string","iconExtension":"icon_extension"}	
 		system.notifications/createAlert (not final implementation)
 		system.notifications/closeAlert (not final implementation)
@@ -367,7 +368,6 @@ The following endpoints are used to query information from WebOS devices, using 
 		tv/getChannelProgramInfo 
 		tv/getCurrentChannel 
 		tv/getExternalInputList 
-		settings/getSystemSettings 
 		system.launcher/getAppState 
 		system/getSystemInfo 
 		com.webos.service.update/getCurrentSWInformation 
@@ -398,6 +398,10 @@ The following endpoints are used to query information from WebOS devices, using 
 *close the screensaver on device1*
 ```
 "LGTV Companion.exe" -close_app com.webos.app.screensaver device1
+```
+*get the current picture mode on device1*
+```
+"LGTVcli.exe" -request_with_param settings/getSystemSettings "{\"category\":\"picture\",\"keys\":[\"pictureMode\"]}" device1
 ```
 ## picture system settings (LGTV Companion and LGTVcli)
 - *-settings_picture [payload]* 	- Send a generic JSON payload containing settings for the "picture" system settings category (see examples of applicable settings below)
