@@ -21,6 +21,9 @@
     <ClCompile Include="..\Common\tools.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="WinToastLib\src\wintoastlib.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="updater.h">
@@ -33,6 +36,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Common\tools.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WinToastLib\include\wintoastlib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

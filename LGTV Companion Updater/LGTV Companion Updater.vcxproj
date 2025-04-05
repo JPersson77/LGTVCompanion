@@ -224,12 +224,14 @@
   <ItemGroup>
     <ClCompile Include="..\Common\tools.cpp" />
     <ClCompile Include="updater.cpp" />
+    <ClCompile Include="WinToastLib\src\wintoastlib.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\common_app_define.h" />
     <ClInclude Include="..\Common\tools.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="updater.h" />
+    <ClInclude Include="WinToastLib\include\wintoastlib.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="LGTV Companion Updater.rc" />

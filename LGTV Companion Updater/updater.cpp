@@ -18,7 +18,7 @@
 #include "updater.h"
 #include "../Common/common_app_define.h"
 #include "../Common/tools.h"
-#include <wintoastlib.h>
+#include "WinToastLib/include/wintoastlib.h" // wait for vcpkg action to update and include v1.3.1
 #include <urlmon.h>
 #include <thread>
 #include <vector>
