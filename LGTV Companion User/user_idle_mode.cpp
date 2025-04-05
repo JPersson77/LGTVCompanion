@@ -22,37 +22,35 @@ struct FULLSCREEN_DETECTION
 bool UIM::isDisplayLock(bool& video_wake_lock, std::vector <std::wstring> & processes, std::wstring& message)
 {
     NTSTATUS status;
-    PPOWER_REQUEST_LIST buffer;
-    ULONG bufferLength = 4096;
-
+    std::vector<BYTE> buf;
+    ULONG buffer_length = 4096;
     video_wake_lock = false;
 
     do 
     {
-        buffer = (PPOWER_REQUEST_LIST)RtlAllocateHeap(RtlGetCurrentPeb()->ProcessHeap, 0, bufferLength);
-        if (!buffer)
-        {
-            message = L"Failed to allocate memory when iterating power requests";
-            return false;
-        }
-        status = NtPowerInformation( (POWER_INFORMATION_LEVEL)GetPowerRequestList, NULL, 0, buffer, bufferLength );
+        buf.resize(buffer_length);
+        status = NtPowerInformation( (POWER_INFORMATION_LEVEL)GetPowerRequestList, NULL, 0, buf.data(), buffer_length);
         if (!NT_SUCCESS(status))
         {
-            RtlFreeHeap(RtlGetCurrentPeb()->ProcessHeap, 0, buffer);
-            buffer = NULL;
-            bufferLength += 4096;
+            if (status == STATUS_BUFFER_TOO_SMALL) {
+                buffer_length += 4096;
+            }
+            else {
+                message = L"Failed to query power information";
+                return false;
+            }
         }
     } while (status == STATUS_BUFFER_TOO_SMALL);
-    if (!buffer)
+    if (buf.empty())
     {
-        message = L"Failed to allocate memory when checking power requests";
+        message = L"Failed to allocate memory for power requests";
         return false;
     }
-
-    for (ULONG i = 0; i < buffer->Count; i++)
+    PPOWER_REQUEST_LIST power_list = reinterpret_cast<PPOWER_REQUEST_LIST>(buf.data());
+    for (ULONG i = 0; i < power_list->Count; i++)
     {
         PDIAGNOSTIC_BUFFER diagnosticBuffer;
-        PPOWER_REQUEST Request = (PPOWER_REQUEST)RtlOffsetToPointer(buffer, buffer->PowerRequestOffsets[i]);
+        PPOWER_REQUEST Request = (PPOWER_REQUEST)RtlOffsetToPointer(power_list, power_list->PowerRequestOffsets[i]);
         if (!Request->V4.PowerRequestCount[PowerRequestDisplayRequiredInternal])
             continue;
 
@@ -72,6 +70,7 @@ bool UIM::isDisplayLock(bool& video_wake_lock, std::vector <std::wstring> & proc
                 (PCOUNTED_REASON_CONTEXT_RELATIVE)RtlOffsetToPointer(diagnosticBuffer, diagnosticBuffer->ReasonOffset);
             if (reason->Flags & POWER_REQUEST_CONTEXT_SIMPLE_STRING)
                 reason_message = (PCWCHAR)RtlOffsetToPointer(reason, reason->SimpleStringOffset);
+/*
             else if (reason->Flags & POWER_REQUEST_CONTEXT_DETAILED_STRING)
             {
                 HMODULE hModule = LoadLibraryExW((PCWSTR)RtlOffsetToPointer(reason, reason->ResourceFileNameOffset), NULL,LOAD_LIBRARY_AS_DATAFILE);
@@ -84,6 +83,7 @@ bool UIM::isDisplayLock(bool& video_wake_lock, std::vector <std::wstring> & proc
                      FreeLibrary(hModule);
                 }
             }
+*/
         }
         
         if (reason_message == L"Video Wake Lock")
@@ -97,8 +97,6 @@ bool UIM::isDisplayLock(bool& video_wake_lock, std::vector <std::wstring> & proc
                 processes.push_back(tools::tolower(requesterName));
         }
     }
-    RtlFreeHeap(RtlGetCurrentPeb()->ProcessHeap, 0, buffer);
-    buffer = NULL;
     return true;
 }
 

@@ -468,23 +468,21 @@ DWORD WINAPI SvcEventLogSubscribeCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PV
 		DWORD dwBufferUsed = 0;
 		DWORD dwPropertyCount = 0;
 		LPWSTR pRenderedContent = NULL;
+		std::vector<BYTE> buffer;
 
 		if (!EvtRender(NULL, hEvent, EvtRenderEventXml, dwBufferSize, pRenderedContent, &dwBufferUsed, &dwPropertyCount))
 		{
 			if (ERROR_INSUFFICIENT_BUFFER == GetLastError())
 			{
 				dwBufferSize = dwBufferUsed;
-				pRenderedContent = (LPWSTR)malloc(dwBufferSize);
+				buffer.resize(dwBufferSize);
+				pRenderedContent = reinterpret_cast<LPWSTR>(buffer.data());
 				if (pRenderedContent)
 				{
 					EvtRender(NULL, hEvent, EvtRenderEventXml, dwBufferSize, pRenderedContent, &dwBufferUsed, &dwPropertyCount);
+					xml = pRenderedContent;
 				}
 			}
-		}
-		if (pRenderedContent)
-		{
-			xml = pRenderedContent;
-			free(pRenderedContent);
 		}
 	}
 	if (xml != L"")

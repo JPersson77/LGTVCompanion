@@ -725,6 +725,7 @@ bool isAnythingPreventingSilentUpdate(void)
 }
 bool isOtherUpdaterWindowShown(bool focus, bool update )
 {
+	//close Updater windows that are not shown
 	PostMessage(HWND_BROADCAST, custom_updater_close_message, NULL, NULL);
 	Sleep(100);
 	std::wstring window_title;

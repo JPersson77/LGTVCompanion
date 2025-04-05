@@ -618,10 +618,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			if (daemon_is_visible)
 			{
+/*
 				std::wstring m;
 				if (UIM::preventUIM(Prefs, m))
 					log(m);
-
+*/
 				DWORD time = (time_now - last_input) / 1000;
 				std::wstring ago = std::to_wstring(time);
 				SendMessage(GetDlgItem(hWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());

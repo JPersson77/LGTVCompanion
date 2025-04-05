@@ -357,52 +357,48 @@ bool tools::compareUsingWildcard(const std::wstring& text, const std::wstring& p
 }
 std::string tools::getIPfromLUID(uint64_t& luid)
 {
-	ULONG outBufLen = 0;
-	DWORD dwRetVal = 0;
-	PIP_ADAPTER_ADDRESSES pAddresses = nullptr;
+	ULONG buffer_len = 0;
+	DWORD return_value = 0;
+	std::vector<BYTE> buffer;
+	PIP_ADAPTER_ADDRESSES p_addresses = nullptr;
 	// Get the required buffer size
-	dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, pAddresses, &outBufLen);
-	if (dwRetVal == ERROR_BUFFER_OVERFLOW)
+	return_value = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, p_addresses, &buffer_len);
+	if (return_value == ERROR_BUFFER_OVERFLOW)
 	{
-		pAddresses = (PIP_ADAPTER_ADDRESSES)malloc(outBufLen);
-		if (!pAddresses)
+		buffer.resize(buffer_len);
+		p_addresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
+		if (!p_addresses)
 			return "";
-	}
-	else if (dwRetVal != ERROR_SUCCESS)
-		return "";
-	// Retrieve the adapter addresses
-	dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, pAddresses, &outBufLen);
-	if (dwRetVal == NO_ERROR)
-	{
-		for (PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses; pCurrAddresses != NULL; pCurrAddresses = pCurrAddresses->Next)
+		return_value = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, p_addresses, &buffer_len);
+		if (return_value == ERROR_SUCCESS)
 		{
-
-			if (pCurrAddresses->Luid.Value != luid)
-				continue;
-
-			char ipStringBuffer[INET6_ADDRSTRLEN];
-			for (PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrAddresses->FirstUnicastAddress; pUnicast != NULL; pUnicast = pUnicast->Next)
+			for (PIP_ADAPTER_ADDRESSES p_address = p_addresses; p_address != NULL; p_address = p_address->Next)
 			{
-				LPSOCKADDR sockaddr = pUnicast->Address.lpSockaddr;
-				DWORD ipBufferLength = sizeof(ipStringBuffer);
 
-				// Convert the address to a readable string
-				if (sockaddr->sa_family == AF_INET) // IPv4
+				if (p_address->Luid.Value != luid)
+					continue;
+
+				char ip_string_buffer[INET6_ADDRSTRLEN];
+				for (PIP_ADAPTER_UNICAST_ADDRESS pUnicast = p_address->FirstUnicastAddress; pUnicast != NULL; pUnicast = pUnicast->Next)
 				{
-					sockaddr_in* ipv4 = (sockaddr_in*)sockaddr;
-					InetNtopA(AF_INET, &(ipv4->sin_addr), ipStringBuffer, ipBufferLength);
-					if (strcmp(ipStringBuffer, "127.0.0.1") != 0)
+					LPSOCKADDR sockaddr = pUnicast->Address.lpSockaddr;
+					DWORD ip_string_buffer_len = sizeof(ip_string_buffer);
+
+					// Convert the address to a readable string
+					if (sockaddr->sa_family == AF_INET) // IPv4
 					{
-						std::string out(ipStringBuffer);
-						return out;
+						sockaddr_in* ipv4 = (sockaddr_in*)sockaddr;
+						InetNtopA(AF_INET, &(ipv4->sin_addr), ip_string_buffer, ip_string_buffer_len);
+						if (strcmp(ip_string_buffer, "127.0.0.1") != 0)
+						{
+							std::string out(ip_string_buffer);
+							return out;
+						}
 					}
 				}
 			}
 		}
 	}
-	// Free memory
-	if (pAddresses)
-		free(pAddresses);
 	return "";
 }
 std::string	tools::getIPfromLUIDandEndpoint(uint64_t& value, std::string& destinationIp)

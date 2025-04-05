@@ -1138,62 +1138,57 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 		LRESULT t = SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), CB_SETITEMDATA, static_cast<WPARAM>(t), static_cast<LPARAM>(0));
 
-		ULONG outBufLen = 0;
-		DWORD dwRetVal = 0;
-		PIP_ADAPTER_ADDRESSES pAddresses = nullptr;
+		ULONG buffer_len = 0;
+		DWORD return_value = 0;
+		PIP_ADAPTER_ADDRESSES p_addresses = nullptr;
+		std::vector<BYTE> buffer;
 		// Get the required buffer size
-		dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, pAddresses, &outBufLen);
-		if (dwRetVal == ERROR_BUFFER_OVERFLOW) 
+		return_value = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, p_addresses, &buffer_len);
+		if (return_value == ERROR_BUFFER_OVERFLOW) 
 		{
-			pAddresses = (PIP_ADAPTER_ADDRESSES)malloc(outBufLen);
-			if (!pAddresses) 
+			buffer.resize(buffer_len);
+			p_addresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
+			if (!p_addresses) 
 				break;
-		}
-		else if (dwRetVal != ERROR_SUCCESS) 
-			break;
-		// Retrieve the adapter addresses
-		dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, pAddresses, &outBufLen);
-		if (dwRetVal == NO_ERROR) 
-		{
-			for (PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses; pCurrAddresses != NULL; pCurrAddresses = pCurrAddresses->Next) 
+			// Retrieve the adapter addresses
+			return_value = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_ALL_INTERFACES, NULL, p_addresses, &buffer_len);
+			if (return_value == ERROR_SUCCESS)
 			{
-				// Print adapter name
-//					std::wcout << L"Adapter: " << pCurrAddresses->FriendlyName << std::endl;
-				if (pCurrAddresses->OperStatus != IfOperStatusUp)
-					continue;
-
-				bool hasIPv4Address = false;
-				bool localhost = false;
-				char ipStringBuffer[INET6_ADDRSTRLEN];
-				for (PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrAddresses->FirstUnicastAddress; pUnicast != NULL; pUnicast = pUnicast->Next) 
+				for (PIP_ADAPTER_ADDRESSES p_address = p_addresses; p_address != NULL; p_address = p_address->Next)
 				{
-					LPSOCKADDR sockaddr = pUnicast->Address.lpSockaddr;
-					DWORD ipBufferLength = sizeof(ipStringBuffer);
+					// Print adapter name
+	//					std::wcout << L"Adapter: " << p_address->FriendlyName << std::endl;
+					if (p_address->OperStatus != IfOperStatusUp)
+						continue;
 
-					// Convert the address to a readable string
-					if (sockaddr->sa_family == AF_INET) // IPv4
+					bool has_ipv4_address = false;
+					bool localhost = false;
+					char ip_string_buffer[INET6_ADDRSTRLEN];
+					for (PIP_ADAPTER_UNICAST_ADDRESS pUnicast = p_address->FirstUnicastAddress; pUnicast != NULL; pUnicast = pUnicast->Next)
 					{
-						hasIPv4Address = true;
-						sockaddr_in* ipv4 = (sockaddr_in*)sockaddr;
-						InetNtopA(AF_INET, &(ipv4->sin_addr), ipStringBuffer, ipBufferLength);
-						if (strcmp(ipStringBuffer, "127.0.0.1") == 0)
-							localhost = true;
+						LPSOCKADDR sockaddr = pUnicast->Address.lpSockaddr;
+						DWORD ip_string_buffer_len = sizeof(ip_string_buffer);
+
+						// Convert the address to a readable string
+						if (sockaddr->sa_family == AF_INET) // IPv4
+						{
+							has_ipv4_address = true;
+							sockaddr_in* ipv4 = (sockaddr_in*)sockaddr;
+							InetNtopA(AF_INET, &(ipv4->sin_addr), ip_string_buffer, ip_string_buffer_len);
+							if (strcmp(ip_string_buffer, "127.0.0.1") == 0)
+								localhost = true;
+						}
 					}
+					if (!has_ipv4_address || localhost)
+						continue; // Skip adapters without IPv4 addresses
+
+					std::wstring text = p_address->FriendlyName;
+					uint64_t nl = static_cast<uint64_t>(p_address->Luid.Value);
+					LRESULT index = SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)text.c_str());
+					SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), CB_SETITEMDATA, static_cast<WPARAM>(index), static_cast<LPARAM>(nl));
 				}
-
-				if (!hasIPv4Address || localhost)
-					continue; // Skip adapters without IPv4 addresses
-
-				std::wstring text = pCurrAddresses->FriendlyName;
-				uint64_t nl = static_cast<uint64_t>(pCurrAddresses->Luid.Value);
-				LRESULT index = SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)text.c_str());
-				SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), CB_SETITEMDATA, static_cast<WPARAM>(index), static_cast<LPARAM>(nl));
 			}
 		}
-		// Free memory
-		if (pAddresses) 
-			free(pAddresses);
-
 	}break;
 	case WM_NOTIFY:
 	{
@@ -1608,35 +1603,35 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		SendDlgItemMessage(hWnd, IDC_TIMEOUT, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_COMBO_TIMING, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
-		std::wstring s;
+		std::wstring ss;
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-		s = L"Default";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		s = L"Early";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		s = L"Delayed";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		ss = L"Default";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
+		ss = L"Early";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
+		ss = L"Delayed";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_SETCURSEL, (WPARAM)Prefs.shutdown_timing_, (LPARAM)0);
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-		s = L"Off";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		s = L"Notify Only";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		s = L"Silent Install";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		ss = L"Off";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
+		ss = L"Notify Only";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
+		ss = L"Silent Install";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_UPDATE), (UINT)CB_SETCURSEL, (WPARAM)Prefs.updater_mode_, (LPARAM)0);
 
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-		s = L"Off";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		s = L"Info";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		s = L"Warning";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		s = L"Error";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
-		s = L"Debug";
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)s.c_str());
+		ss = L"Off";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
+		ss = L"Info";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
+		ss = L"Warning";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
+		ss = L"Error";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
+		ss = L"Debug";
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ss.c_str());
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_LOG), (UINT)CB_SETCURSEL, (WPARAM)Prefs.log_level_, (LPARAM)0);
 
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(100, 5));
@@ -1659,37 +1654,38 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			{
 				for (DWORD i = 0; i < dwReturned; i++)
 				{
-					DWORD dwBufferSize = 0;
-					DWORD dwBufferUsed = 0;
-					DWORD dwPropertyCount = 0;
+					DWORD buffer_len = 0;
+					DWORD buffer_used = 0;
+					DWORD property_count = 0;
 					LPWSTR pRenderedContent = NULL;
+					std::vector<BYTE> buffer;
+					std::wstring xml;
 
-					if (!EvtRender(NULL, hEv[i], EvtRenderEventXml, dwBufferSize, pRenderedContent, &dwBufferUsed, &dwPropertyCount))
+					if (!EvtRender(NULL, hEv[i], EvtRenderEventXml, buffer_len, pRenderedContent, &buffer_used, &property_count))
 					{
 						if (ERROR_INSUFFICIENT_BUFFER == GetLastError())
 						{
-							dwBufferSize = dwBufferUsed;
-							pRenderedContent = (LPWSTR)malloc(dwBufferSize);
+							buffer_len = buffer_used;
+							buffer.resize(buffer_len);
+							pRenderedContent = reinterpret_cast<LPWSTR>(buffer.data());
 							if (pRenderedContent)
 							{
-								EvtRender(NULL, hEv[i], EvtRenderEventXml, dwBufferSize, pRenderedContent, &dwBufferUsed, &dwPropertyCount);
+								EvtRender(NULL, hEv[i], EvtRenderEventXml, buffer_len, pRenderedContent, &buffer_used, &property_count);
+								xml = pRenderedContent;
 							}
 						}
 					}
 
-					if (pRenderedContent)
+					if (xml != L"")
 					{
-						std::wstring s = pRenderedContent;
-						free(pRenderedContent);
-
 						std::wstring strfind = L"<Data Name='param5'>";
-						size_t f = s.find(strfind);
+						size_t f = xml.find(strfind);
 						if (f != std::wstring::npos)
 						{
-							size_t e = s.find(L"<", f + 1);
+							size_t e = xml.find(L"<", f + 1);
 							if (e != std::wstring::npos)
 							{
-								std::wstring sub = s.substr(f + strfind.length(), e - (f + strfind.length()));
+								std::wstring sub = xml.substr(f + strfind.length(), e - (f + strfind.length()));
 								if (std::find(Prefs.event_log_shutdown_strings_.begin(), Prefs.event_log_shutdown_strings_.end(), tools::narrow(sub)) == Prefs.event_log_shutdown_strings_.end())
 									if (std::find(Prefs.event_log_restart_strings_.begin(), Prefs.event_log_restart_strings_.end(), tools::narrow(sub)) == Prefs.event_log_restart_strings_.end())
 										if (std::find(str.begin(), str.end(), sub) == str.end())
@@ -2584,9 +2580,11 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			int index = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETCURSEL, 0, 0);
 			if (index != LB_ERR)
 			{
-				TCHAR* text;
+				WCHAR* text;
+				std::vector<WCHAR> buffer;
 				int len = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETTEXTLEN, index, 0);
-				text = new TCHAR[len + 1];
+				buffer.resize(len + 1);
+				text = reinterpret_cast<WCHAR*>(buffer.data());
 				if (SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETTEXT, (WPARAM)index, (LPARAM)text) != LB_ERR)
 				{
 					std::wstring s = L"Do you want to delete '";
