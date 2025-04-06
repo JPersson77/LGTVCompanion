@@ -2,7 +2,7 @@
 
 // common application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"5.0.0"
+#define         APP_VERSION                     L"5.0.2"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
