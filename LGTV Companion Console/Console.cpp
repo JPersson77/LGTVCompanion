@@ -191,16 +191,16 @@ void iterateJsonKeys(const nlohmann::json& json_obj, std::string key_value)
 			const auto& key = it.key();
 			const auto& value = it.value();
 
-			if (value.is_string() && key == key_value)
+			if (key == key_value)
 			{
 				if (!bOutputContainsManyResults)
 				{
-					std::cout << std::string(value);
+					std::cout << value;
 					bOutputContainsManyResults = true;
 				}
 				else
 				{
-					std::cout << std::endl << std::string(value);
+					std::cout << std::endl << value;
 				}
 			}
 
