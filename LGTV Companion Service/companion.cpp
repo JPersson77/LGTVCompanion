@@ -189,15 +189,30 @@ void Companion::Impl::shutdown(bool stage){
 }
 void Companion::Impl::enableSession(std::vector<std::string> device_names_or_ids){
 	for (auto& session : sessions_)
-		for (auto& name_or_id : device_names_or_ids)
-			if (tools::tolower(session->device_.name) == tools::tolower(name_or_id) || tools::tolower(session->device_.id) == tools::tolower(name_or_id))
-				session->device_.enabled = true;
+	{
+		if (device_names_or_ids.size() > 0)
+		{
+			for (auto& name_or_id : device_names_or_ids)
+				if (tools::tolower(session->device_.name) == tools::tolower(name_or_id) || tools::tolower(session->device_.id) == tools::tolower(name_or_id))
+					session->device_.enabled = true;
+		}
+		else
+			session->device_.enabled = true;
+	}
  }
 void Companion::Impl::disableSession(std::vector<std::string> device_names_or_ids){
 	for (auto& session : sessions_)
-		for (auto& name_or_id : device_names_or_ids)
-			if (tools::tolower(session->device_.name) == tools::tolower(name_or_id) || tools::tolower(session->device_.id) == tools::tolower(name_or_id))
-				session->device_.enabled = false;
+	{
+		if(device_names_or_ids.size() > 0)
+		{
+			for (auto& name_or_id : device_names_or_ids)
+				if (tools::tolower(session->device_.name) == tools::tolower(name_or_id) || tools::tolower(session->device_.id) == tools::tolower(name_or_id))
+					session->device_.enabled = false;
+		}
+		else
+			session->device_.enabled = false;
+
+	}
 }
 std::string	Companion::Impl::setTopology(std::vector<std::string> device_names_or_ids){
 	if (sessions_.size() == 0)
