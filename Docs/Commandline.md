@@ -64,8 +64,8 @@ LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 - *-autodisable* 	- temporarily disable the automatic management, i.e. to stop processing power events for device(s). This is effective until next restart of the service. 
 - *-autoenable* 	- temporarily enable the application's automatic management of a device. This is effective until next restart of the service.
 - *-clearlog* 		- clear the application log. This takes no further arguments
-- *-idle* 			- enable user idle mode. This is a global setting and takes no further arguments.
-- *-unidle* 		- disable user idle mode. This is a global setting and takes no further arguments.
+- *-idle* 		- trigger User Idle Mode / screen blanking, as if the user was away from the PC until User Idle Mode triggered. This is a global setting and takes no further arguments.
+- *-unidle* 		- disable the screen blanking, as if the user returned to the PC. This is a global setting and takes no further arguments.
 
 #### Examples: 
 *Power on Device1 and then disable automatic management of Device1*
