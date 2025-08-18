@@ -86,15 +86,21 @@ bool UIM::isDisplayLock(bool& video_wake_lock, std::vector <std::wstring> & proc
 */
         }
         
-        if (reason_message == L"Video Wake Lock")
+        if (reason_message == L"Video Wake Lock") //most browsers
             video_wake_lock = true;
         if (requesterName != L"")
         {
+            std::wstring processName;
             size_t lastSlash = requesterName.find_last_of(L"\\/");
             if (lastSlash != std::wstring::npos)
-                processes.push_back(tools::tolower(requesterName.substr(lastSlash + 1)));
+                processName = tools::tolower(requesterName.substr(lastSlash + 1));
             else
-                processes.push_back(tools::tolower(requesterName));
+                processName = tools::tolower(requesterName);
+            processes.push_back(processName);
+            // Firefox
+            if(processName == L"firefox.exe")
+                if (reason_message == L"display request")
+                    video_wake_lock = true;
         }
     }
     return true;
