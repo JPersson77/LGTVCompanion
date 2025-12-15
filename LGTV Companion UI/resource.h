@@ -4,6 +4,7 @@
 //
 #define IDC_MYICON                      2
 #define IDCONFIGURE                     3
+#define IDB3                            3
 #define IDD_LGTVCOMPANIONUI_DIALOG      102
 #define IDR_MAINFRAME                   128
 #define IDD_MAIN                        129
@@ -19,6 +20,7 @@
 #define IDI_ICON3                       150
 #define IDD_ADVANCEDIDLE                153
 #define IDD_WHITELIST_EDIT              154
+#define IDD_MESSAGEBOX                  155
 #define IDC_COMBO                       1000
 #define IDC_SPLIT                       1001
 #define IDC_OPTIONS                     1002
@@ -121,6 +123,10 @@
 #define IDC_CHECK_VWL_FG                1070
 #define IDC_CHECK_VWL_FULLSCREEN        1071
 #define IDC_PC_CHECK_VWL                1071
+#define IDB2                            1072
+#define IDB1                            1073
+#define IDC_MB_ICON                     1074
+#define IDC_MB_STATIC                   1075
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -145,9 +151,9 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        155
+#define _APS_NEXT_RESOURCE_VALUE        156
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1072
+#define _APS_NEXT_CONTROL_VALUE         1076
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

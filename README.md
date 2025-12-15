@@ -96,7 +96,7 @@ With the rise in popularity of using OLED TVs as PC monitors, it is apparent tha
  'LGTV companion.exe" can accept hundreds of command line arguments for controlling the application and managed devices. Please see the documentation for all command line arguments here: [Command line documentation](https://github.com/JPersson77/LGTVCompanion/blob/master/Docs/Commandline.md)
 
 ## License
-Copyright © 2021-2025 Jörgen Persson
+Copyright © 2021-2026 Jörgen Persson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -134,4 +134,4 @@ This is free software, but your support is appreciated and there is a donation p
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.me/jpersson77)
 
 ## Copyright
-Copyright © 2021-2025 Jörgen Persson
+Copyright © 2021-2026 Jörgen Persson

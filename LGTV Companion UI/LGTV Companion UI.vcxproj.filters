@@ -79,4 +79,7 @@
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="scaling.manifest" />
+  </ItemGroup>
 </Project>

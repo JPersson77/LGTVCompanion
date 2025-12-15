@@ -92,10 +92,10 @@ class WebOsClient::Impl : public std::enable_shared_from_this<WebOsClient::Impl>
 private:
 	Device device_settings_;
 	Work work_;
-	net::deadline_timer keep_alive_timer_;
-	net::deadline_timer async_timer_;
-	net::deadline_timer wol_timer_;
-	net::deadline_timer delayed_request_timer_;
+	net::steady_timer keep_alive_timer_;
+	net::steady_timer async_timer_;
+	net::steady_timer wol_timer_;
+	net::steady_timer delayed_request_timer_;
 	ssl::context* ctx_;
 	udp::socket udp_socket_;
 	tcp::resolver resolver_;
@@ -294,7 +294,7 @@ void WebOsClient::Impl::startNextWork(void)
 	
 		case WORK_REQUEST_DELAYED:		
 			DEBUG("---  Starting work: REQUEST (Delayed %1% s) -----------------", std::to_string(work_.delay_));
-			delayed_request_timer_.expires_from_now(boost::posix_time::seconds(work_.delay_));
+			delayed_request_timer_.expires_after(boost::asio::chrono::seconds(work_.delay_));
 			delayed_request_timer_.async_wait(beast::bind_front_handler(&Impl::onDelayedRequest, shared_from_this()));
 			break;
 		case WORK_BUTTON:
@@ -350,7 +350,7 @@ void WebOsClient::Impl::startNextWork(void)
 			}
 			else if (device_settings_.persistent_connection_level == PERSISTENT_CONNECTION_KEEPALIVE)
 			{
-				keep_alive_timer_.expires_from_now(boost::posix_time::seconds(60));
+				keep_alive_timer_.expires_after(boost::asio::chrono::seconds(60));
 				keep_alive_timer_.async_wait(beast::bind_front_handler(&Impl::onKeepAlive, shared_from_this()));
 			}
 			else // no persistence
@@ -610,7 +610,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 					send(JSON_POWERTOGGLE);
 				else
 				{
-					async_timer_.expires_from_now(boost::posix_time::milliseconds(TIMER_POWER_POLL_WAIT));
+					async_timer_.expires_after(boost::asio::chrono::milliseconds(TIMER_POWER_POLL_WAIT));
 					async_timer_.async_wait(beast::bind_front_handler(&Impl::onWait, shared_from_this()));
 				}
 			}
@@ -627,7 +627,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 			}
 			else if (response_id == "powerToggle")
 			{
-				async_timer_.expires_from_now(boost::posix_time::milliseconds(TIMER_POWER_POLL_WAIT));
+				async_timer_.expires_after(boost::asio::chrono::milliseconds(TIMER_POWER_POLL_WAIT));
 				async_timer_.async_wait(beast::bind_front_handler(&Impl::onWait, shared_from_this()));
 			}
 			else if (response_id == "unmute")
@@ -1006,9 +1006,9 @@ void WebOsClient::Impl::onError(beast::error_code& ec, std::string err) {
 			if (time(0) - work_.timestamp_start_ < device_settings_.extra.timeout && work_.retry_count_ < device_settings_.extra.timeout / (TIMER_RETRY_WAIT / 1000))
 			{
 				if (time(0) - work_.timestamp_retry_ <= (TIMER_RETRY_WAIT / 1000))
-					async_timer_.expires_from_now(boost::posix_time::milliseconds(TIMER_RETRY_WAIT));
+					async_timer_.expires_after(boost::asio::chrono::milliseconds(TIMER_RETRY_WAIT));
 				else
-					async_timer_.expires_from_now(boost::posix_time::milliseconds(50));
+					async_timer_.expires_after(boost::asio::chrono::milliseconds(50));
 				async_timer_.async_wait(beast::bind_front_handler(&Impl::onRetryConnection, shared_from_this()));
 			}
 			else
@@ -1023,7 +1023,7 @@ void WebOsClient::Impl::onError(beast::error_code& ec, std::string err) {
 			if(work_.retry_count_ < device_settings_.extra.timeout / (TIMER_RETRY_WAIT / 1000))
 			{
 				DEBUG("Failed to send data during POWER ON due to invalid socket / lost connection.");
-				async_timer_.expires_from_now(boost::posix_time::milliseconds(50));
+				async_timer_.expires_after(boost::asio::chrono::milliseconds(50));
 				async_timer_.async_wait(beast::bind_front_handler(&Impl::onRetryConnection, shared_from_this()));
 			}
 			else
@@ -1048,7 +1048,7 @@ void WebOsClient::Impl::onError(beast::error_code& ec, std::string err) {
 			if (work_.retry_count_ < 2) // tried to write on invalid /closed socket
 			{
 				DEBUG("Failed to send data due to invalid socket / lost connection");
-				async_timer_.expires_from_now(boost::posix_time::milliseconds(50));
+				async_timer_.expires_after(boost::asio::chrono::milliseconds(50));
 				async_timer_.async_wait(beast::bind_front_handler(&Impl::onRetryConnection, shared_from_this()));
 			}
 			else
@@ -1090,7 +1090,7 @@ void WebOsClient::Impl::runWOL(void) {
 	boost::system::error_code error;
 	if (!udp_socket_.is_open())
 	{
-		wol_timer_.expires_from_now(boost::posix_time::milliseconds(200));
+		wol_timer_.expires_after(boost::asio::chrono::milliseconds(200));
 		wol_timer_.async_wait(beast::bind_front_handler(&Impl::onWOL, shared_from_this()));
 	}
 	else
@@ -1227,7 +1227,7 @@ void WebOsClient::Impl::onWOL(beast::error_code ec) {
 			else
 				ERR("Failed to create magic packet");
 		}
-		wol_timer_.expires_from_now(boost::posix_time::milliseconds(TIMER_WOL_WAIT));
+		wol_timer_.expires_after(boost::asio::chrono::milliseconds(TIMER_WOL_WAIT));
 		wol_timer_.async_wait(beast::bind_front_handler(&Impl::onWOL, shared_from_this()));
 	}
 	else

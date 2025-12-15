@@ -137,6 +137,9 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>scaling.manifest</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -154,6 +157,9 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>scaling.manifest</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -177,6 +183,9 @@
     <PostBuildEvent>
       <Command>Copy /Y "$(ProjectDir)mainicon.ico*" "$(TargetDir)"</Command>
     </PostBuildEvent>
+    <Manifest>
+      <AdditionalManifestFiles>scaling.manifest</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -205,6 +214,9 @@
     <PostBuildEvent>
       <Command>Copy /Y "$(ProjectDir)mainicon.ico*" "$(TargetDir)"</Command>
     </PostBuildEvent>
+    <Manifest>
+      <AdditionalManifestFiles>scaling.manifest</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <ClCompile>
@@ -227,6 +239,9 @@
     <PostBuildEvent>
       <Command>Copy /Y "$(ProjectDir)mainicon.ico*" "$(TargetDir)"</Command>
     </PostBuildEvent>
+    <Manifest>
+      <AdditionalManifestFiles>scaling.manifest</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>
@@ -253,6 +268,9 @@
     <PostBuildEvent>
       <Command>Copy /Y "$(ProjectDir)mainicon.ico*" "$(TargetDir)"</Command>
     </PostBuildEvent>
+    <Manifest>
+      <AdditionalManifestFiles>scaling.manifest</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\common_app_define.h" />
@@ -275,6 +293,9 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="mainicon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="scaling.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -60,7 +60,7 @@ LICENSE
 	ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 COPYRIGHT
-	Copyright (c) 2021-2025 Jörgen Persson
+	Copyright (c) 2021-2026 Jörgen Persson
 */
 
 #include "targetver.h"
@@ -147,6 +147,7 @@ HWND									h_options_wnd = NULL;
 HWND									h_topology_wnd = NULL;
 HWND									h_user_idle_mode_wnd = NULL;
 HWND									h_whitelist_wnd = NULL;
+HWND									h_custom_messagebox_wnd = NULL;
 HBRUSH									h_backbrush;
 HFONT									h_large_edit_font;
 HFONT									h_edit_font;
@@ -293,6 +294,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			!IsDialogMessage(h_topology_wnd, &msg) &&
 			!IsDialogMessage(h_user_idle_mode_wnd, &msg) &&
 			!IsDialogMessage(h_whitelist_wnd, &msg) &&
+			!IsDialogMessage(h_custom_messagebox_wnd, &msg) &&
 			!IsDialogMessage(h_user_idle_mode_wnd, &msg))
 		{
 			TranslateMessage(&msg);
@@ -324,6 +326,8 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	std::wstring str;
 	if (message == custom_UI_close_message)
 	{
+		if (h_custom_messagebox_wnd)
+			DestroyWindow(h_custom_messagebox_wnd);
 		if (h_whitelist_wnd)
 			DestroyWindow(h_whitelist_wnd);
 		if (h_user_idle_mode_wnd)
@@ -610,7 +614,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		std::wstringstream mess;
 		mess << DevicesAdded;
 		mess << L" new devices found.";
-		MessageBox(hWnd, mess.str().c_str(), L"Scan results", MB_OK | MB_ICONINFORMATION);
+		customMsgBox(hWnd, mess.str().c_str(), L"Scan results", MB_OK | MB_ICONINFORMATION);
 	}break;
 	case APP_MESSAGE_REMOVE:
 	{
@@ -706,7 +710,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 					mess += Dev.ip;
 					mess += " is not on the same subnet as the PC. Please note that this might cause problems with waking "
 						"up the TV. Please check the documentation and the configuration.\n\n Do you want to continue anyway?";
-					int mb = MessageBox(hWnd, tools::widen(mess).c_str(), L"Warning", MB_YESNO | MB_ICONEXCLAMATION);
+					int mb = customMsgBox(hWnd, tools::widen(mess).c_str(), L"Warning", MB_YESNO | MB_ICONEXCLAMATION);
 					if (mb == IDNO)
 					{
 						EnableWindow(hWnd, true);
@@ -744,7 +748,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				CloseServiceHandle(serviceHandle);
 			}
 			else
-				MessageBox(hWnd, L"The LGTV Companion service is not installed. Please reinstall the application", L"Error", MB_OK | MB_ICONEXCLAMATION);
+				customMsgBox(hWnd, L"The LGTV Companion service is not installed. Please reinstall the application", L"Error", MB_OK | MB_ICONEXCLAMATION);
 			CloseServiceHandle(serviceDbHandle);
 		}
 
@@ -808,7 +812,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 					SendMessage(hWnd, APP_MESSAGE_MANAGE, NULL, NULL);
 				else
 				{
-					int ms = MessageBoxW(hWnd, L"Scanning will discover and add any LG devices found.\n\nThe scan is performed locally by filtering the 'Digital Media Devices' category in the device manager for LG devices.\n\nClick OK to continue!", L"Scanning", MB_OKCANCEL | MB_ICONEXCLAMATION);
+					int ms = customMsgBox(hWnd, L"Scanning will discover and add any LG devices found.\n\nThe scan is performed locally by filtering the 'Digital Media Devices' category in the device manager for LG devices.\n\nClick OK to continue!", L"Scanning", MB_OKCANCEL | MB_ICONEXCLAMATION);
 					if (ms == IDCANCEL)
 						break;
 					SendMessage(hWnd, APP_MESSAGE_SCAN, NULL, NULL);
@@ -864,13 +868,13 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			//care to support your coder
 			if (wParam == IDC_DONATE)
 			{
-				if (MessageBox(hWnd, L"This is free software, but your support is appreciated and there "
+				if (customMsgBox(hWnd, L"This is free software, but your support is appreciated and there "
 					"is a donation page set up over at PayPal. PayPal allows you to use a credit- or debit "
 					"card or your PayPal balance to make a donation, even without a PayPal account.\n\n"
 					"Click 'Yes' to continue to the PayPal donation web page (a PayPal account is not "
 					"required to make a donation)!"
 					"\n\nAlternatively you can go to the following URL in your web browser (a PayPal "
-					"account is required for this link).\n\nhttps://paypal.me/jpersson77", L"Donate via PayPal?", MB_YESNO | MB_ICONQUESTION) == IDYES)
+					"account is required for this link).\n\nhttps://paypal.me/jpersson77", L"Donate via PayPal?", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES)
 					ShellExecute(0, 0, DONATELINK, 0, 0, SW_SHOW);
 			}
 		}break;
@@ -910,13 +914,13 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				case ID_M_REMOVE:
 				{
 					if (Prefs.devices_.size() > 0)
-						if (MessageBox(hWnd, L"You are about to remove this device.\n\nDo you want to continue?", L"Remove device", MB_YESNO | MB_ICONQUESTION) == IDYES)
+						if (customMsgBox(hWnd, L"You are about to remove this device.\n\nDo you want to continue?", L"Remove device", MB_YESNO | MB_ICONQUESTION) == IDYES)
 							SendMessage(hWnd, (UINT)APP_MESSAGE_REMOVE, (WPARAM)0, (LPARAM)lParam);
 				}break;
 				case ID_M_REMOVEALL:
 				{
 					if (Prefs.devices_.size() > 0)
-						if (MessageBox(hWnd, L"You are about to remove ALL devices.\n\nDo you want to continue?", L"Remove all devices", MB_YESNO | MB_ICONQUESTION) == IDYES)
+						if (customMsgBox(hWnd, L"You are about to remove ALL devices.\n\nDo you want to continue?", L"Remove all devices", MB_YESNO | MB_ICONQUESTION) == IDYES)
 							SendMessage(hWnd, (UINT)APP_MESSAGE_REMOVE, (WPARAM)1, (LPARAM)lParam);
 				}break;
 
@@ -932,7 +936,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				{
 					if (Prefs.devices_.size() > 0)
 					{
-						int ms = MessageBoxW(hWnd, L"Scanning will discover and add any LG devices found.\n\nThe scan is performed locally by filtering the 'Digital Media Devices' category in the device manager for LG devices.\n\nDo you want to replace the current devices with any discovered devices?\n\nYES = clear current devices before adding, \n\nNO = add to current list of devices.", L"Scanning", MB_YESNOCANCEL | MB_ICONEXCLAMATION);
+						int ms = customMsgBox(hWnd, L"Scanning will discover and add any LG devices found.\n\nThe scan is performed locally by filtering the 'Digital Media Devices' category in the device manager for LG devices.\n\nDo you want to replace the current devices with any discovered devices?\n\nYES = clear current devices before adding, \n\nNO = add to current list of devices.", L"Scanning", MB_YESNOCANCEL | MB_ICONEXCLAMATION);
 
 						if (ms == IDCANCEL)
 							break;
@@ -941,7 +945,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 					}
 					else
 					{
-						int ms = MessageBoxW(hWnd, L"Scanning will discover and add any LG devices found.\n\nThe scan is performed locally by filtering the 'Digital Media Devices' category in the device manager for LG devices.\n\nClick OK to continue!", L"Scanning", MB_OKCANCEL| MB_ICONEXCLAMATION);
+						int ms = customMsgBox(hWnd, L"Scanning will discover and add any LG devices found.\n\nThe scan is performed locally by filtering the 'Digital Media Devices' category in the device manager for LG devices.\n\nClick OK to continue!", L"Scanning", MB_OKCANCEL| MB_ICONEXCLAMATION);
 						if (ms == IDCANCEL)
 							break;
 						SendMessage(hWnd, (UINT)APP_MESSAGE_SCAN, (WPARAM)0, (LPARAM)lParam);
@@ -952,14 +956,14 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 					if (Prefs.devices_.size() > 0)
 					{
 						if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-							if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+							if (customMsgBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
 								break;
-						int ms = MessageBoxW(hWnd, L"You are about to test the ability to control this device?\n\nPlease click YES to power off the device. Then wait about 5 seconds, or until you hear an internal relay of the TV clicking, and press ENTER on your keyboard to power on the device again.", L"Test device", MB_YESNO | MB_ICONQUESTION);
+						int ms = customMsgBox(hWnd, L"You are about to test the ability to control this device?\n\nPlease click YES to power off the device. Then wait about 5 seconds, or until you hear an internal relay of the TV clicking, and press ENTER on your keyboard to power on the device again.", L"Test device", MB_YESNO | MB_ICONQUESTION);
 						switch (ms)
 						{
 						case IDYES:
 							SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
-							MessageBoxW(hWnd, L"Please press ENTER on your keyboard to power on the device again.", L"Test device", MB_OK | MB_ICONEXCLAMATION);
+							customMsgBox(hWnd, L"Please press ENTER on your keyboard to power on the device again.", L"Test device", MB_OK | MB_ICONEXCLAMATION);
 							SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
 							break;
 						default:break;
@@ -971,7 +975,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 					if (Prefs.devices_.size() > 0)
 					{
 						if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-							if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+							if (customMsgBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
 								break;
 						SendMessage(hWnd, (UINT)APP_MESSAGE_TURNON, (WPARAM)wParam, (LPARAM)lParam);
 					}
@@ -981,7 +985,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 					if (Prefs.devices_.size() > 0)
 					{
 						if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
-							if (MessageBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
+							if (customMsgBox(hWnd, L"Please apply unsaved changes before attempting to control the device", L"Information", MB_OK | MB_ICONEXCLAMATION) == IDOK)
 								break;
 						SendMessage(hWnd, (UINT)APP_MESSAGE_TURNOFF, (WPARAM)wParam, (LPARAM)lParam);
 					}
@@ -1064,7 +1068,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	{
 		if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
 		{
-			int mess = MessageBox(hWnd, L"You have made changes which are not yet applied.\n\nDo you want to apply the changes before exiting?", L"Unsaved configuration", MB_YESNOCANCEL | MB_ICONEXCLAMATION);
+			int mess = customMsgBox(hWnd, L"You have made changes which are not yet applied.\n\nDo you want to apply the changes before exiting?", L"Unsaved configuration", MB_YESNOCANCEL | MB_ICONEXCLAMATION);
 			if (mess == IDCANCEL)
 				break;
 			if (mess == IDYES)
@@ -1199,7 +1203,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 			// explain the device settings
 			if (wParam == IDC_SYSLINK8)
 			{
-				MessageBox(hWnd,
+				customMsgBox(hWnd,
 					L"Name your devices so you can easily distinguish them.\n\n"
 					"The IP-address and MAC-address are the device's unique network identifiers. If the automatic scan did not determine the "
 					"correct values please go into the network settings "
@@ -1210,7 +1214,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 			// explain the network settings
 			else if (wParam == IDC_SYSLINK4)
 			{
-				MessageBox(hWnd,
+				customMsgBox(hWnd,
 					L"Devices are powered on by means of wake-on lan (WOL) magic packets. The \"Automatic\" mode should work well on most systems, but depending on your network environment, device firmware and operating system you may need to "
 					"go to \"Manual\" mode and adjust the settings.\n\n"
 					"The manual method \"Send to device IP-address\" method (no 2) sends unicast packets directly to the device IP, while the other two send to the network broadcast address or subnet broadcast address respectively.\n\n"
@@ -1222,7 +1226,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 			// explain the source input settings
 			else if (wParam == IDC_SYSLINK9)
 			{
-				MessageBox(hWnd,
+				customMsgBox(hWnd,
 					L"Please select the source input of the PC, i.e. the HDMI-input that the PC is "
 					"connected to. \n\nThe option to prevent powering off the device during non-PC use will ensure that the device is not accidentally powered off or that the screen is turned off "
 					"while you are using the device for watching other things, i.e. when you are busy watching Netflix or gaming on your console.\n\n"
@@ -1233,7 +1237,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 			// explain the connection settings
 			else if (wParam == IDC_SYSLINK10)
 			{
-				MessageBox(hWnd,
+				customMsgBox(hWnd,
 					L"The Firmware option should be set to \"Default\" for all newer devices which expect a secure connection using SSL/TLS. The \"Legacy\" option ensures compatibility with "
 					"older devices or devices with a firmware version from 2022 or older.\n\nThe Persistence option determines whether the connection will remain active/connected from the device is "
 					"powered on until it is powered off, for automatically managed devices. Otherwise the connection is disconnected immediately after each work. Persistent connections will generally offer improved response times over non-persistent connections"
@@ -1295,7 +1299,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 						//check on HEX
 						if (edittext.find_first_not_of(L"0123456789ABCDEF\r") != std::string::npos)
 						{
-							MessageBox(hWnd, L"One or several MAC addresses contain illegal caharcters.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
+							customMsgBox(hWnd, L"One or several MAC addresses contain illegal caharcters.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
 							return 0;
 						}
 						//verify length of MACs
@@ -1304,7 +1308,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 						{
 							if (mac.length() != 12)
 							{
-								MessageBox(hWnd, L"One or several MAC addresses is incorrect.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
+								customMsgBox(hWnd, L"One or several MAC addresses is incorrect.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
 								maclines.clear();
 								return 0;
 							}
@@ -1315,7 +1319,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 						//verify IP
 						if (tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_DEVICEIP))) == "0.0.0.0")
 						{
-							MessageBox(hWnd, L"The IP-address is invalid.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
+							customMsgBox(hWnd, L"The IP-address is invalid.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
 							return 0;
 						}
 					}
@@ -1430,7 +1434,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 								EnableWindow(GetDlgItem(hParentWnd, IDOK), true);
 							}
 							else {
-								MessageBox(hWnd, L"Failed to add a new device.\n\nUnknown error.", L"Error", MB_OK | MB_ICONERROR);
+								customMsgBox(hWnd, L"Failed to add a new device.\n\nUnknown error.", L"Error", MB_OK | MB_ICONERROR);
 							}
 						}
 
@@ -1440,7 +1444,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 					}
 					else
 					{
-						MessageBox(hWnd, L"The configuration is incorrect or missing information.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
+						customMsgBox(hWnd, L"The configuration is incorrect or missing information.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
 						return 0;
 					}
 				}
@@ -1450,7 +1454,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 			{
 				if (IsWindowEnabled(GetDlgItem(hWnd, IDOK)))
 				{
-					if (MessageBox(hWnd, L"You have made changes to the configuration.\n\nDo you want to discard the changes?", L"Error", MB_YESNOCANCEL | MB_ICONQUESTION) == IDYES)
+					if (customMsgBox(hWnd, L"You have made changes to the configuration.\n\nDo you want to discard the changes?", L"Error", MB_YESNOCANCEL | MB_ICONQUESTION) == IDYES)
 					{
 						EndDialog(hWnd, 0);
 						EnableWindow(GetParent(hWnd), true);
@@ -1766,7 +1770,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			{
 				if (Prefs.version_loaded_ < 2 && !reset_api_keys)
 				{
-					int mess = MessageBox(hWnd, L"Enabling this option will enforce re-pairing of all your devices.\n\n Do you want to enable this option?", L"Device pairing", MB_YESNO | MB_ICONQUESTION);
+					int mess = customMsgBox(hWnd, L"Enabling this option will enforce re-pairing of all your devices.\n\n Do you want to enable this option?", L"Device pairing", MB_YESNO | MB_ICONQUESTION);
 					if (mess == IDNO)
 					{
 						CheckDlgButton(hWnd, IDC_CHECK_BLANK, BST_UNCHECKED);
@@ -1788,7 +1792,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			{
 				if (Prefs.version_loaded_ < 2 && !reset_api_keys)
 				{
-					int mess = MessageBox(hWnd, L"Enabling this option will enforce re-pairing of all your devices.\n\n Do you want to enable this option?", L"Device pairing", MB_YESNO | MB_ICONQUESTION);
+					int mess = customMsgBox(hWnd, L"Enabling this option will enforce re-pairing of all your devices.\n\n Do you want to enable this option?", L"Device pairing", MB_YESNO | MB_ICONQUESTION);
 					if (mess == IDNO)
 					{
 						CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, BST_UNCHECKED);
@@ -1806,7 +1810,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					bool found = false;
 					if (Prefs.devices_.size() == 0)
 					{
-						MessageBox(hWnd, L"Please configure all devices before enabling and configuring this option", L"Error", MB_ICONEXCLAMATION | MB_OK);
+						customMsgBox(hWnd, L"Please configure all devices before enabling and configuring this option", L"Error", MB_ICONEXCLAMATION | MB_OK);
 						CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, BST_UNCHECKED);
 					}
 					else
@@ -1954,7 +1958,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				str += LOG_FILE;
 				std::wstring mess = L"Do you want to clear the log?\n\n";
 				mess += str;
-				if (MessageBox(hWnd, mess.c_str(), L"Clear log?", MB_YESNO | MB_ICONQUESTION) == IDYES)
+				if (customMsgBox(hWnd, mess.c_str(), L"Clear log?", MB_YESNO | MB_ICONQUESTION) == IDYES)
 				{
 					communicateWithService(L"-clearlog");
 				}
@@ -1975,7 +1979,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				}
 				if(bAuto)
 				{
-					MessageBox(hWnd, L"It is not necessary to manually configure localised restart strings on this system, as the application can automatically determine whether "
+					customMsgBox(hWnd, L"It is not necessary to manually configure localised restart strings on this system, as the application can automatically determine whether "
 						"a reboot or shutdown has been initiated on this system. Consequently the option to manually configure \"localised restart strings\" have been disabled."
 						"\n\nThe timing option determine the timing when managing system shutdown or restart. Depending on specifics of your system you may need to change this option.\n\n"
 						"When set to \"Default\" the app will trigger the shutdown/restart routine "
@@ -1987,7 +1991,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 						L"Shutdown options", MB_OK | MB_ICONINFORMATION);
 				}
 				else
-					if (MessageBox(hWnd, L"This application depend on localised events in the windows event log to determine whether a reboot or shutdown was initiated by the user."
+					if (customMsgBox(hWnd, L"This application depend on localised events in the windows event log to determine whether a reboot or shutdown was initiated by the user."
 						"\n\nIt seems the OS on this system is localised in a language not yet managed by the application and the user must therefore assist with manually indicating which "
 						"word or phrase that refers to the system restarting.\n\nPlease put a checkmark for every word or phrase that refers to 'restart' in the \"localised restart strings\" list and "
 						"make sure that the other checkboxes in the list are unchecked. You can contribute to the automatic detection of this language in a future release - please read below!"
@@ -2008,7 +2012,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			// explain the power on timeout, logging etc
 			else if (wParam == IDC_SYSLINK7)
 			{
-				MessageBox(hWnd, L"The power on timeout sets the maximum number of seconds the app will attempt to power on devices. "
+				customMsgBox(hWnd, L"The power on timeout sets the maximum number of seconds the app will attempt to power on devices. "
 					"Please consider increasing this value if your PC needs more time to establish contact with the WebOS-devices during system boot.\n\n"
 					"The option to enable logging is very useful for troubleshooting issues. If you are experiencing issues with the operations of this app please configure the "
 					"log level to \"Debug\" to properly capture any issues.\n\n"
@@ -2018,7 +2022,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			// explain the power saving options
 			else if (wParam == IDC_SYSLINK5)
 			{
-				MessageBox(hWnd, L"The user idle mode will automatically blank the screen, i e turn the transmitters off, in the absence of user input from keyboard, mouse and/or controllers. "
+				customMsgBox(hWnd, L"The user idle mode will automatically blank the screen, i e turn the transmitters off, in the absence of user input from keyboard, mouse and/or controllers. "
 					"The difference, when compared to both the screensaver and windows power plan settings, is that those OS implemented power saving features "
 					"utilize more obscured variables for determining user idle / busy states, and which can also be programmatically overridden f.e. by games, "
 					"media players, production software or your web browser, In short, and simplified, this option is a more aggressively configured screen and "
@@ -2031,7 +2035,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			// explain the multi-monitor conf
 			else if (wParam == IDC_SYSLINK6)
 			{
-				MessageBox(hWnd, L"The option to support the windows multi-monitor topology ensures that the "
+				customMsgBox(hWnd, L"The option to support the windows multi-monitor topology ensures that the "
 					"power state of individual devices will match the enabled or disabled state in the Windows monitor configuration, i e "
 					"when an HDMI-output is disabled in the graphics card configuration the associated device will also power off. "
 					"If you have a multi-monitor system and a compatible WebOS device it is recommended to configure and enable this feature. It may also be "
@@ -2043,14 +2047,14 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"\"Always Ready\" must be enabled in the settings of a compatible WebOS device to ensure that "
 					"the feature works properly.\n\n"
 					"ALSO NOTE! A change of GPU or addition of more displays may invalidate the configuration. If so, please run the configuration guide "
-					"again to ensure correct operation.\n\n",
+					"again to ensure correct operation.",
 					L"Multi-monitor support", MB_OK | MB_ICONINFORMATION);
 			}
 			
 			// explain the external api
 			else if (wParam == IDC_SYSLINK11)
 			{
-				if (MessageBox(hWnd, L"Scripts or other applications can use the \"External API\" to be notified of power events and to send commands to the devices. The "
+				if (customMsgBox(hWnd, L"Scripts or other applications can use the \"External API\" to be notified of power events and to send commands to the devices. The "
 					"usability of this is up to the creativity of the user, but can for example be used to trigger power state changes "
 					"of non-LG devices, execute scripts, trigger RGB profiles etc. The functionality and implementation is currently in BETA and "
 					"is preferrably discussed in the Discord #external-api channel (https://discord.gg/7KkTPrP3fq)\n\n"
@@ -2080,7 +2084,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			{
 				if (Prefs.devices_.size() == 0)
 				{
-					MessageBox(hWnd, L"Please configure devices before enabling and configuring this option", L"Error", MB_ICONEXCLAMATION | MB_OK);
+					customMsgBox(hWnd, L"Please configure devices before enabling and configuring this option", L"Error", MB_ICONEXCLAMATION | MB_OK);
 					CheckDlgButton(hWnd, IDC_CHECK_TOPOLOGY, BST_UNCHECKED);
 				}
 				else
@@ -2326,13 +2330,13 @@ LRESULT CALLBACK WndTopologyProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					// No WebOs devices attached
 					if (displays.size() == 0)
 					{
-						MessageBox(hWnd, L"To configure your devices, ensure that all your WebOS-devices are powered ON, connected to to your PC and enabled (with an extended desktop in case of multiple displays).", L"No WebOS devices detected", MB_OK | MB_ICONWARNING);
+						customMsgBox(hWnd, L"To configure your devices, ensure that all your WebOS-devices are powered ON, connected to to your PC and enabled (with an extended desktop in case of multiple displays).", L"No WebOS devices detected", MB_OK | MB_ICONWARNING);
 						break;
 					}
 					// If exactly one physical device connected/enabled and exactly one device cofigured it is considered an automatic match
 					else if (Prefs.devices_.size() == 1 && displays.size() == 1)
 					{
-						if (MessageBox(hWnd, L"Your device can be automatically configured.\n\nDo you want to accept the automatic configuration?", L"Automatic match", MB_YESNO) == IDYES)
+						if (customMsgBox(hWnd, L"Your device can be automatically configured.\n\nDo you want to accept the automatic configuration?", L"Automatic match", MB_YESNO) == IDYES)
 						{
 							Prefs.devices_[0].uniqueDeviceKeyTemporary = tools::narrow(displays[0].target.monitorDevicePath);
 							SendMessage(hWnd, APP_TOP_PHASE_3, NULL, NULL);
@@ -2590,7 +2594,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					std::wstring s = L"Do you want to delete '";
 					s += text;
 					s += L"' from process control?";
-					if (MessageBox(hWnd, s.c_str(), L"Delete item", MB_YESNO | MB_ICONQUESTION) == IDYES)
+					if (customMsgBox(hWnd, s.c_str(), L"Delete item", MB_YESNO | MB_ICONQUESTION) == IDYES)
 					{
 						int data = (int)SendMessage(GetDlgItem(hWnd, IDC_LIST), LB_GETITEMDATA, index, 0);
 						if (data != LB_ERR && data < process_list_temp.size())
@@ -2601,13 +2605,13 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 						}
 						else
 						{
-							MessageBox(hWnd, L"Could not delete item!", L"Error", MB_OK | MB_ICONINFORMATION);
+							customMsgBox(hWnd, L"Could not delete item!", L"Error", MB_OK | MB_ICONINFORMATION);
 						}
 					}
 				}
 				else
 				{
-					MessageBox(hWnd, L"There was an error when managing the listbox", L"Error", MB_OK | MB_ICONINFORMATION);
+					customMsgBox(hWnd, L"There was an error when managing the listbox", L"Error", MB_OK | MB_ICONINFORMATION);
 				}
 			}
 		}break;
@@ -2730,14 +2734,14 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		{
 			if (wParam == IDC_SYSLINK_INFO_1)
 			{
-				MessageBox(hWnd, L"Please configure the time, in minutes, without user input from keyboard, mouse or game controllers before "
+				customMsgBox(hWnd, L"Please configure the time, in minutes, without user input from keyboard, mouse or game controllers before "
 					"User Idle Mode is triggered and the screen is blanked.\r\n\r\nScreen blanking can be globally disabled for "
 					"fullscreen applications and for web-browsers while a video or a game is playing. \r\n\r\nAlso select whether the built-in speakers "
 					"shall be muted while the screen is blanked", L"User Idle Mode configuration", MB_OK | MB_ICONINFORMATION);
 			}
 			else if (wParam == IDC_SYSLINK_INFO_2)
 			{
-				MessageBox(hWnd, L"Enable detailed process control to set rules and conditions for a specific process. E.g. to prevent "
+				customMsgBox(hWnd, L"Enable detailed process control to set rules and conditions for a specific process. E.g. to prevent "
 					"the screen blanking while running a specific movie player.", L"User Idle Mode process control", MB_OK | MB_ICONINFORMATION);
 			}
 			else if (wParam == IDC_SYSLINK_ADD)
@@ -2909,7 +2913,7 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 				}
 				else
 				{
-					MessageBox(hWnd, L"Please ensure that both display name and process executable name are properly "
+					customMsgBox(hWnd, L"Please ensure that both display name and process executable name are properly "
 						"configured before continuing. Please note that process executable name should not include the path.",
 						L"Invalid configuration", MB_OK | MB_ICONERROR);
 				}
@@ -2945,20 +2949,20 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 		{
 			if (wParam == IDC_SYSLINK7)
 			{
-				MessageBox(hWnd, L"Please type display name and name of the executable for the process which should prevent Screen Blanking. "
+				customMsgBox(hWnd, L"Please type display name and name of the executable for the process which should prevent Screen Blanking. "
 					"The name of the executable can contain wildcard characters (*) to match multiple processes.",
 					L"Process Control configuration", MB_OK | MB_ICONINFORMATION);
 
 			}
 			if (wParam == IDC_SYSLINK13)
 			{
-				MessageBox(hWnd, L"Please select the specific rules for the process by selecting the appropriate checkboxes. \r\n\r\n"
+				customMsgBox(hWnd, L"Please select the specific rules for the process by selecting the appropriate checkboxes. \r\n\r\n"
 					"Please note that Universal Windows Platform (UWP) apps are not always detected correctly.",
 					L"Process Control configuration", MB_OK | MB_ICONINFORMATION);
 			}
 			if (wParam == IDC_SYSLINK_WILDCARD)
 			{
-				MessageBox(hWnd, L"The name of the executable can contain wildcard characters (*) to match multiple processes.\r\n\r\n"
+				customMsgBox(hWnd, L"The name of the executable can contain wildcard characters (*) to match multiple processes.\r\n\r\n"
 					"It is for example possible to set the executable name to \"*player*.exe\" to match multiple media pleyers, e.g. \"Microsoft.Media.Player.exe\", \"PotPlayerMini64.exe\" and \"KMPlayer64.exe\"",
 					L"Process Control wildcards", MB_OK | MB_ICONINFORMATION);
 
@@ -3075,6 +3079,187 @@ LRESULT CALLBACK WndWhitelistProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 	}
 	return true;
 }
+INT_PTR CALLBACK CustomMsgBoxProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	{
+		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
+		auto params = reinterpret_cast<CUSTOMMSGBOXPARAMS*>(lParam);
+		h_custom_messagebox_wnd = hWnd;
+		SetDlgItemText(hWnd, IDC_MB_STATIC, params->lpText);
+		SetWindowText(hWnd, params->lpCaption);
+		SendDlgItemMessage(hWnd, IDC_MB_STATIC, WM_SETFONT, (WPARAM)h_edit_small_font, MAKELPARAM(TRUE, 0));
+
+		//measure size of text
+		RECT rcText = { 0, 0, 400, 0 };
+
+		HDC hdc = GetDC(GetDlgItem(hWnd, IDC_MB_STATIC));
+		HFONT hFont = (HFONT)SendDlgItemMessage(hWnd, IDC_MB_STATIC, WM_GETFONT, 0, 0);
+		HFONT hOld = (HFONT)SelectObject(hdc, hFont);
+
+		DrawText(hdc, params->lpText, -1, &rcText, DT_WORDBREAK | DT_CALCRECT);
+
+		SelectObject(hdc, hOld);
+		ReleaseDC(GetDlgItem(hWnd, IDC_MB_STATIC), hdc);
+
+		//size window and controls
+		if (rcText.right < 200)
+			rcText.right = 200;
+		SetWindowPos(hWnd, NULL, 0, 0, rcText.right + 120, rcText.bottom + 100, SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
+		SetWindowPos(GetDlgItem(hWnd, IDB1), NULL, rcText.right - 10, rcText.bottom + 20, 90, 28, SWP_NOZORDER | SWP_FRAMECHANGED);
+		SetWindowPos(GetDlgItem(hWnd, IDB2), NULL, rcText.right - 110, rcText.bottom + 20, 90, 28, SWP_NOZORDER | SWP_FRAMECHANGED);
+		SetWindowPos(GetDlgItem(hWnd, IDB3), NULL, rcText.right - 210, rcText.bottom + 20, 90, 28, SWP_NOZORDER | SWP_FRAMECHANGED);
+		SetWindowPos(GetDlgItem(hWnd, IDC_MB_STATIC), NULL,
+			60, 10, rcText.right, rcText.bottom,
+			SWP_NOZORDER);
+
+		//reposition window
+		HWND hParent = GetParent(hWnd);
+		if (!hParent) {
+			hParent = GetDesktopWindow(); // fallback if no parent
+		}
+
+		RECT rcParent, rcDlg;
+		GetWindowRect(hParent, &rcParent);
+		GetWindowRect(hWnd, &rcDlg);
+
+		int dlgWidth = rcDlg.right - rcDlg.left;
+		int dlgHeight = rcDlg.bottom - rcDlg.top;
+
+		int parentWidth = rcParent.right - rcParent.left;
+		int parentHeight = rcParent.bottom - rcParent.top;
+
+		int x = rcParent.left + (parentWidth - dlgWidth) / 2;
+		int y = rcParent.top + (parentHeight - dlgHeight) / 2;
+
+		// Ensure dialog stays fully visible on screen
+		SetWindowPos(hWnd, HWND_TOP, x, y, 0, 0,
+			SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+		// icon
+		SHSTOCKICONINFO sii = { sizeof(sii) };
+		HRESULT hr = NULL;
+		if ((params->uType & MB_ICONMASK) == MB_ICONERROR)
+			hr = SHGetStockIconInfo(SIID_ERROR, SHGSI_ICON | SHGSI_LARGEICON, &sii);
+		else if ((params->uType & MB_ICONMASK) == MB_ICONWARNING)
+			hr = SHGetStockIconInfo(SIID_WARNING, SHGSI_ICON | SHGSI_LARGEICON, &sii);
+		else if ((params->uType & MB_ICONMASK) == MB_ICONINFORMATION)
+			hr = SHGetStockIconInfo(SIID_INFO, SHGSI_ICON | SHGSI_LARGEICON, &sii);
+		else if ((params->uType & MB_ICONMASK) == MB_ICONQUESTION)
+			hr = SHGetStockIconInfo(SIID_HELP, SHGSI_ICON | SHGSI_LARGEICON, &sii);
+
+		if (hr == S_OK)
+			SendDlgItemMessage(hWnd, IDC_MB_ICON, STM_SETICON, (WPARAM)sii.hIcon, 0);
+
+		// button
+		HWND hBtn1 = GetDlgItem(hWnd, IDB1);
+		HWND hBtn2 = GetDlgItem(hWnd, IDB2);
+		HWND hBtn3 = GetDlgItem(hWnd, IDB3);
+
+		ShowWindow(hBtn1, SW_HIDE);
+		ShowWindow(hBtn2, SW_HIDE);
+		ShowWindow(hBtn3, SW_HIDE);
+
+		if ((params->uType & 0x0000000F) == MB_OKCANCEL) {
+			SetWindowText(hBtn2, L"OK");     SetWindowLongPtr(hBtn2, GWLP_ID, IDOK);     ShowWindow(hBtn2, SW_SHOW);
+			SetWindowText(hBtn1, L"Cancel"); SetWindowLongPtr(hBtn1, GWLP_ID, IDCANCEL); ShowWindow(hBtn1, SW_SHOW);
+		}
+		else if ((params->uType & 0x0000000F) == MB_YESNO) {
+			SetWindowText(hBtn2, L"Yes");    SetWindowLongPtr(hBtn2, GWLP_ID, IDYES);    ShowWindow(hBtn2, SW_SHOW);
+			SetWindowText(hBtn1, L"No");     SetWindowLongPtr(hBtn1, GWLP_ID, IDNO);     ShowWindow(hBtn1, SW_SHOW);
+		}
+		else if ((params->uType & 0x0000000F) == MB_YESNOCANCEL) {
+			SetWindowText(hBtn3, L"Yes");    SetWindowLongPtr(hBtn3, GWLP_ID, IDYES);    ShowWindow(hBtn3, SW_SHOW);
+			SetWindowText(hBtn2, L"No");     SetWindowLongPtr(hBtn2, GWLP_ID, IDNO);     ShowWindow(hBtn2, SW_SHOW);
+			SetWindowText(hBtn1, L"Cancel"); SetWindowLongPtr(hBtn1, GWLP_ID, IDCANCEL); ShowWindow(hBtn1, SW_SHOW);
+		}
+		else if ((params->uType & 0x0000000F) == MB_RETRYCANCEL) {
+			SetWindowText(hBtn2, L"Retry");  SetWindowLongPtr(hBtn2, GWLP_ID, IDRETRY);  ShowWindow(hBtn2, SW_SHOW);
+			SetWindowText(hBtn1, L"Cancel"); SetWindowLongPtr(hBtn1, GWLP_ID, IDCANCEL); ShowWindow(hBtn1, SW_SHOW);
+		}
+		else { // default MB_OK
+			SetWindowText(hBtn1, L"OK");     SetWindowLongPtr(hBtn1, GWLP_ID, IDOK);     ShowWindow(hBtn1, SW_SHOW);
+		}
+
+		// default button
+		int defButtonId = IDOK;
+		if ((params->uType & 0x00000F00) == MB_DEFBUTTON2)
+			defButtonId = GetDlgCtrlID(hBtn2);
+		else if ((params->uType & 0x00000F00) == MB_DEFBUTTON3)
+			defButtonId = GetDlgCtrlID(hBtn3);
+		else 
+			defButtonId = GetDlgCtrlID(hBtn1);
+
+		HWND hDefBtn = GetDlgItem(hWnd, defButtonId);
+		if (hDefBtn) {
+			SendMessage(hWnd, DM_SETDEFID, defButtonId, 0);
+			SetFocus(hDefBtn);
+		}
+
+		return FALSE;
+	}break;
+	case WM_CTLCOLORSTATIC:
+	{
+		HDC hdcStatic = (HDC)wParam;
+		//		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_ENABLE))
+		{
+			SetBkMode(hdcStatic, TRANSPARENT);
+		}
+		return(INT_PTR)h_backbrush;
+	}break;
+	case WM_PAINT:
+	{
+		RECT rc = { 0 };
+		GetClientRect(hWnd, &rc);
+		PAINTSTRUCT ps;
+		//		PAINTSTRUCT psPaint;
+		InvalidateRect(hWnd, NULL, false);
+
+		//		GetClientRect(hWnd, &rc);
+		int width = rc.right;
+		int height = rc.bottom;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		HDC backbuffDC = CreateCompatibleDC(hdc);
+		HBITMAP backbuffer = CreateCompatibleBitmap(hdc, width, height);
+		int savedDC = SaveDC(backbuffDC);
+		SelectObject(backbuffDC, backbuffer);
+
+		FillRect(backbuffDC, &rc, (HBRUSH)h_backbrush);
+
+		BitBlt(hdc, 0, 0, width, height, backbuffDC, 0, 0, SRCCOPY);
+		RestoreDC(backbuffDC, savedDC);
+
+		DeleteObject(backbuffer);
+		DeleteDC(backbuffDC);
+
+		ReleaseDC(hWnd, hdc);
+		EndPaint(hWnd, &ps);
+		return 0;
+	}break;
+	case WM_ERASEBKGND:
+	{
+		return true;
+	}break;
+	case WM_COMMAND:
+	{
+		EndDialog(hWnd, LOWORD(wParam));
+	}break;
+	case WM_CLOSE:
+	{
+		EndDialog(hWnd, IDCANCEL);
+	}break;
+	case WM_DESTROY:
+	{
+		h_custom_messagebox_wnd = NULL;
+	}break;
+	default:
+		return false;
+	}
+
+	return true;
+}
 
 //   If the application is already running, send the command line parameters to that other process
 bool messageExistingProcess(std::wstring command_line)
@@ -3102,7 +3287,7 @@ bool messageExistingProcess(std::wstring command_line)
 void communicateWithService(std::wstring sData)
 {
 	if(!p_pipe_client->send(sData))
-		MessageBox(h_main_wnd, L"Failed to connect to named pipe. Service may be stopped.", L"Error", MB_OK | MB_ICONEXCLAMATION);
+		customMsgBox(h_main_wnd, L"Failed to connect to named pipe. Service may be stopped.", L"Error", MB_OK | MB_ICONEXCLAMATION);
 }
 void threadVersionCheck(HWND hWnd)
 {
@@ -3286,4 +3471,14 @@ void prepareForUninstall(void)
 	PostMessage(HWND_BROADCAST, custom_updater_close_message, NULL, (LPARAM)1);
 	PostMessage(HWND_BROADCAST, custom_UI_close_message, NULL, NULL);
 	return;
+}
+int customMsgBox(HWND hParent, LPCWSTR lpText, LPCWSTR lpCaption, UINT uType)
+{
+	CUSTOMMSGBOXPARAMS params{ lpText, lpCaption, uType };
+	return (int)DialogBoxParam(
+		GetModuleHandle(NULL),
+		MAKEINTRESOURCE(IDD_MESSAGEBOX),
+		hParent,
+		CustomMsgBoxProc,
+		(LPARAM)&params);
 }
