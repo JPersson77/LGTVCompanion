@@ -10,7 +10,7 @@
 // TODO: consider using boost::interprocess
 
 #define PIPE_BUF_SIZE					1024
-#define PIPE_INSTANCES					5
+#define PIPE_INSTANCES					50
 #define PIPE_NOT_RUNNING				99
 #define PIPE_EVENT_ERROR				100
 #define PIPE_EVENT_READ					101 // Data was read 
