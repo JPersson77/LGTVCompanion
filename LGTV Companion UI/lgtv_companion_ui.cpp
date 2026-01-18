@@ -98,7 +98,7 @@ COPYRIGHT
 #include <urlmon.h>
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
-
+#include <mutex>
 #include "resource.h"
 
 #pragma comment(lib, "Comctl32.lib")
@@ -137,7 +137,7 @@ COPYRIGHT
 #define									APP_LISTBOX_ADD					WM_USER+15
 #define									APP_LISTBOX_DELETE	            WM_USER+16
 #define									APP_LISTBOX_REDRAW				WM_USER+17
-
+#define									COPYDATA_MUTEX_WAIT				10
 
 // Global Variables:
 HINSTANCE								h_instance;  // current instance
@@ -171,6 +171,7 @@ UINT									custom_daemon_unidle_message;
 UINT									custom_daemon_close_message;
 UINT									custom_updater_close_message;
 UINT									custom_UI_close_message;
+inline static std::mutex				copydata_mutex_;
 
 Preferences								Prefs(CONFIG_FILE);
 
@@ -245,7 +246,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 			max_wait -= 25;
 		}
 		communicateWithService(command_line);
-		std::stringstream temp;
+		Sleep(20);
 		p_pipe_client->terminate();
 		return false;
 	}
@@ -804,7 +805,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			}break;
 			case IDC_TEST:
 			{
-				PostMessage((HWND)-1, WM_SYSCOMMAND, SC_MONITORPOWER, 2);
+//				MessageBox(NULL, std::to_wstring(copydata_count).c_str(), L"Message", MB_OK);
 			}break;
 			case IDC_SPLIT:
 			{
@@ -1011,10 +1012,15 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	}break;
 	case WM_COPYDATA:
 	{
-		std::wstring received_command_line;
+		
 		if (!lParam)
 			return true;
 
+		//thread safe
+		while (!copydata_mutex_.try_lock())
+			Sleep(COPYDATA_MUTEX_WAIT);
+		
+		std::wstring received_command_line;
 		COPYDATASTRUCT* pcds = (COPYDATASTRUCT*)lParam;
 
 		if (pcds->dwData == NOTIFY_NEW_COMMANDLINE)
@@ -1022,13 +1028,19 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			if (pcds->cbData == 0)
 			{
 				SetForegroundWindow(hWnd);
+				copydata_mutex_.unlock();
 				return true;
 			}
 			received_command_line = (WCHAR*)pcds->lpData;
 			if (received_command_line.size() == 0)
+			{
+				copydata_mutex_.unlock();
 				return true;
+			}
 			communicateWithService(received_command_line);
+			Sleep(20);
 		}
+		copydata_mutex_.unlock();
 		return true;
 	}break;
 	case WM_PAINT:
