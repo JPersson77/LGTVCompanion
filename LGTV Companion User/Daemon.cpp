@@ -609,6 +609,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				if (time_now - lii.dwTime <= (DWORD)(user_is_idle ? TIMER_MAIN_DELAY_WHEN_IDLE : TIMER_MAIN_DELAY_WHEN_BUSY))
 					fallback_count++;
+				if (time_now - lii.dwTime > 5000)
+					fallback_count--;
+				if (fallback_count < 0)
+				{
+					fallback_count = 0;
+					using_fallback = false;
+				}
 				if (fallback_count > 10)
 				{
 					fallback_count = 10;
