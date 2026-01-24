@@ -9,7 +9,7 @@
 #include "../Common/log.h"
 #include "../Common/lg_api.h"
 #include "../Common/common_app_define.h"
-#include "../Common//ipc.h"
+#include "../Common//ipc_v2.h"
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ssl/context.hpp>
 #include <nlohmann/json.hpp>
@@ -64,7 +64,7 @@ private:
 	int													event_log_callback_status_ = NULL;
 	std::vector<std::string>							host_ips_;
 	std::shared_ptr<Logging>							log_;
-	std::shared_ptr<IpcServer>							ipc_server_;
+	std::shared_ptr<IpcServer2>							ipc_server_;
 
 	void												dispatchEvent(Event&);
 	void												processEvent(Event&, SessionWrapper&);
@@ -108,7 +108,7 @@ Companion::Impl::Impl(Preferences& settings)
 	std::wstring file = tools::widen(prefs_.data_path_);
 	file += LOG_FILE;
 	log_ = std::make_shared<Logging>(settings.log_level_, file);
-	ipc_server_ = std::make_shared<IpcServer>(PIPENAME, &ipcCallbackStatic, (LPVOID)this);
+	ipc_server_ = std::make_shared<IpcServer2>(PIPENAME, &ipcCallbackStatic, (LPVOID)this);
 	if (prefs_.devices_.size() > 0)
 	{
 		for (auto& device : prefs_.devices_)
@@ -180,7 +180,7 @@ void Companion::Impl::shutdown(bool stage){
 	else
 	{
 		INFO("Service is shutting down. Finishing activities and closing connections");
-		ipc_server_->terminate();
+//		ipc_server_->terminate();
 		if(isBusy())
 			if (sessions_.size() > 0)
 				for (auto& session : sessions_)
@@ -617,11 +617,10 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 		int threads = 0;
 		for (auto& dev : sessions_)
 			if (dev->device_.enabled)
-				threads++;
+				threads+=2;
 		if (threads < 2)
 			threads = 2;
-		else
-			threads++;
+
 		DEBUG("Creating a new thread pool - %1% threads", std::to_string(threads));
 		std::vector<std::thread> thread_pool;
 		for (int i = 0; i < threads; i++)

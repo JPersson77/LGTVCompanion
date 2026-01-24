@@ -42,6 +42,12 @@
     <ClCompile Include="transient_arp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="button_client.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\ipc_v2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="main.h">
@@ -90,6 +96,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="transient_arp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="button_client.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\ipc_v2.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

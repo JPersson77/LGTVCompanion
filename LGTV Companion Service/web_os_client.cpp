@@ -4,6 +4,7 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "web_os_client.h"
+#include "button_client.h"
 #include "transient_arp.h"
 #include "../Common/common_app_define.h"
 #include "../Common/lg_api.h" 
@@ -24,6 +25,7 @@
 #define			TIMER_RETRY_WAIT					2000	// milliseconds to wait before retrying connection
 #define			TIMER_POWER_POLL_WAIT				1000	// milliseconds to wait before sending next power state poll
 #define			TIMER_WOL_WAIT						1000	// milliseconds to  wait before sending next WOL magic packet
+#define			TIMER_CLOSE_WAIT					1000	// milliseconds to  wait before sending next WOL magic packet
 
 // connection port
 #define			PORT								"3000"
@@ -92,10 +94,12 @@ class WebOsClient::Impl : public std::enable_shared_from_this<WebOsClient::Impl>
 private:
 	Device device_settings_;
 	Work work_;
+	ButtonClient button_client_;
 	net::steady_timer keep_alive_timer_;
 	net::steady_timer async_timer_;
 	net::steady_timer wol_timer_;
 	net::steady_timer delayed_request_timer_;
+	net::steady_timer delayed_close_timer_;
 	ssl::context* ctx_;
 	udp::socket udp_socket_;
 	tcp::resolver resolver_;
@@ -108,6 +112,7 @@ private:
 	bool isPoweredOn_ = false;
 	std::list<Work> workQueue_;
 	std::shared_ptr<Logging> log_;
+	time_t timestamp_last_work_performed_ = 0;
 
 	//functions running on strand
 	bool setSessionKey(std::string, std::string);
@@ -115,6 +120,7 @@ private:
 	void startNextWork(void);
 	void workIsFinished(void);
 	void doClose(void);
+	void doDelayedClose(void);
 	void run(void);
 	void runWOL(void);
 	void send(std::string data, std::string log_message = "");
@@ -130,6 +136,7 @@ private:
 	void onClose(boost::beast::error_code);
 	void onWait(boost::beast::error_code);
 	void onDelayedRequest(boost::beast::error_code);
+	void onDelayedClose(boost::beast::error_code);
 	void onError(boost::beast::error_code&, std::string);
 	void onRetryConnection(boost::beast::error_code);
 	void onWOL(boost::beast::error_code);
@@ -147,7 +154,9 @@ WebOsClient::Impl::Impl(net::io_context& ioc, ssl::context& ctx, Device& setting
 	, wol_timer_(net::make_strand(ioc))
 	, keep_alive_timer_(net::make_strand(ioc))
 	, delayed_request_timer_(net::make_strand(ioc))
+	, delayed_close_timer_(net::make_strand(ioc))
 	, udp_socket_(net::make_strand(ioc))
+	, button_client_(ioc, ctx, settings, log)
 {
 	ctx_ = &ctx;
 	device_settings_ = settings;
@@ -299,7 +308,13 @@ void WebOsClient::Impl::startNextWork(void)
 			break;
 		case WORK_BUTTON:
 			DEBUG("---  Starting work: BUTTON  -----------------");
-			if (socket_status_ == SOCKET_CONNECTED)
+			if (button_client_.isConnected())
+			{
+				button_client_.sendButton(work_.data_);
+				INFO("Virtual button press %1% was sent", work_.data_);
+				workIsFinished();
+			}
+			else if (socket_status_ == SOCKET_CONNECTED)
 				send(JSON_GETBUTTONSOCKET);
 			else
 				this->run();
@@ -356,20 +371,25 @@ void WebOsClient::Impl::startNextWork(void)
 			else // no persistence
 			{
 				DEBUG("Work queue is empty");;
-				doClose();
+				doDelayedClose();
 			}
 		}
 		else
 		{
 			DEBUG("Work queue is empty");
-			doClose();
+			if (device_settings_.enabled && !isPoweredOn_)
+				doClose();
+			else
+				doDelayedClose();
 		}
 	}
 }
 void WebOsClient::Impl::workIsFinished(void)
 {
 	work_.clear();
-//	Sleep(20); // potentially webOS does not like requests to be sent too quickly
+	if(!workQueue_.empty())
+		Sleep(20); // potentially webOS does not like requests to be sent too quickly
+	timestamp_last_work_performed_ = time(0);
 	startNextWork();
 }
 void WebOsClient::Impl::doClose(void) {
@@ -382,13 +402,51 @@ void WebOsClient::Impl::doClose(void) {
 		break;
 	default:
 		DEBUG("Closing connection");
-		if(device_settings_.ssl)
+		if (device_settings_.ssl)
 			ws_->async_close(websocket::close_code::normal, beast::bind_front_handler(&Impl::onClose, shared_from_this()));
 		else
 			ws_tcp_->async_close(websocket::close_code::normal, beast::bind_front_handler(&Impl::onClose, shared_from_this()));
 		break;
 	}
 }
+
+void WebOsClient::Impl::doDelayedClose(void) {
+	DEBUG("Delaying closing connection...");
+	delayed_close_timer_.expires_after(boost::asio::chrono::milliseconds(TIMER_CLOSE_WAIT));
+	delayed_close_timer_.async_wait(beast::bind_front_handler(&Impl::onDelayedClose, shared_from_this()));
+}
+
+void WebOsClient::Impl::onDelayedClose(beast::error_code ec) {
+	if (ec )
+	{
+		if (ec = boost::asio::error::operation_aborted)
+			return;
+		return onError(ec, "onDelayedClose");
+	}
+
+	if (time(0) - timestamp_last_work_performed_ < 2)
+	{
+		delayed_close_timer_.expires_after(boost::asio::chrono::milliseconds(TIMER_CLOSE_WAIT));
+		delayed_close_timer_.async_wait(beast::bind_front_handler(&Impl::onDelayedClose, shared_from_this()));
+		return;
+	}
+	workQueue_ = {}; //clear work queue
+	work_.clear();
+	switch (socket_status_)
+	{
+	case SOCKET_DISCONNECTED:
+		DEBUG("Closing connection after delay. Socket is already closed");
+		break;
+	default:
+		DEBUG("Closing connection after delay");
+		if (device_settings_.ssl)
+			ws_->async_close(websocket::close_code::normal, beast::bind_front_handler(&Impl::onClose, shared_from_this()));
+		else
+			ws_tcp_->async_close(websocket::close_code::normal, beast::bind_front_handler(&Impl::onClose, shared_from_this()));
+		break;
+	}
+}
+
 void WebOsClient::Impl::run(void) {
 	socket_status_ = SOCKET_CONNECTING;
 	if(device_settings_.ssl)
@@ -847,79 +905,9 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 					if (pos != std::string::npos)
 					{
 						path = path.substr(pos);
-						std::string button_command = "type:button\nname:";
-						button_command += work_.data_;
-						button_command += "\n\n";
-	
-						beast::error_code ec;
-
-						beast::websocket::stream<beast::ssl_stream<beast::tcp_stream>> ws_button(resolver_.get_executor(), *ctx_);
-						beast::websocket::stream<beast::tcp_stream> ws_button_tcp(resolver_.get_executor());
-						auto const results = resolver_.resolve(device_settings_.ip, device_settings_.ssl ? PORT_SSL : PORT, ec);
-						if(!ec)
-						{
-							if (device_settings_.ssl)
-								beast::get_lowest_layer(ws_button).connect(results, ec);
-							else
-								beast::get_lowest_layer(ws_button_tcp).connect(results, ec);
-						}
-						if(!ec)
-						{
-							if(device_settings_.ssl)
-							{
-								if (!SSL_set_tlsext_host_name(ws_button.next_layer().native_handle(), device_settings_.ip.c_str()))
-									ec = beast::error_code(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category());
-								if (!ec)
-									ws_button.next_layer().handshake(ssl::stream_base::client, ec); //SSL handshake
-								if (!ec)
-									ws_button.set_option(websocket::stream_base::decorator(
-										[](websocket::request_type& req)
-										{
-											req.set(http::field::user_agent,
-											std::string(BOOST_BEAST_VERSION_STRING) +
-											" websocket-client-async-ssl");
-										}));
-							}
-							else
-							{
-								if (!ec)
-									ws_button_tcp.set_option(websocket::stream_base::decorator(
-										[](websocket::request_type& req)
-										{
-											req.set(http::field::user_agent,
-											std::string(BOOST_BEAST_VERSION_STRING) +
-											" websocket-client-async");
-										}));
-							}
-
-							if (!ec)
-							{
-								if(device_settings_.ssl)
-									ws_button.handshake(host_, path, ec);
-								else
-									ws_button_tcp.handshake(host_, path, ec);
-							}
-							if (!ec)
-							{
-								if (device_settings_.ssl)
-									ws_button.write(net::buffer(std::string(button_command)), ec);
-								else
-									ws_button_tcp.write(net::buffer(std::string(button_command)), ec);
-							}
-							if(device_settings_.ssl)
-							{
-								if (ws_button.is_open())
-									ws_button.close(websocket::close_code::normal);
-							}
-							else
-							{
-								if (ws_button_tcp.is_open())
-									ws_button_tcp.close(websocket::close_code::normal);
-							}
-							INFO("Virtual button press %1% was sent", work_.data_);
-						}
-						if (ec)
-							ERR("Failed to send button command : %1%", ec.message());								
+						button_client_.setPath(path);
+						button_client_.sendButton(work_.data_);
+						INFO("Virtual button press %1% was sent", work_.data_);
 					}
 					else
 						ERR("Did not receive resource path for BUTTON. Aborting!");
@@ -986,7 +974,9 @@ void WebOsClient::Impl::onDelayedRequest(beast::error_code ec) {
 void WebOsClient::Impl::onClose(beast::error_code ec) {
 	if (ec) 
 		return onError(ec, "onClose");
+	button_client_.close(true);
 	DEBUG("Socket closed gracefully");
+
 	socket_status_ = SOCKET_DISCONNECTED;
 }
 void WebOsClient::Impl::onError(beast::error_code& ec, std::string err) {
