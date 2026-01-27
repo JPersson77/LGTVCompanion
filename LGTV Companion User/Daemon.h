@@ -7,7 +7,7 @@ struct DisplayInfo;
 LRESULT CALLBACK			WndProc(HWND, UINT, WPARAM, LPARAM);
 
 void						closeExistingProcess(void);
-void						communicateWithService(std::string);
+void						communicateWithService(std::wstring, bool);
 void						log(std::wstring input);
 std::vector<DisplayInfo>	queryDisplays();
 static BOOL	CALLBACK		meproc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData);

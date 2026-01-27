@@ -242,7 +242,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\common_app_define.h" />
-    <ClInclude Include="..\Common\ipc.h" />
+    <ClInclude Include="..\Common\ipc_v2.h" />
     <ClInclude Include="..\Common\preferences.h" />
     <ClInclude Include="..\Common\restart_strings.h" />
     <ClInclude Include="..\Common\tools.h" />
@@ -251,7 +251,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Common\ipc.cpp" />
+    <ClCompile Include="..\Common\ipc_v2.cpp" />
     <ClCompile Include="..\Common\log.cpp" />
     <ClCompile Include="..\Common\preferences.cpp" />
     <ClCompile Include="..\Common\tools.cpp" />

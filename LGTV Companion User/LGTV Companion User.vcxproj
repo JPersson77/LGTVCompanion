@@ -274,7 +274,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\common_app_define.h" />
-    <ClInclude Include="..\Common\ipc.h" />
+    <ClInclude Include="..\Common\ipc_v2.h" />
     <ClInclude Include="..\Common\preferences.h" />
     <ClInclude Include="..\Common\tools.h" />
     <ClInclude Include="user_idle_mode.h" />
@@ -282,7 +282,7 @@
     <ClInclude Include="daemon.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Common\ipc.cpp" />
+    <ClCompile Include="..\Common\ipc_v2.cpp" />
     <ClCompile Include="..\Common\preferences.cpp" />
     <ClCompile Include="..\Common\tools.cpp" />
     <ClCompile Include="daemon.cpp" />

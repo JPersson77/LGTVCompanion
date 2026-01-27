@@ -5,7 +5,7 @@
 
 #include "console.h"
 #include "../Common/lg_api.h"
-#include "../Common/ipc.h"
+//#include "../Common/ipc.h"
 #include "../Common/preferences.h"
 #include "../Common/common_app_define.h"
 #include "../Common/tools.h"

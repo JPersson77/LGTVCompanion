@@ -2,11 +2,12 @@
 
 // common application definitions
 #define			APPNAME							L"LGTV Companion"
-#define         APP_VERSION                     L"5.0.8"
+#define         APP_VERSION                     L"5.1.0"
 #define			CONFIG_FILE						L"config.json"
 #define			LOG_FILE						L"log.txt"
 #define			WINDOW_CLASS_UNIQUE				L"YOLOx0x0x0181818"
 #define         PIPENAME                        TEXT("\\\\.\\pipe\\LGTVyolo")
+#define			NOTIFY_NEW_COMMANDLINE			1
 #define         NEWRELEASELINK                  L"https://github.com/JPersson77/LGTVCompanion/releases"
 #define         VERSIONCHECKLINK                L"https://api.github.com/repos/JPersson77/LGTVCompanion/releases/latest"
 #define         DONATELINK                      L"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=jorgen.persson@gmail.com&lc=US&item_name=Friendly+gift+for+the+development+of+LGTV+Companion&no_note=0&cn=&currency_code=EUR&bn=PP-DonationsBF:btn_donateCC_LG.gif:NonHosted"

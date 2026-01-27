@@ -82,7 +82,7 @@ COPYRIGHT
 
 #include "lgtv_companion_ui.h"
 #include "../Common/preferences.h"
-#include "../Common/ipc.h"
+#include "../Common/ipc_v2.h"
 #include "../Common/common_app_define.h"
 #include "../Common/tools.h"
 #include "../Common/log.h"
@@ -113,7 +113,6 @@ COPYRIGHT
 #define									DEVICEWINDOW_TITLE_ADD          L"Add device"
 #define									DEVICEWINDOW_TITLE_MANAGE       L"Configure device"
 
-#define									NOTIFY_NEW_COMMANDLINE			1
 #define									COLOR_STATIC					0x00555555
 #define									COLOR_RED						0x00000099
 #define									COLOR_GREEN						0x00009900
@@ -163,7 +162,7 @@ int										i_top_configuration_phase;
 int										i_top_configuration_display;
 bool									reset_api_keys = false;
 std::vector<Preferences::ProcessList>	process_list_temp;
-std::shared_ptr<IpcClient>				p_pipe_client;
+std::shared_ptr<IpcClient2>				p_pipe_client;
 std::shared_ptr<Logging>				logger;
 UINT									custom_daemon_restart_message;
 UINT									custom_daemon_idle_message;
@@ -218,7 +217,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	if(!Prefs.isInitialised())
 	{
 		MessageBox(NULL, L"Error when reading the configuration file.\n\nApplication terminated!", APPNAME, MB_OK | MB_ICONERROR);
-		return false;
+		return false; 
 	}
 	// tweak prefs regarding windows topology
 	bool bTop = false;
@@ -233,29 +232,29 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	file += L"ui_log.txt";
 	logger = std::make_shared<Logging>(0, file);
 
+	
+
 	// Initiate PipeClient IPC
-	p_pipe_client = std::make_shared<IpcClient>(PIPENAME, ipcCallback, (LPVOID)NULL);
+	p_pipe_client = std::make_shared<IpcClient2>(PIPENAME, ipcCallback, (LPVOID)NULL);
+	h_backbrush = CreateSolidBrush(0x00ffffff);
+	h_edit_small_font = CreateFont(18, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
 
 	//parse and execute command line parameters when applicable and then exit
 	if (Prefs.devices_.size() > 0 && command_line.size() > 0)
 	{
-		int max_wait = 1000;
-		while (!p_pipe_client->isRunning() && max_wait > 0)
-		{
-			Sleep(25);
-			max_wait -= 25;
-		}
 		communicateWithService(command_line);
-		Sleep(20);
-		p_pipe_client->terminate();
+//		Sleep(100);
+//		p_pipe_client->terminate();
+		DeleteObject(h_backbrush);
+		DeleteObject(h_edit_small_font);
+
+	
 		return false;
 	}
 
-	h_backbrush = CreateSolidBrush(0x00ffffff);
 	h_large_edit_font = CreateFont(32, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
 	h_edit_font = CreateFont(26, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
 	h_edit_medium_font = CreateFont(22, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
-	h_edit_small_font = CreateFont(18, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
 	h_edit_medium_bold_font = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, TEXT("Calibri"));
 	h_popup_menu = LoadMenu(h_instance, MAKEINTRESOURCE(IDR_BUTTONMENU));
 
@@ -303,7 +302,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		}
 	}
 
-	p_pipe_client->terminate();
+//	p_pipe_client->terminate();
 
 	//clean up
 	DeleteObject(h_backbrush);
@@ -778,7 +777,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				ShellExecute(NULL, L"open", exe.c_str(), L"-restart", path.c_str(), SW_HIDE);
 			}
 		}
-		p_pipe_client->init();
+//		p_pipe_client->init();
 		EnableWindow(hWnd, true);
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
 	}break;
@@ -2040,8 +2039,8 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"media players, production software or your web browser, In short, and simplified, this option is a more aggressively configured screen and "
 					"power saver. \n\n"
 					"The option to support remote streaming hosts will power off or blank the screen of managed devices while the system is acting as streaming host or being remoted into. Supported "
-					"hosts include Nvidia gamestream, Moonlight, Steam Link and RDP. \n\nPlease note that the devices will remain powered off / blanked until the remote connection is disconnected. \n\n"
-					"NOTE! Support for detecting Sunshine streaming host require Sunshine to be installed (i.e. not portable install) and Sunshine logging level be at minimum on level \"Info\" (default)",
+					"hosts include Nvidia gamestream, Moonlight, Sunshine, Apollo, Steam Link and RDP. \n\nPlease note that the devices will remain powered off / blanked until the remote connection is disconnected. \n\n"
+					"NOTE! Support for detecting Sunshine/Apollo streaming host require Sunshine/Apollo to be installed (i.e. not portable install) and Sunshine/Apollo logging level be at minimum on level \"Info\" (default)",
 					L"Andvanced power options", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the multi-monitor conf
@@ -3276,29 +3275,64 @@ INT_PTR CALLBACK CustomMsgBoxProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 //   If the application is already running, send the command line parameters to that other process
 bool messageExistingProcess(std::wstring command_line)
 {
-	std::wstring WindowTitle;
-	WindowTitle = APPNAME;
-	WindowTitle += L" v";
-	WindowTitle += APP_VERSION;
-	std::wstring sWinSearch = WindowTitle;
-	HWND Other_hWnd = FindWindow(NULL, sWinSearch.c_str());
-	if (Other_hWnd)
+	std::wstring window_title;
+	std::wstring sWinSearch;
+	HWND remote_hWnd;
+	HWND daemon_hWnd;
+	COPYDATASTRUCT cds;
+
+	window_title = APPNAME;
+	window_title += L" Daemon v";
+	window_title += APP_VERSION;
+	sWinSearch = window_title;
+	daemon_hWnd = FindWindow(NULL, sWinSearch.c_str());
+
+	window_title = APPNAME;
+	window_title += L" v";
+	window_title += APP_VERSION;
+	sWinSearch = window_title;
+	remote_hWnd = FindWindow(NULL, sWinSearch.c_str());
+
+
+	if (command_line == L"")
 	{
-		COPYDATASTRUCT cds;
-		cds.cbData = command_line == L"" ? 0 : (DWORD)(command_line.size() * sizeof(WCHAR) + sizeof(WCHAR));
-		cds.lpData = command_line == L"" ? NULL : (PVOID)command_line.data();
-		cds.dwData = NOTIFY_NEW_COMMANDLINE;
-		SendMessage(Other_hWnd, WM_COPYDATA, NULL, (LPARAM)&cds);
-
-		return true;
+		if(remote_hWnd)
+		{
+			cds.cbData = 0;
+			cds.lpData = NULL;
+			cds.dwData = NOTIFY_NEW_COMMANDLINE;
+			SendMessage(remote_hWnd, WM_COPYDATA, NULL, (LPARAM)&cds);
+			return true;
+		}
 	}
-
+	else
+	{
+		cds.cbData = (DWORD)(command_line.size() * sizeof(WCHAR) + sizeof(WCHAR));
+		cds.lpData = (PVOID)command_line.data();
+		cds.dwData = NOTIFY_NEW_COMMANDLINE;
+		if(daemon_hWnd)
+		{
+			SendMessage(daemon_hWnd, WM_COPYDATA, NULL, (LPARAM)&cds);
+			return true;
+		}
+		else if (remote_hWnd)
+		{
+			SendMessage(remote_hWnd, WM_COPYDATA, NULL, (LPARAM)&cds);
+			return true;
+		}
+	}
 	return false;
 }
 //   Send the commandline to the service
 void communicateWithService(std::wstring sData)
 {
-	if(!p_pipe_client->send(sData))
+	int max_wait = 1000;
+	while (!p_pipe_client->send(sData) && max_wait > 0)
+	{
+		Sleep(25);
+		max_wait -= 25;
+	}
+	if(max_wait <= 0)
 		customMsgBox(h_main_wnd, L"Failed to connect to named pipe. Service may be stopped.", L"Error", MB_OK | MB_ICONEXCLAMATION);
 }
 void threadVersionCheck(HWND hWnd)

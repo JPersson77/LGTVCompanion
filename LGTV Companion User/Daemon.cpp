@@ -17,7 +17,7 @@
 
 #include "daemon.h"
 #include "../Common/common_app_define.h"
-#include "../Common/ipc.h"
+#include "../Common/ipc_v2.h"
 #include "../Common/preferences.h"
 #include "../Common/tools.h"
 #include <stdlib.h>
@@ -62,6 +62,7 @@
 #define         TIMER_VERSIONCHECK_DELAY				30000
 #define         TIMER_CHECK_PROCESSES_DELAY				5000
 #define         TIMER_TOPOLOGY_COLLECTION_DELAY			3000
+#define			COPYDATA_MUTEX_WAIT						10
 #define         APP_DISPLAYCHANGE						WM_USER+10
 #define         APP_SET_MESSAGEFILTER					WM_USER+11
 #define         APP_USER_IDLE_ON						1
@@ -144,7 +145,9 @@ time_t							time_of_last_version_check = 0;
 DWORD							last_input = 0;
 DWORD							time_of_last_controller_tick = 0;
 int								number_of_mouse_checks = 0;
-std::shared_ptr<IpcClient>		p_pipe_client;
+inline static std::mutex		copydata_mutex_;
+
+std::shared_ptr<IpcClient2>		p_pipe_client;
 Preferences						Prefs(CONFIG_FILE);
 std::string						session_id;
 std::unordered_map<std::wstring, ControllerInfo> g_device_cache; // Key = device path
@@ -210,12 +213,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	closeExistingProcess();
 
 	// Initiate PipeClient IPC
-	p_pipe_client = std::make_shared<IpcClient>(PIPENAME, ipcCallback, (LPVOID)NULL);
+	p_pipe_client = std::make_shared<IpcClient2>(PIPENAME, ipcCallback, (LPVOID)NULL);
 
 	// read the configuration file and init prefs
 	if(!Prefs.isInitialised())
 	{
-		communicateWithService("errorconfig");
+		communicateWithService(L"errorconfig", false);
 		return false;
 	}
 
@@ -238,6 +241,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	h_main_wnd = CreateDialog(h_instance, MAKEINTRESOURCE(IDD_MAIN), NULL, (DLGPROC)WndProc);
 	SetWindowText(h_main_wnd, window_title.c_str());
 	SendMessage(h_main_wnd, WM_SETICON, ICON_BIG, (LPARAM)h_icon);
+
+	//allow WM_COPYDATA to elevated
+	CHANGEFILTERSTRUCT cfs = { sizeof(cfs), 0 }; 
+	ChangeWindowMessageFilterEx(h_main_wnd, WM_COPYDATA, MSGFLT_ALLOW, &cfs);
 
 	// start timers
 	if (Prefs.updater_mode_ != PREFS_UPDATER_OFF)
@@ -284,7 +291,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 	log_message = window_title;
 	log_message += L" is running.";
 	log(log_message);
-	communicateWithService("started");
+	communicateWithService(L"started", false);
 	log_message = L"Session ID is: ";
 	log_message += tools::widen(session_id);
 	log(log_message);
@@ -359,7 +366,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
 			SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 			log(L"User forced user idle mode!");
-			communicateWithService("useridle");
+			communicateWithService(L"useridle", false);
 		}
 		else
 			log(L"Can not force user idle mode, as the feature is not enabled in the global options!");
@@ -374,7 +381,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 			time_of_last_raw_input = GetTickCount();
 			log(L"User forced unsetting user idle mode!");
-			communicateWithService("userbusy");
+			communicateWithService(L"userbusy", false);
 		}
 		else
 			log(L"Can not force unset user idle mode, as the feature is not enabled in the global options!");
@@ -407,7 +414,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		DWORD tick_now = GetTickCount();
 		if ((tick_now - time_of_last_raw_input) < TIMER_MAIN_DELAY_WHEN_BUSY)
 		{
-	//		DefWindowProc(hWnd, message, wParam, lParam);
 			return 0;
 		}
 		HRAWINPUT h_raw_input = reinterpret_cast<HRAWINPUT>(lParam);
@@ -630,11 +636,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			if (daemon_is_visible)
 			{
-/*
-				std::wstring m;
-				if (UIM::preventUIM(Prefs, m))
-					log(m);
-*/
 				DWORD time = (time_now - last_input) / 1000;
 				std::wstring ago = std::to_wstring(time);
 				SendMessage(GetDlgItem(hWnd, IDC_EDIT3), WM_SETTEXT, 0, (WPARAM)ago.c_str());
@@ -649,7 +650,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 					SetTimer(hWnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
 					user_is_idle = false;
-					communicateWithService("userbusy");
+					communicateWithService(L"userbusy", false);
 				}
 			}
 			else
@@ -680,7 +681,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			user_is_idle = true;
 			SetTimer(hWnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_IDLE, (TIMERPROC)NULL);
-			communicateWithService("useridle");
+			communicateWithService(L"useridle", false);
 			return 0;
 		}break;
 		case TIMER_CHECK_PROCESSES:
@@ -692,12 +693,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case REMOTE_CONNECT:
 		{
 			KillTimer(hWnd, (UINT_PTR)REMOTE_CONNECT);
-			communicateWithService("remote_connect");
+			communicateWithService(L"remote_connect", false);
 		}break;
 		case REMOTE_DISCONNECT:
 		{
 			KillTimer(hWnd, (UINT_PTR)REMOTE_DISCONNECT);
-			communicateWithService("remote_disconnect");
+			communicateWithService(L"remote_disconnect", false);
 		}break;
 		case TIMER_TOPOLOGY_COLLECTION:
 		{
@@ -741,7 +742,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			else if (result == TOPOLOGY_UNDETERMINED)
 			{
 				log(L"Warning! No active devices detected when verifying Windows Monitor Topology.");
-				communicateWithService("topology undetermined");
+				communicateWithService(L"topology undetermined", false);
 				//				Prefs.AdhereTopology = false;
 			}
 			else if (result == TOPOLOGY_OK_DISABLE)
@@ -751,7 +752,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			else if (result == TOPOLOGY_ERROR)
 			{
 				Prefs.topology_support_ = false;
-				communicateWithService("topology invalid");
+				communicateWithService(L"topology invalid",false);
 
 				std::wstring s = L"A change to the system has invalidated the monitor topology configuration and the feature has been disabled. "
 					"Please run the configuration guide in the global options to ensure correct operation.";
@@ -937,6 +938,39 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		pMinMaxInfo->ptMinTrackSize.y = 250;
 		return 0; // Return 0 to indicate the message was handled
 	}
+	case WM_COPYDATA:
+	{
+
+		if (!lParam)
+			return true;
+
+		//thread safe
+		while (!copydata_mutex_.try_lock())
+			Sleep(COPYDATA_MUTEX_WAIT);
+
+		std::wstring received_command_line;
+		COPYDATASTRUCT* pcds = (COPYDATASTRUCT*)lParam;
+
+		if (pcds->dwData == NOTIFY_NEW_COMMANDLINE)
+		{
+			if (pcds->cbData == 0)
+			{
+				SetForegroundWindow(hWnd);
+				copydata_mutex_.unlock();
+				return true;
+			}
+			received_command_line = (WCHAR*)pcds->lpData;
+			if (received_command_line.size() == 0)
+			{
+				copydata_mutex_.unlock();
+				return true;
+			}
+			communicateWithService(received_command_line, true);
+			Sleep(20);
+		}
+		copydata_mutex_.unlock();
+		return true;
+	}break;
 	case WM_CTLCOLORSTATIC:
 	{
 		HDC hdcStatic = (HDC)wParam;
@@ -1010,26 +1044,37 @@ void closeExistingProcess(void)
 	return;
 }
 //   communicate with service via IPC
-void communicateWithService(std::string sData)
+void communicateWithService(std::wstring sData, bool is_command_line)
 {
 	if (sData.size() == 0)
 		return;
-	std::string message = "-daemon ";
-	if (session_id.size() > 0)
+	std::wstring message;
+	if(!is_command_line)
 	{
-		message += session_id;
-		message += " ";
-	}
-	else
-	{
-		message += "unknown_id";
-		message += " ";
+		message = L"-daemon ";
+		if (session_id.size() > 0)
+		{
+			message += tools::widen(session_id);
+			message += L" ";
+		}
+		else
+		{
+			message += L"unknown_id";
+			message += L" ";
+		}
 	}
 	message += sData;
-	if (!p_pipe_client->send(tools::widen(message)))
+
+	int max_wait = 1000;
+	while (!p_pipe_client->send(message) && max_wait > 0)
+	{
+		Sleep(25);
+		max_wait -= 25;
+	}
+	if (max_wait <= 0)
 		log(L"Failed to connect to named pipe. Service may be stopped.");
 	else
-		log(tools::widen(message));
+		log(message);
 	return;
 }
 
@@ -1151,8 +1196,8 @@ static BOOL CALLBACK meproc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPAR
 }
 bool checkDisplayTopology(void)
 {
-	std::string top;
-	top = "topology state ";
+	std::wstring top;
+	top = L"topology state ";
 	if (Prefs.devices_.size() == 0)
 		return false;
 	std::vector<DisplayInfo> displays = queryDisplays();
@@ -1169,14 +1214,14 @@ bool checkDisplayTopology(void)
 				{
 					if (ActiveDisplay == DeviceString)
 					{
-						top += dev.id;
-						top += " ";
+						top += tools::widen(dev.id);
+						top += L" ";
 					}
 				}
 			}
 		}
 	}
-	communicateWithService(top);
+	communicateWithService(top, false);
 	return true;
 }
 
@@ -1321,7 +1366,7 @@ static BOOL	CALLBACK	enumWindowsProc(HWND hWnd, LPARAM lParam)
 						log(L"BroadcastSystemMessage() failed");
 					}
 					else {
-						communicateWithService("gfe");
+						communicateWithService(L"gfe", false);
 						log(L"Unset NVIDIA GFE overlay fullscreen");
 					}
 
