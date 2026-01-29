@@ -46,7 +46,7 @@ namespace net = boost::asio;            // from <boost/asio.hpp>
 namespace ssl = boost::asio::ssl;       // from <boost/asio/ssl.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-class ButtonWork {
+class Work {
 public:
 	int									type_ = WORK_UNDEFINED;
 	std::string							data_;
@@ -70,7 +70,7 @@ public:
 class ButtonClient::Impl : public std::enable_shared_from_this<ButtonClient::Impl> {
 private:
 	Device device_settings_;
-	ButtonWork work_;
+	Work work_;
 	net::steady_timer keep_alive_timer_;
 	net::steady_timer async_timer_;
 	ssl::context* ctx_;
@@ -81,7 +81,7 @@ private:
 	std::string host_;
 	int socket_status_ = SOCKET_DISCONNECTED;
 	std::string path_;
-	std::list<ButtonWork> workQueue_;
+	std::list<Work> workQueue_;
 	std::shared_ptr<Logging> log_;
 
 	//functions running on strand
@@ -110,7 +110,7 @@ public:
 	void close(void);
 	bool isConnected();
 	void setPath(std::string);
-	void enqueueWork(ButtonWork&);
+	void enqueueWork(Work&);
 };
 ButtonClient::Impl::Impl(net::io_context& ioc, ssl::context& ctx, Device& settings, Logging& log)
 	: resolver_(net::make_strand(ioc))
@@ -134,7 +134,7 @@ bool ButtonClient::Impl::isConnected(void) {
 void ButtonClient::Impl::setPath(std::string path) {
 	path_ = path;
 }
-void ButtonClient::Impl::enqueueWork(ButtonWork& work)
+void ButtonClient::Impl::enqueueWork(Work& work)
 {
 	if (work.type_ != WORK_KEEPALIVE || LOG_KEEPALIVE)
 		if (work.type_ == WORK_BUTTON)
@@ -384,7 +384,7 @@ void ButtonClient::Impl::onKeepAlive(beast::error_code ec) {
 	}
 	if (socket_status_ == SOCKET_CONNECTED && work_.type_ == WORK_UNDEFINED)
 	{
-		ButtonWork work;
+		Work work;
 		work.type_ = WORK_KEEPALIVE;
 		enqueueWork(work);
 	}
@@ -484,7 +484,7 @@ ButtonClient::ButtonClient(net::io_context& ioc, ssl::context& ctx, Device& sett
 ButtonClient::~ButtonClient(void) = default;
 
 bool ButtonClient::sendButton(std::string button) {
-	ButtonWork work;
+	Work work;
 	work.data_ = button;
 	work.type_ = WORK_BUTTON;
 	pimpl->enqueueWork(work);
@@ -503,7 +503,7 @@ bool ButtonClient::close(bool enqueue) {
 	
 	if (enqueue)
 	{
-		ButtonWork work;
+		Work work;
 		work.type_ = WORK_CLOSE;
 		pimpl->enqueueWork(work);
 	}
