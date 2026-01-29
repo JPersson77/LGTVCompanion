@@ -1,8 +1,8 @@
 ﻿<!-- When publishing updated version, make sure to update "ProductCode" GUID and "Version" -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui" >
   <Package Name="LGTV Companion" Language="1033" 
-           Version="5.1.0" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A" InstallerVersion="500" 
-           ProductCode="{8BA9BEF9-7126-4EE8-9DF6-6106CA589AEE}">
+           Version="5.1.1" Manufacturer="J Persson" UpgradeCode="0BA17E5B-11CE-491D-B1A1-05DD2D9F610A" InstallerVersion="500" 
+           ProductCode="{50609F8D-7453-4C07-B744-F11DC4E189EF}">
     <SummaryInformation Description="LGTV Companion installer" />
     <Media Id="1" Cabinet="LGTVapp.cab" EmbedCab="yes" />   
     <MajorUpgrade DowngradeErrorMessage="A newer version of LGTV Companion is already installed." />
