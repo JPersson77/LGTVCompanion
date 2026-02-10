@@ -101,6 +101,10 @@ bool UIM::isDisplayLock(bool& video_wake_lock, std::vector <std::wstring> & proc
             if(processName == L"firefox.exe")
                 if (reason_message == L"display request")
                     video_wake_lock = true;
+            // Zen Browser (Firefox-based)
+            if(processName == L"zen.exe")
+                if (reason_message == L"display request")
+                    video_wake_lock = true;
         }
     }
     return true;
