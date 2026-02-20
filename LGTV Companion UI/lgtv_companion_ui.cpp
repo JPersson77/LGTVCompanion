@@ -1171,11 +1171,13 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 			{
 				for (PIP_ADAPTER_ADDRESSES p_address = p_addresses; p_address != NULL; p_address = p_address->Next)
 				{
-					// Print adapter name
-	//					std::wcout << L"Adapter: " << p_address->FriendlyName << std::endl;
 					if (p_address->OperStatus != IfOperStatusUp)
 						continue;
-
+					if (p_address->IfType == IF_TYPE_SOFTWARE_LOOPBACK) 
+						continue; 
+					if (p_address->IfType == IF_TYPE_TUNNEL || p_address->IfType == IF_TYPE_PPP || p_address->IfType == IF_TYPE_PROP_VIRTUAL) 
+						continue;
+					
 					bool has_ipv4_address = false;
 					bool localhost = false;
 					char ip_string_buffer[INET6_ADDRSTRLEN];
@@ -1196,7 +1198,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 					}
 					if (!has_ipv4_address || localhost)
 						continue; // Skip adapters without IPv4 addresses
-
+					
 					std::wstring text = p_address->FriendlyName;
 					uint64_t nl = static_cast<uint64_t>(p_address->Luid.Value);
 					LRESULT index = SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)text.c_str());
@@ -1204,6 +1206,43 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 				}
 			}
 		}
+
+		//set width of combo box drop down
+		int maxW = 0;
+		HDC hdc = GetDC(GetDlgItem(hWnd, IDC_COMBO_NIC));
+		if (hdc) 
+		{
+			HFONT hFont = reinterpret_cast<HFONT>(SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), WM_GETFONT, 0, 0));
+			HFONT hOldFont = reinterpret_cast<HFONT>(SelectObject(hdc, hFont));
+
+			int count = static_cast<int>(SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), CB_GETCOUNT, 0, 0));
+
+			std::vector<wchar_t> buffer;
+
+			for (int i = 0; i < count; ++i) {
+				int len = static_cast<int>(SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), CB_GETLBTEXTLEN, i, 0));
+
+				if (len != CB_ERR && len > 0) 
+				{
+					buffer.resize(len + 1);
+
+					SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), CB_GETLBTEXT, i, reinterpret_cast<LPARAM>(buffer.data()));
+
+					SIZE size;
+					if (GetTextExtentPoint32W(hdc, buffer.data(), len, &size)) 
+					{
+						maxW = max(maxW, static_cast<int>(size.cx));
+					}
+				}
+			}
+
+			SelectObject(hdc, hOldFont);
+			ReleaseDC(GetDlgItem(hWnd, IDC_COMBO_NIC), hdc);
+
+			int finalWidth = maxW + GetSystemMetrics(SM_CXVSCROLL) + (GetSystemMetrics(SM_CXEDGE) * 2);
+			SendMessage(GetDlgItem(hWnd, IDC_COMBO_NIC), CB_SETDROPPEDWIDTH, static_cast<WPARAM>(finalWidth), 0);
+		}
+
 	}break;
 	case WM_NOTIFY:
 	{
