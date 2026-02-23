@@ -82,6 +82,8 @@
 #define			REMOTE_RDP_NOT_CONNECTED				0x0020
 #define			REMOTE_SUNSHINE_CONNECTED				0x0040
 #define			REMOTE_SUNSHINE_NOT_CONNECTED			0x0080
+#define			REMOTE_APOLLO_CONNECTED					0x0100
+#define			REMOTE_APOLLO_NOT_CONNECTED				0x0200
 #define			SUNSHINE_FILE_CONF						"sunshine.conf"
 #define			SUNSHINE_FILE_LOG						"sunshine.log"
 #define			SUNSHINE_FILE_SVC						L"sunshine.exe"
@@ -99,6 +101,7 @@ struct RemoteWrapper {					// Remote streaming info
 	bool								bRemoteCurrentStatusSteam = false;
 	bool								bRemoteCurrentStatusRDP = false;
 	bool								bRemoteCurrentStatusSunshine = false;
+	bool								bRemoteCurrentStatusApollo = false;
 	std::wstring						sCurrentlyRunningWhitelistedProcess = L"";
 	std::wstring						sCurrentlyRunningFsExcludedProcess = L"";
 	std::vector<std::string>			Sunshine_Log_Files;
@@ -1292,35 +1295,36 @@ DWORD checkRemoteStreamingProcesses(void)
 	if (bSunshineSvcProcessFound && (Remote.Sunshine_Log_Files.size() > 0))
 	{
 		int index = 0;
-		bool testval = false;
+//		std::vector<DWORD> val(Remote.Sunshine_Log_Files.size());
 		for(auto& logfile : Remote.Sunshine_Log_Files)
 		{
 			std::filesystem::path p(logfile);
 			uintmax_t Size = std::filesystem::file_size(p);
 			if (Size != Remote.Sunshine_Log_Sizes[index])
 			{
-				DWORD val = sunshine_CheckLog(logfile);
-				if (val == REMOTE_SUNSHINE_CONNECTED)
-				{
-					testval = true;
-					break;
-				}
 				Remote.Sunshine_Log_Sizes[index] = Size;
+				if (index == 0)
+				{
+					ReturnValue |= sunshine_CheckLog(logfile);
+				}
+				else if (index == 1)
+				{
+					DWORD val = sunshine_CheckLog(logfile);
+					if(val == REMOTE_SUNSHINE_CONNECTED)
+						ReturnValue |= REMOTE_APOLLO_CONNECTED;
+					else if (val == REMOTE_SUNSHINE_NOT_CONNECTED)
+						ReturnValue |= REMOTE_APOLLO_NOT_CONNECTED;
+				}
 			}
 			index++;
 		}
-		if (testval)
-			ReturnValue ^= REMOTE_SUNSHINE_CONNECTED;
-		else
-			ReturnValue ^= REMOTE_SUNSHINE_NOT_CONNECTED;
 	}
 	else
-		ReturnValue ^= REMOTE_SUNSHINE_NOT_CONNECTED;
+		ReturnValue |= REMOTE_SUNSHINE_NOT_CONNECTED;
 
 	// was a remote streaming process currently running?
-	ReturnValue ^= bStreamingProcessFound ? REMOTE_STEAM_CONNECTED : REMOTE_STEAM_NOT_CONNECTED;
+	ReturnValue |= bStreamingProcessFound ? REMOTE_STEAM_CONNECTED : REMOTE_STEAM_NOT_CONNECTED;
 
-	// was a user idle mode whitelisted / FS excluded process currently running?
 	return ReturnValue;
 }
 bool isFullscreenApplicationRunning(void)
@@ -1381,7 +1385,7 @@ void remoteStreamingEvent(DWORD dwType)
 {
 	if (Prefs.remote_streaming_host_support_)
 	{
-		bool bCurrentlyConnected = Remote.bRemoteCurrentStatusSteam || Remote.bRemoteCurrentStatusNvidia || Remote.bRemoteCurrentStatusRDP || Remote.bRemoteCurrentStatusSunshine;
+		bool bCurrentlyConnected = Remote.bRemoteCurrentStatusSteam || Remote.bRemoteCurrentStatusNvidia || Remote.bRemoteCurrentStatusRDP || Remote.bRemoteCurrentStatusSunshine || Remote.bRemoteCurrentStatusApollo;
 
 		if (dwType & REMOTE_STEAM_CONNECTED)
 		{
@@ -1431,6 +1435,22 @@ void remoteStreamingEvent(DWORD dwType)
 				Remote.bRemoteCurrentStatusSunshine = false;
 			}
 		}
+		if (dwType & REMOTE_APOLLO_CONNECTED)
+		{
+			if (!Remote.bRemoteCurrentStatusApollo)
+			{
+				log(L"Apollo gamestream connected.");
+				Remote.bRemoteCurrentStatusApollo = true;
+			}
+		}
+		else if (dwType & REMOTE_APOLLO_NOT_CONNECTED)
+		{
+			if (Remote.bRemoteCurrentStatusApollo)
+			{
+				log(L"Apollo gamestream disconnected.");
+				Remote.bRemoteCurrentStatusApollo = false;
+			}
+		}
 		if (dwType & REMOTE_RDP_CONNECTED)
 		{
 			if (!Remote.bRemoteCurrentStatusRDP)
@@ -1447,7 +1467,7 @@ void remoteStreamingEvent(DWORD dwType)
 				Remote.bRemoteCurrentStatusRDP = false;
 			}
 		}
-		bool bConnect = Remote.bRemoteCurrentStatusSteam || Remote.bRemoteCurrentStatusNvidia || Remote.bRemoteCurrentStatusRDP || Remote.bRemoteCurrentStatusSunshine;
+		bool bConnect = Remote.bRemoteCurrentStatusSteam || Remote.bRemoteCurrentStatusNvidia || Remote.bRemoteCurrentStatusRDP || Remote.bRemoteCurrentStatusSunshine || Remote.bRemoteCurrentStatusApollo;
 
 		if (bCurrentlyConnected && !bConnect)
 			SetTimer(h_main_wnd, (UINT_PTR)REMOTE_DISCONNECT, 1000, (TIMERPROC)NULL);
@@ -1503,7 +1523,7 @@ std::vector<std::string> sunshine_GetLogFiles()
 	std::string Sunshine_Config;
 	std::string configuration_path;
 	std::string configuration_text;
-	std::vector<std::string> log_files;
+	std::vector<std::string> log_files(Remote.sunshine_list.size(), "");
 
 	for(int i = 0; i<Remote.sunshine_list.size();i++)
 	{
@@ -1546,7 +1566,7 @@ std::vector<std::string> sunshine_GetLogFiles()
 					{
 						std::string log_file = configuration_path;
 						log_file += SUNSHINE_FILE_LOG;
-						log_files.push_back(log_file);
+						log_files[i] = log_file;
 					}
 					else
 					{
@@ -1554,7 +1574,7 @@ std::vector<std::string> sunshine_GetLogFiles()
 						std::filesystem::current_path(configuration_path);
 						std::filesystem::path log_abs(std::filesystem::absolute(log_p));
 						std::string log_file = log_abs.string();
-						log_files.push_back(log_file);
+						log_files[i] = log_file;
 					}
 				}
 			}
