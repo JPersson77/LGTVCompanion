@@ -216,6 +216,10 @@ LRESULT CALLBACK IgnoredKeysListProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		ignored_key_capture_pending = false;
 		ignored_key_capture_index = LB_ERR;
 		EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
+		EnableWindow(GetDlgItem(GetParent(hWnd), IDC_IGNORE_ADD), IsDlgButtonChecked(GetParent(hWnd), IDC_CHECK_IGNORED_KEYS));
+		EnableWindow(GetDlgItem(GetParent(hWnd), IDC_IGNORE_DELETE),
+			IsDlgButtonChecked(GetParent(hWnd), IDC_CHECK_IGNORED_KEYS) &&
+			(SendMessage(hWnd, LB_GETCURSEL, 0, 0) != LB_ERR));
 		return 0;
 	}
 
@@ -2778,6 +2782,9 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	case APP_IGNORED_KEYS_ADD:
 	{
 		HWND hwndListBox = GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST);
+		if (ignored_key_capture_pending)
+			break;
+
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
 
 		int index = (int)SendMessage(hwndListBox, LB_ADDSTRING, 0, (LPARAM)L"Press Key");
@@ -2792,7 +2799,8 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			ignored_key_capture_pending = true;
 			ignored_key_capture_index = index;
 			SendMessage(hwndListBox, LB_SETCURSEL, (WPARAM)index, 0);
-			EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_DELETE), true);
+			EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_DELETE), false);
+			EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_ADD), false);
 		}
 
 		SetFocus(hwndListBox);
@@ -2801,6 +2809,9 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	}
 	case APP_IGNORED_KEYS_DELETE:
 	{
+		if (ignored_key_capture_pending)
+			break;
+
 		HWND hwndListBox = GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST);
 		int index = (int)SendMessage(hwndListBox, LB_GETCURSEL, 0, 0);
 		if (index != LB_ERR)
@@ -2843,6 +2854,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			if (LOWORD(wParam) == IDC_IGNORED_KEYS_LIST)
 			{
 				EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_DELETE),
+					!ignored_key_capture_pending &&
 					IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS) &&
 					(SendMessage(GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST), LB_GETCURSEL, 0, 0) != LB_ERR));
 			}
@@ -2875,8 +2887,9 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				case IDC_CHECK_IGNORED_KEYS:
 				{
 					EnableWindow(GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST), IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS));
-					EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_ADD), IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS));
+					EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_ADD), IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS) && !ignored_key_capture_pending);
 					EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_DELETE),
+						!ignored_key_capture_pending &&
 						IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS) &&
 						(SendMessage(GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST), LB_GETCURSEL, 0, 0) != LB_ERR));
 					EnableWindow(GetDlgItem(hWnd, IDOK), true);
