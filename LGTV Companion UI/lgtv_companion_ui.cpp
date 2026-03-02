@@ -99,6 +99,7 @@ COPYRIGHT
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
 #include <mutex>
+#include <algorithm>
 #include "resource.h"
 
 #pragma comment(lib, "Comctl32.lib")
@@ -136,6 +137,8 @@ COPYRIGHT
 #define									APP_LISTBOX_ADD					WM_USER+15
 #define									APP_LISTBOX_DELETE	            WM_USER+16
 #define									APP_LISTBOX_REDRAW				WM_USER+17
+#define									APP_IGNORED_KEYS_ADD            WM_USER+18
+#define									APP_IGNORED_KEYS_DELETE         WM_USER+19
 #define									COPYDATA_MUTEX_WAIT				10
 
 // Global Variables:
@@ -171,8 +174,53 @@ UINT									custom_daemon_close_message;
 UINT									custom_updater_close_message;
 UINT									custom_UI_close_message;
 inline static std::mutex				copydata_mutex_;
+WNDPROC									ignored_keys_list_proc = NULL;
+bool									ignored_key_capture_pending = false;
+int										ignored_key_capture_index = LB_ERR;
 
 Preferences								Prefs(CONFIG_FILE);
+
+int ignoredKeyFindIndexByCode(HWND hWnd, DWORD key_code)
+{
+	int count = (int)SendMessage(hWnd, LB_GETCOUNT, 0, 0);
+	for (int i = 0; i < count; i++)
+	{
+		DWORD_PTR item_data = (DWORD_PTR)SendMessage(hWnd, LB_GETITEMDATA, (WPARAM)i, 0);
+		if ((DWORD)item_data == key_code)
+			return i;
+	}
+	return LB_ERR;
+}
+
+LRESULT CALLBACK IgnoredKeysListProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	if (message == WM_KEYDOWN && ignored_key_capture_pending)
+	{
+		DWORD key_code = tools::keyCodeFromWmKeyDown(lParam);
+		std::wstring key_name = tools::keyNameFromCode(key_code);
+		int index = ignored_key_capture_index;
+		if (index != LB_ERR)
+		{
+			SendMessage(hWnd, LB_DELETESTRING, (WPARAM)index, 0);
+			index = ignoredKeyFindIndexByCode(hWnd, key_code);
+			if (index == LB_ERR)
+			{
+				index = (int)SendMessage(hWnd, LB_ADDSTRING, 0, (LPARAM)key_name.c_str());
+				if (index != LB_ERR && index != LB_ERRSPACE)
+					SendMessage(hWnd, LB_SETITEMDATA, (WPARAM)index, (LPARAM)key_code);
+			}
+			if (index != LB_ERR && index != LB_ERRSPACE)
+				SendMessage(hWnd, LB_SETCURSEL, (WPARAM)index, 0);
+		}
+
+		ignored_key_capture_pending = false;
+		ignored_key_capture_index = LB_ERR;
+		EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
+		return 0;
+	}
+
+	return CallWindowProc(ignored_keys_list_proc, hWnd, message, wParam, lParam);
+}
 
 struct DisplayInfo {					// Display info
 	DISPLAYCONFIG_TARGET_DEVICE_NAME	target;
@@ -2565,6 +2613,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		CheckDlgButton(hWnd, IDC_CHECK_VWL_FG, Prefs.user_idle_mode_disable_while_video_wake_lock_foreground_ ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_VWL_FULLSCREEN, Prefs.user_idle_mode_disable_while_video_wake_lock_fullscreen_ ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_MUTE, Prefs.user_idle_mode_mute_speakers_ ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_IGNORED_KEYS, Prefs.user_idle_mode_ignored_keys_ ? BST_CHECKED : BST_UNCHECKED);
 
 		EnableWindow(GetDlgItem(hWnd, IDC_LIST), Prefs.user_idle_mode_process_control_);
 		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_ADD), Prefs.user_idle_mode_process_control_);
@@ -2572,6 +2621,32 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), Prefs.user_idle_mode_process_control_);
 		EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FG), Prefs.user_idle_mode_disable_while_video_wake_lock_);
 		EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FULLSCREEN), Prefs.user_idle_mode_disable_while_video_wake_lock_);
+
+		EnableWindow(GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST), Prefs.user_idle_mode_ignored_keys_);
+		EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_ADD), Prefs.user_idle_mode_ignored_keys_);
+
+		ignored_key_capture_pending = false;
+		ignored_key_capture_index = LB_ERR;
+
+		HWND ignored_key_list = GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST);
+		if (ignored_keys_list_proc == NULL)
+			ignored_keys_list_proc = (WNDPROC)SetWindowLongPtr(ignored_key_list, GWLP_WNDPROC, (LONG_PTR)IgnoredKeysListProc);
+		else
+			SetWindowLongPtr(ignored_key_list, GWLP_WNDPROC, (LONG_PTR)IgnoredKeysListProc);
+
+		SendMessage(ignored_key_list, LB_RESETCONTENT, 0, 0);
+		for (auto& ignored_key : Prefs.ignored_keys)
+		{
+			if (ignoredKeyFindIndexByCode(ignored_key_list, ignored_key) == LB_ERR)
+			{
+				std::wstring key_name = tools::keyNameFromCode(ignored_key);
+				int index = (int)SendMessage(ignored_key_list, LB_ADDSTRING, 0, (LPARAM)key_name.c_str());
+				if (index != LB_ERR && index != LB_ERRSPACE)
+					SendMessage(ignored_key_list, LB_SETITEMDATA, (WPARAM)index, (LPARAM)ignored_key);
+			}
+		}
+		int ignored_index = (int)SendMessage(ignored_key_list, LB_GETCURSEL, 0, 0);
+		EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_DELETE), Prefs.user_idle_mode_ignored_keys_ && (ignored_index != LB_ERR));
 
 		EnableWindow(GetDlgItem(hWnd, IDOK), false);
 	}break;
@@ -2700,6 +2775,54 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		default:break;
 		}
 	}break;
+	case APP_IGNORED_KEYS_ADD:
+	{
+		HWND hwndListBox = GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST);
+		EnableWindow(GetDlgItem(hWnd, IDOK), false);
+
+		int index = (int)SendMessage(hwndListBox, LB_ADDSTRING, 0, (LPARAM)L"Press Key");
+
+		if (index == LB_ERR || index == LB_ERRSPACE)
+		{
+			MessageBox(hWnd, L"Insert failed", L"Debug", MB_OK);
+		}
+		else
+		{
+			SendMessage(hwndListBox, LB_SETITEMDATA, (WPARAM)index, (LPARAM)LB_ERR);
+			ignored_key_capture_pending = true;
+			ignored_key_capture_index = index;
+			SendMessage(hwndListBox, LB_SETCURSEL, (WPARAM)index, 0);
+			EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_DELETE), true);
+		}
+
+		SetFocus(hwndListBox);
+
+		break;
+	}
+	case APP_IGNORED_KEYS_DELETE:
+	{
+		HWND hwndListBox = GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST);
+		int index = (int)SendMessage(hwndListBox, LB_GETCURSEL, 0, 0);
+		if (index != LB_ERR)
+		{
+			// Keep changes local to the dialog; Prefs.ignored_keys is rebuilt only when IDOK is pressed.
+			SendMessage(hwndListBox, LB_DELETESTRING, (WPARAM)index, 0);
+
+			int count = (int)SendMessage(hwndListBox, LB_GETCOUNT, 0, 0);
+			if (count > 0)
+			{
+				int new_index = index;
+				if (new_index >= count)
+					new_index = count - 1;
+				SendMessage(hwndListBox, LB_SETCURSEL, (WPARAM)new_index, 0);
+			}
+			EnableWindow(GetDlgItem(hWnd, IDOK), true);
+		}
+		EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_DELETE),
+			IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS) &&
+			(SendMessage(hwndListBox, LB_GETCURSEL, 0, 0) != LB_ERR));
+		break;
+	}
 	case WM_COMMAND:
 	{
 		switch (HIWORD(wParam))
@@ -2715,6 +2838,15 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			default:break;
 			}		
 		}break;
+		case LBN_SELCHANGE:
+		{
+			if (LOWORD(wParam) == IDC_IGNORED_KEYS_LIST)
+			{
+				EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_DELETE),
+					IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS) &&
+					(SendMessage(GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST), LB_GETCURSEL, 0, 0) != LB_ERR));
+			}
+		}break;
 
 		case BN_CLICKED:
 		{
@@ -2728,18 +2860,27 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				EnableWindow(GetDlgItem(hWnd, IDC_SYSLINK_DELETE), IsDlgButtonChecked(hWnd, IDC_CHECK_PROCESS_CONTROL));
 				EnableWindow(GetDlgItem(hWnd, IDOK), true);
 			}break;
-			case IDC_CHECK_VWL:
-			{
-				EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FG), IsDlgButtonChecked(hWnd, IDC_CHECK_VWL));
-				EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FULLSCREEN), IsDlgButtonChecked(hWnd, IDC_CHECK_VWL));
-			}			
-			case IDC_CHECK_FULLSCREEN:
-			case IDC_CHECK_VWL_FG:
-			case IDC_CHECK_VWL_FULLSCREEN:
-			case IDC_CHECK_MUTE:
-			{
-				EnableWindow(GetDlgItem(hWnd, IDOK), true);
-			}break;
+				case IDC_CHECK_VWL:
+				{
+					EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FG), IsDlgButtonChecked(hWnd, IDC_CHECK_VWL));
+					EnableWindow(GetDlgItem(hWnd, IDC_CHECK_VWL_FULLSCREEN), IsDlgButtonChecked(hWnd, IDC_CHECK_VWL));
+				}
+				case IDC_CHECK_FULLSCREEN:
+				case IDC_CHECK_VWL_FG:
+				case IDC_CHECK_VWL_FULLSCREEN:
+				case IDC_CHECK_MUTE:
+				{
+					EnableWindow(GetDlgItem(hWnd, IDOK), true);
+				}break;
+				case IDC_CHECK_IGNORED_KEYS:
+				{
+					EnableWindow(GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST), IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS));
+					EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_ADD), IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS));
+					EnableWindow(GetDlgItem(hWnd, IDC_IGNORE_DELETE),
+						IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS) &&
+						(SendMessage(GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST), LB_GETCURSEL, 0, 0) != LB_ERR));
+					EnableWindow(GetDlgItem(hWnd, IDOK), true);
+				}break;
 			case IDOK:
 			{
 				Prefs.user_idle_mode_delay_ = atoi(tools::narrow(tools::getWndText(GetDlgItem(hWnd, IDC_EDIT_TIME))).c_str());
@@ -2749,7 +2890,20 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				Prefs.user_idle_mode_disable_while_video_wake_lock_foreground_ = IsDlgButtonChecked(hWnd, IDC_CHECK_VWL_FG);
 				Prefs.user_idle_mode_disable_while_video_wake_lock_fullscreen_ = IsDlgButtonChecked(hWnd, IDC_CHECK_VWL_FULLSCREEN);
 				Prefs.user_idle_mode_mute_speakers_ = IsDlgButtonChecked(hWnd, IDC_CHECK_MUTE);
+				Prefs.user_idle_mode_ignored_keys_ = IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS);
 				Prefs.user_idle_mode_process_control_list_ = process_list_temp;
+				Prefs.ignored_keys.clear();
+				HWND ignored_key_list = GetDlgItem(hWnd, IDC_IGNORED_KEYS_LIST);
+				int item_count = (int)SendMessage(ignored_key_list, LB_GETCOUNT, 0, 0);
+				if (item_count != LB_ERR)
+				{
+					for (int i = 0; i < item_count; i++)
+					{
+						DWORD key_code = (DWORD)SendMessage(ignored_key_list, LB_GETITEMDATA, (WPARAM)i, 0);
+						if ((int)key_code != LB_ERR)
+							Prefs.ignored_keys.push_back(key_code);
+					}
+				}
 				EndDialog(hWnd, 0);
 				EnableWindow(GetParent(hWnd), true);
 				EnableWindow(GetDlgItem(GetParent(hWnd), IDOK), true);
@@ -2794,6 +2948,11 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				customMsgBox(hWnd, L"Enable detailed process control to set rules and conditions for a specific process. E.g. to prevent "
 					"the screen blanking while running a specific movie player.", L"User Idle Mode process control", MB_OK | MB_ICONINFORMATION);
 			}
+			else if (wParam == IDC_SYSLINK_INFO_IGNORED_KEYS)
+			{
+				customMsgBox(hWnd, L"Ignores certain keypresses while determining idle state. E.g. to allow the screen to blank if Pause is "
+					"sent by a macro to keep your Teams / Slack active.", L"Ignored Keys", MB_OK | MB_ICONINFORMATION);
+			}
 			else if (wParam == IDC_SYSLINK_ADD)
 			{
 				PostMessage(hWnd, APP_LISTBOX_ADD, 1, 0);
@@ -2805,6 +2964,14 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			else if (wParam == IDC_SYSLINK_DELETE)
 			{
 				PostMessage(hWnd, APP_LISTBOX_DELETE, 1, 0);
+			}
+			else if (wParam == IDC_IGNORE_ADD)
+			{
+				PostMessage(hWnd, APP_IGNORED_KEYS_ADD, 1, 0);
+			}
+			else if (wParam == IDC_IGNORE_DELETE)
+			{
+				PostMessage(hWnd, APP_IGNORED_KEYS_DELETE, 1, 0);
 			}
 		}break;
 		default:break;

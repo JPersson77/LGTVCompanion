@@ -42,6 +42,8 @@ using			json = nlohmann::json;
 #define			JSON_UIM_VIDEO_BROWSER_DISABLE3	"BlankWhenIdleVWLDisableFullscreen"
 #define			JSON_UIM_PROCESS_CONTROL		"BlankWhenIdleProcessControl"
 #define			JSON_UIM_PROCESS_LIST			"BlankWhenIdleProcessList"
+#define			JSON_IGNORED_KEYS				"IgnoredKeys"
+#define			JSON_IGNORED_KEYS_LIST			"IgnoredKeysList"
 #define			JSON_DEVICE_NAME				"Name"
 #define			JSON_DEVICE_IP					"IP"
 #define			JSON_DEVICE_UNIQUEKEY			"UniqueDeviceKey"
@@ -319,6 +321,24 @@ Preferences::Preferences(std::wstring configuration_file_name)
 							}
 						}
 					}
+
+					// Enable ignored keys list
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_IGNORED_KEYS];
+					if (!j.empty() && j.is_boolean())
+						user_idle_mode_ignored_keys_ = j.get<bool>();
+
+					// Ignored keys list
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_IGNORED_KEYS_LIST];
+					if (!j.empty() && j.size() > 0)
+					{
+						for (auto& elem : j.items())
+						{
+							if (elem.value().is_number_unsigned())
+								ignored_keys.push_back(elem.value().get<uint32_t>());
+							else if (elem.value().is_number_integer() && elem.value().get<int32_t>() >= 0)
+								ignored_keys.push_back((uint32_t)elem.value().get<int32_t>());
+						}
+					}
 					// Process control - process list 
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_LIST];
 					if (!j.empty() && j.size() > 0)
@@ -527,6 +547,11 @@ bool Preferences::Preferences::writeToDisk(void)
 	prefs[JSON_PREFS_NODE][JSON_UIM_VIDEO_BROWSER_DISABLE2] = (bool)user_idle_mode_disable_while_video_wake_lock_foreground_;
 	prefs[JSON_PREFS_NODE][JSON_UIM_VIDEO_BROWSER_DISABLE3] = (bool)user_idle_mode_disable_while_video_wake_lock_fullscreen_;
 	prefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_CONTROL] = (bool)user_idle_mode_process_control_;
+	prefs[JSON_PREFS_NODE][JSON_IGNORED_KEYS] = (bool)user_idle_mode_ignored_keys_;
+	prefs[JSON_PREFS_NODE][JSON_IGNORED_KEYS_LIST] = nlohmann::json::array();
+	if (ignored_keys.size() > 0)
+		for (auto& item : ignored_keys)
+			prefs[JSON_PREFS_NODE][JSON_IGNORED_KEYS_LIST].push_back(item);
 	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM] = (bool)remote_streaming_host_support_;
 	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_MODE] = (bool)remote_streaming_host_prefer_power_off_;
 	prefs[JSON_PREFS_NODE][JSON_EXTERNAL_API] = (bool)external_api_support_;

@@ -150,6 +150,31 @@ std::string	tools::validateArgument(std::string argument, std::string validation
 	}
 	return "";
 }
+DWORD tools::keyCodeFromWmKeyDown(LPARAM lParam)
+{
+	// Keep the exact key identity (scan code + extended-key bits) so matching is layout/language independent.
+	return (DWORD)(lParam & 0x01FF0000);
+}
+DWORD tools::keyCodeFromRawKeyboard(const RAWKEYBOARD& keyboard)
+{
+	// Build the same code shape used by WM_KEYDOWN capture (scan code + extended-key flags).
+	LONG key_data = ((LONG)keyboard.MakeCode << 16);
+	if (keyboard.Flags & RI_KEY_E0)
+		key_data |= (1 << 24);
+	if (keyboard.Flags & RI_KEY_E1)
+		key_data |= (1 << 25);
+	return (DWORD)key_data;
+}
+std::wstring tools::keyNameFromCode(DWORD key_code)
+{
+	WCHAR key_name[128] = { 0 };
+	// Convert a stored raw code into a user-facing label.
+	if (GetKeyNameText((LONG)key_code, key_name, ARRAYSIZE(key_name)) > 0)
+		return key_name;
+
+	// Fallback keeps entry visible even when Windows cannot resolve a friendly name.
+	return L"Code_" + std::to_wstring(key_code);
+}
 std::vector <std::string> tools::getLocalIP(void)
 {
 	std::vector <std::string> IPs;
