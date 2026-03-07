@@ -686,7 +686,7 @@ LRESULT CALLBACK WndMainProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				bool bFound = false;
 				for (auto& IP : IPs)
 				{
-					std::vector temp = tools::stringsplit(IP, "/");
+					std::vector<std::string> temp = tools::stringsplit(IP, "/");
 					std::string IP, CIRD;
 					if (temp.size() > 1)
 					{
@@ -1347,7 +1347,7 @@ LRESULT CALLBACK WndDeviceProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 							edittext.erase(remove(edittext.begin(), edittext.end(), CharsToRemove[i]), edittext.end());
 
 						//check on HEX
-						if (edittext.find_first_not_of(L"0123456789ABCDEF\r") != std::string::npos)
+						if (edittext.find_first_not_of(L"0123456789ABCDEF\r") != std::wstring::npos)
 						{
 							customMsgBox(hWnd, L"One or several MAC addresses contain illegal caharcters.\n\nPlease correct before continuing.", L"Error", MB_OK | MB_ICONERROR);
 							return 0;
