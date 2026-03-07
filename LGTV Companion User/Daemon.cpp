@@ -35,6 +35,7 @@
 #include <Hidsdi.h>
 #include <hidpi.h>
 #include <unordered_map>
+#include <algorithm>
 #include <Shobjidl.h>
 #include <ctime>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -430,12 +431,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			return 0;
 		PRAWINPUT raw = reinterpret_cast<PRAWINPUT>(buffer.data());
 
-		// Was a key pressed?
-		if (raw->header.dwType == RIM_TYPEKEYBOARD)
-		{
-			time_of_last_raw_input = tick_now;
-			return 0;
-		}
+			// Was a key pressed?
+			if (raw->header.dwType == RIM_TYPEKEYBOARD)
+			{
+				if (Prefs.user_idle_mode_ignored_keys_)
+				{
+					DWORD key_code = tools::keyCodeFromRawKeyboard(raw->data.keyboard);
+					if (std::find(Prefs.ignored_keys.begin(), Prefs.ignored_keys.end(), key_code) != Prefs.ignored_keys.end())
+						return 0;
+				}
+				time_of_last_raw_input = tick_now;
+				return 0;
+			}
 		// Was the mouse moved?
 		else if (raw->header.dwType == RIM_TYPEMOUSE)
 		{
@@ -1580,7 +1587,16 @@ std::vector<std::string> sunshine_GetLogFiles()
 			}
 		}
 	}
-	return log_files;
+
+	std::vector<std::string> filtered_log_files;
+
+	for (auto& log_file : log_files)
+	{
+		if (!log_file.empty())
+			filtered_log_files.push_back(log_file);
+	}
+
+	return filtered_log_files;
 }
 
 std::string sunshine_GetConfVal(std::string buf, std::string conf_item)

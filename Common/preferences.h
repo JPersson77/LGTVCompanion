@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <cstdint>
 #include <nlohmann/json.hpp>
 #include "../Common/device.h"
 
@@ -32,6 +33,7 @@ public:
 		bool							process_control_disable_while_running_display_lock = false;
 	};
 
+	std::vector<uint32_t>				ignored_keys;
 	std::vector<std::string>			event_log_restart_strings_custom_; 
 	std::vector<std::string>			event_log_shutdown_strings_custom_; 
 	std::vector<std::string>			event_log_restart_strings_;
@@ -57,6 +59,7 @@ public:
 	bool								user_idle_mode_disable_while_video_wake_lock_fullscreen_ = false;
 	bool								user_idle_mode_process_control_ = false;
 	std::vector<ProcessList>			user_idle_mode_process_control_list_;
+	bool								user_idle_mode_ignored_keys_ = false;
 	bool								topology_support_ = false;
 	bool								topology_keep_on_boot_ = false;
 	bool								remote_streaming_host_support_ = false;

@@ -13,6 +13,9 @@ namespace tools
 	std::wstring							getWndText(HWND);
 	void									replaceAllInPlace(std::string& str, const std::string& from, const std::string& to);
 	std::string								validateArgument(std::string argument, std::string validation_list);
+	DWORD									keyCodeFromWmKeyDown(LPARAM lParam);
+	DWORD									keyCodeFromRawKeyboard(const RAWKEYBOARD& keyboard);
+	std::wstring							keyNameFromCode(DWORD key_code);
 	std::vector <std::string>				getLocalIP(void);
 	std::string								getSubnetMask(std::string ip);
 	bool									isSameSubnet(const char* ip1, const char* ip2, const char* subnetMask);
