@@ -61,11 +61,13 @@ LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 "LGTV Companion.exe" -poweroff
 ```
 ## Application commands (LGTV Companion only)
-- *-autodisable* 	- temporarily disable the automatic management, i.e. to stop processing power events for device(s). This is effective until next restart of the service. 
-- *-autoenable* 	- temporarily enable the application's automatic management of a device. This is effective until next restart of the service.
-- *-clearlog* 		- clear the application log. This takes no further arguments
-- *-idle* 		- trigger User Idle Mode / screen blanking, as if the user was away from the PC until User Idle Mode triggered. This is a global setting and takes no further arguments.
-- *-unidle* 		- disable the screen blanking, as if the user returned to the PC. This is a global setting and takes no further arguments.
+- *-autodisable* 			- temporarily disable the automatic management, i.e. to stop processing power events for device(s). This is effective until next restart of the service. 
+- *-autoenable* 			- temporarily enable the application's automatic management of a device. This is effective until next restart of the service.
+- *-streaming_connect*		- force remote client connect (when streaming support is enabled). Typically used in the connect command buffer of the streaming server.
+- *-streaming_disconnect*	- force remote client disconnect (when streaming support is enabled). Typically used in in the disconnect command buffer of the streaming server.
+- *-clearlog* 				- clear the application log. 
+- *-idle* 					- trigger User Idle Mode / screen blanking, as if the user was away from the PC until User Idle Mode triggered. 
+- *-unidle* 				- disable the screen blanking, as if the user returned to the PC.
 
 #### Examples: 
 *Power on Device1 and then disable automatic management of Device1*

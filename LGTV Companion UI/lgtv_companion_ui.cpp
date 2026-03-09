@@ -2131,7 +2131,9 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 					"power saver. \n\n"
 					"The option to support remote streaming hosts will power off or blank the screen of managed devices while the system is acting as streaming host or being remoted into. Supported "
 					"hosts include Nvidia gamestream, Moonlight, Sunshine, Apollo, Steam Link and RDP. \n\nPlease note that the devices will remain powered off / blanked until the remote connection is disconnected. \n\n"
-					"NOTE! Support for detecting Sunshine/Apollo streaming host require Sunshine/Apollo to be installed (i.e. not portable install) and Sunshine/Apollo logging level be at minimum on level \"Info\" (default)",
+					"NOTE! Support for detecting Sunshine/Apollo require Sunshine/Apollo to be installed (i.e. not portable) and Sunshine/Apollo logging level be at minimum on level \"Info\" (default)\n\n"
+					"NOTE! The user can manually force LGTV Companion to detect a connection or disconnect with CLI-commands: -streaming_connect and -streaming_disconnect. This can for example be used with most streaming hosts' "
+					"command buffers that are performed before streaming and after streaming stopped.",
 					L"Andvanced power options", MB_OK | MB_ICONINFORMATION);
 			}
 			// explain the multi-monitor conf

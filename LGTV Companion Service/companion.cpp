@@ -931,6 +931,34 @@ void Companion::Impl::ipcCallback(std::wstring message, bool recursive)
 			event(EVENT_FORCE_BLANKSCREEN, grabDevices(words, 1));
 			continue;
 		}
+		else if (command == "streaming_connect")
+		{
+			if (!prefs_.remote_streaming_host_support_)
+			{
+				INFO_("CLI", "Cannot force streaming client connect. Support for remote streaming is disabled.");
+				continue;
+			}
+			if (windows_power_status_on_)
+				INFO_("CLI", "Forced streaming client connect. All managed devices will %1%", prefs_.remote_streaming_host_prefer_power_off_ ? "power OFF" : "be blanked");
+			else
+				INFO_("CLI", "Forced streaming client connect. Global power status is OFF.");
+			event(EVENT_SYSTEM_REMOTE_CONNECT);
+			continue;
+		}
+		else if (command == "streaming_disconnect")
+		{
+			if (!prefs_.remote_streaming_host_support_)
+			{
+				INFO_("CLI", "Cannot force streaming client disconnect. Support for remote streaming is disabled.");
+				continue;
+			}
+			if (windows_power_status_on_)
+				INFO_("CLI", "Forced streaming client disconnect. All managed devices will power ON");
+			else
+				INFO_("CLI", "Forced streaming client connect. Global power status is OFF.");
+			event(EVENT_SYSTEM_REMOTE_DISCONNECT);
+			continue;
+		}
 		else if (command.find("sethdmi") == 0)							// SET HDMI INPUT
 		{
 			int cmd_offset = 1;
