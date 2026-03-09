@@ -149,6 +149,7 @@ time_t							time_of_last_version_check = 0;
 DWORD							last_input = 0;
 DWORD							time_of_last_controller_tick = 0;
 int								number_of_mouse_checks = 0;
+bool							last_input_was_ignored = false;
 inline static std::mutex		copydata_mutex_;
 
 std::shared_ptr<IpcClient2>		p_pipe_client;
@@ -319,9 +320,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		Remote.Sunshine_Log_Files = sunshine_GetLogFiles();
 		if (Remote.Sunshine_Log_Files.size() > 0)
 		{
-			for (auto& log : Remote.Sunshine_Log_Files) {
-				std::filesystem::path p(log);
-				Remote.Sunshine_Log_Sizes.push_back(std::filesystem::file_size(p));
+			for (auto& log : Remote.Sunshine_Log_Files) 
+			{
+				try
+				{
+					std::filesystem::path p(log);
+					Remote.Sunshine_Log_Sizes.push_back(std::filesystem::file_size(p));
+				}
+				catch (...)
+				{
+					Remote.Sunshine_Log_Sizes.push_back(0);
+				}
 			}
 		}
 	}
@@ -431,18 +440,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			return 0;
 		PRAWINPUT raw = reinterpret_cast<PRAWINPUT>(buffer.data());
 
-			// Was a key pressed?
-			if (raw->header.dwType == RIM_TYPEKEYBOARD)
+		// Was a key pressed?
+		if (raw->header.dwType == RIM_TYPEKEYBOARD)
+		{
+			if (Prefs.user_idle_mode_ignored_keys_)
 			{
-				if (Prefs.user_idle_mode_ignored_keys_)
+				DWORD key_code = tools::keyCodeFromRawKeyboard(raw->data.keyboard);
+				log(std::to_wstring(key_code));
+				if (std::find(Prefs.ignored_keys.begin(), Prefs.ignored_keys.end(), key_code) != Prefs.ignored_keys.end())
 				{
-					DWORD key_code = tools::keyCodeFromRawKeyboard(raw->data.keyboard);
-					if (std::find(Prefs.ignored_keys.begin(), Prefs.ignored_keys.end(), key_code) != Prefs.ignored_keys.end())
-						return 0;
+					last_input_was_ignored = true;
+					return 0;
 				}
-				time_of_last_raw_input = tick_now;
-				return 0;
 			}
+			last_input_was_ignored = false;
+			time_of_last_raw_input = tick_now;
+			return 0;
+		}
 		// Was the mouse moved?
 		else if (raw->header.dwType == RIM_TYPEMOUSE)
 		{
@@ -454,7 +468,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			else
 				number_of_mouse_checks++;
 			if (number_of_mouse_checks >= 3)
+			{
+				last_input_was_ignored = false;
 				time_of_last_raw_input = tick_now;
+			}
 			time_of_last_mouse_sample = tick_now;
 			return 0;
 		}
@@ -494,6 +511,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						{
 							if (usageLength > 0)
 							{
+								last_input_was_ignored = false;
 								time_of_last_raw_input = tick_now;
 								return 0;
 							}
@@ -541,6 +559,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 							{
 								if (abs(cache.axis_value[i] - scaledValue) >= (int)(0.045 * 65535)) // sensitivity of the input detection
 								{
+									last_input_was_ignored = false;
 									time_of_last_raw_input = tick_now;
 								}
 							}
@@ -604,7 +623,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				last_input = time_of_last_raw_input;
 			}
 			// but also use GetLastInputInfo() to determine user input (fallback method)
-			else if((lii.dwTime > time_of_last_raw_input) && (lii.dwTime - time_of_last_raw_input > 1000 ))
+			else if(!last_input_was_ignored && (lii.dwTime > time_of_last_raw_input) && (lii.dwTime - time_of_last_raw_input > 1000 ))
 			{
 				// discover and discard controllers that are jittery (i.e. that send constant updates)
 				if ((user_is_idle && abs((int)(lii.dwTime - time_of_last_input_info - (DWORD)TIMER_MAIN_DELAY_WHEN_IDLE)) <= 20)
@@ -1299,29 +1318,33 @@ DWORD checkRemoteStreamingProcesses(void)
 	CloseHandle(snapshot);
 
 	// was sunshine service found currently running?
-	if (bSunshineSvcProcessFound && (Remote.Sunshine_Log_Files.size() > 0))
+	if (bSunshineSvcProcessFound)
 	{
 		int index = 0;
 //		std::vector<DWORD> val(Remote.Sunshine_Log_Files.size());
 		for(auto& logfile : Remote.Sunshine_Log_Files)
 		{
-			std::filesystem::path p(logfile);
-			uintmax_t Size = std::filesystem::file_size(p);
-			if (Size != Remote.Sunshine_Log_Sizes[index])
+			if (logfile != "")
 			{
-				Remote.Sunshine_Log_Sizes[index] = Size;
-				if (index == 0)
+				std::filesystem::path p(logfile);
+				uintmax_t Size = std::filesystem::file_size(p);
+				if (Size != Remote.Sunshine_Log_Sizes[index])
 				{
-					ReturnValue |= sunshine_CheckLog(logfile);
+					if (index == 0) // SUNSHINE
+					{
+						Remote.Sunshine_Log_Sizes[index] = Size;
+						ReturnValue |= sunshine_CheckLog(logfile);
+					}
+					else if (index == 1) //APOLLO
+					{
+						DWORD val = sunshine_CheckLog(logfile);
+						if (val == REMOTE_SUNSHINE_CONNECTED)
+							ReturnValue |= REMOTE_APOLLO_CONNECTED;
+						else if (val == REMOTE_SUNSHINE_NOT_CONNECTED)
+							ReturnValue |= REMOTE_APOLLO_NOT_CONNECTED;
+					}
 				}
-				else if (index == 1)
-				{
-					DWORD val = sunshine_CheckLog(logfile);
-					if(val == REMOTE_SUNSHINE_CONNECTED)
-						ReturnValue |= REMOTE_APOLLO_CONNECTED;
-					else if (val == REMOTE_SUNSHINE_NOT_CONNECTED)
-						ReturnValue |= REMOTE_APOLLO_NOT_CONNECTED;
-				}
+
 			}
 			index++;
 		}
@@ -1587,7 +1610,8 @@ std::vector<std::string> sunshine_GetLogFiles()
 			}
 		}
 	}
-
+	return log_files;
+	/*
 	std::vector<std::string> filtered_log_files;
 
 	for (auto& log_file : log_files)
@@ -1597,6 +1621,7 @@ std::vector<std::string> sunshine_GetLogFiles()
 	}
 
 	return filtered_log_files;
+	*/
 }
 
 std::string sunshine_GetConfVal(std::string buf, std::string conf_item)

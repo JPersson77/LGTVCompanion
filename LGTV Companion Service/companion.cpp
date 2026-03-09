@@ -363,7 +363,6 @@ void Companion::Impl::dispatchEvent(Event& event) {
 					processEvent(event, *session);
 	//post processing stuff
 	time_t pp_entry = time(0);
-	DEBUG("dispatchEvent() post process init...");
 	switch (event.getType())
 	{
 	case EVENT_SYSTEM_REMOTE_CONNECT:
@@ -425,7 +424,6 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		break;
 	default:break;
 	}
-	DEBUG("dispatchEvent() exiting...");
 	return;
 }
 bool Companion::Impl::isScreensaverActive(void)
@@ -466,7 +464,6 @@ bool Companion::Impl::setHdmiInput(Event& event, SessionWrapper& session)
 void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 {
 	bool work_was_enqueued;
-	DEBUG("processEvent()");
 	do
 	{
 		work_was_enqueued = false;
@@ -478,10 +475,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			ioc_reset_.store(true);
 			ioc_.restart();
 		}
-		else
-			DEBUG("I/O context is active...");
 		// process forced and user initiated 
-		DEBUG("ProcessEvent() processing event...");
 		switch (event.getType())
 		{
 		case EVENT_FORCE_DISPLAYON:
@@ -561,10 +555,7 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 				if (windows_power_status_on_ == true)
 				{
 					work_was_enqueued = session.client_.powerOff();
-					DEBUG("processEvent() queueing power off during suspend...");
 				}
-				else
-					DEBUG("processEvent() screen already off...");
 				break;
 
 			case EVENT_SYSTEM_DISPLAYDIMMED:
@@ -648,9 +639,6 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 		ioc_started_.store(true);
 		ioc_reset_.store(false);
 	}
-	else
-		DEBUG("processEvent() no new thread pool need to be created...");
-	DEBUG("processEvent() exiting...");
 }
 void Companion::Impl::sendToIpc(DWORD dwEvent)
 {
@@ -1559,7 +1547,6 @@ std::vector<std::string> Companion::Impl::grabDevices(std::vector<std::string> C
 	return CommandWords;
 }
 void Companion::Impl::systemEvent(int e, std::string data) {
-	DEBUG("systemEvent()");
 	int dispatched_event_type = EVENT_UNDEFINED;
 	switch (e)
 	{
@@ -1653,11 +1640,9 @@ void Companion::Impl::systemEvent(int e, std::string data) {
 	default:break;
 	}
 
-	DEBUG("systemEvent() sending event");
 	if(dispatched_event_type != EVENT_UNDEFINED)
 	{
 		this->event(dispatched_event_type);
-		DEBUG("systemEvent() sending event to IPC");
 		sendToIpc(dispatched_event_type);
 	}
 	// Get host IP, if not already available
@@ -1675,7 +1660,6 @@ void Companion::Impl::systemEvent(int e, std::string data) {
 			DEBUG("Host IP: %1%", ips);
 		}
 	}
-	DEBUG("systemEvent() exiting...");
 	return;
 }
 Companion::Companion(Preferences& settings)

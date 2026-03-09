@@ -2604,6 +2604,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	{
 		SetCurrentProcessExplicitAppUserModelID(L"JPersson.LGTVCompanion.18");
 		SendDlgItemMessage(hWnd, IDC_LIST, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
+		SendDlgItemMessage(hWnd, IDC_IGNORED_KEYS_LIST, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_EDIT_TIME, WM_SETFONT, (WPARAM)h_edit_medium_font, MAKELPARAM(TRUE, 0));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETRANGE, (WPARAM)NULL, MAKELPARAM(240, 1));
 		SendDlgItemMessage(hWnd, IDC_SPIN, UDM_SETPOS, (WPARAM)NULL, (LPARAM)Prefs.user_idle_mode_delay_);
@@ -2963,8 +2964,8 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			}
 			else if (wParam == IDC_SYSLINK_INFO_IGNORED_KEYS)
 			{
-				customMsgBox(hWnd, L"Ignores certain keypresses while determining idle state. E.g. to allow the screen to blank if Pause is "
-					"sent by a macro to keep your Teams / Slack active.", L"Ignored Keys", MB_OK | MB_ICONINFORMATION);
+				customMsgBox(hWnd, L"Specify keys that are ignored when determining idle state. This is used to keep User Idle Mode active even though the specified keys "
+					"are pressed.", L"Ignored Keys", MB_OK | MB_ICONINFORMATION);
 			}
 			else if (wParam == IDC_SYSLINK_ADD)
 			{
