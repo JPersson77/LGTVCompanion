@@ -489,6 +489,11 @@ DWORD WINAPI SvcEventLogSubscribeCallback(EVT_SUBSCRIBE_NOTIFY_ACTION Action, PV
 	{
 		std::wstring strfind = L"<Data Name='param5'>";
 		size_t f = xml.find(strfind);
+		if (f == std::wstring::npos)
+		{
+			strfind = L"<Data Name=\"param5\">";
+			f = xml.find(strfind);
+		}
 		if (f != std::wstring::npos)
 		{
 			size_t e = xml.find(L"<", f + 1);
