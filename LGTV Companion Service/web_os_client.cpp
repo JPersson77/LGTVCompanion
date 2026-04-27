@@ -555,6 +555,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 	json payload;
 	std::string response_id;
 	std::string response_type;
+	std::string error_msg;
 	boost::ignore_unused(bytes_transferred);
 	if (ec)
 		return onError(ec, "onRead");
@@ -579,6 +580,8 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 			else
 				response_id = response["id"];
 		response_type = response["type"];
+		if (!response["error"].empty() && response["error"].is_string())
+			error_msg = response["error"];
 	}
 	catch (std::exception const& e)
 	{
@@ -629,7 +632,14 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 		}
 		else if (response_type == "error")
 		{
-			INFO("User rejected or cancelled the pairing prompt");
+			if (error_msg != "")
+			{
+				ERR(error_msg);
+			}
+			else
+			{
+				INFO("User rejected or cancelled the pairing prompt");
+			}
 			workIsFinished();
 		}
 		else // Device is unregistered or pairing key is invalid.
