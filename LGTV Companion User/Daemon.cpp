@@ -260,26 +260,31 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		SetTimer(h_main_wnd, TIMER_CHECK_PROCESSES, TIMER_CHECK_PROCESSES_DELAY, (TIMERPROC)NULL);
 	if (Prefs.user_idle_mode_)
 	{
-		RAWINPUTDEVICE Rid[4];
-		Rid[0].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
-		Rid[0].usUsage = 0x02;								// HID_USAGE_GENERIC_MOUSE
+		RAWINPUTDEVICE Rid[5];
+		Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+		Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
 		Rid[0].dwFlags = daemon_is_visible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
 		Rid[0].hwndTarget = h_main_wnd;
 
-		Rid[1].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
-		Rid[1].usUsage = 0x04;								// HID_USAGE_GENERIC_JOYSTICK
+		Rid[1].usUsagePage = HID_USAGE_PAGE_GENERIC;
+		Rid[1].usUsage = HID_USAGE_GENERIC_JOYSTICK;
 		Rid[1].dwFlags = RIDEV_INPUTSINK;
 		Rid[1].hwndTarget = h_main_wnd;
 
-		Rid[2].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
-		Rid[2].usUsage = 0x05;								// HID_USAGE_GENERIC_GAMEPAD
+		Rid[2].usUsagePage = HID_USAGE_PAGE_GENERIC;
+		Rid[2].usUsage = HID_USAGE_GENERIC_GAMEPAD;
 		Rid[2].dwFlags = RIDEV_INPUTSINK;
 		Rid[2].hwndTarget = h_main_wnd;
 
-		Rid[3].usUsagePage = 0x01;							// HID_USAGE_PAGE_GENERIC
-		Rid[3].usUsage = 0x06;								// HID_USAGE_GENERIC_KEYBOARD
+		Rid[3].usUsagePage = HID_USAGE_PAGE_GENERIC;
+		Rid[3].usUsage = HID_USAGE_GENERIC_KEYBOARD;
 		Rid[3].dwFlags = daemon_is_visible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
 		Rid[3].hwndTarget = h_main_wnd;
+
+		Rid[4].usUsagePage = HID_USAGE_PAGE_GENERIC;
+		Rid[4].usUsage = HID_USAGE_GENERIC_MULTI_AXIS_CONTROLLER;
+		Rid[4].dwFlags = RIDEV_INPUTSINK;
+		Rid[4].hwndTarget = h_main_wnd;
 
 		UINT deviceCount = sizeof(Rid) / sizeof(*Rid);
 		if (RegisterRawInputDevices(Rid, deviceCount, sizeof(Rid[0])) == FALSE)
