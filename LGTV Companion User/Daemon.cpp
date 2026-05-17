@@ -35,6 +35,7 @@
 #include <Hidsdi.h>
 #include <hidpi.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <algorithm>
 #include <Shobjidl.h>
 #include <ctime>
@@ -88,6 +89,7 @@
 #define			SUNSHINE_FILE_CONF						"sunshine.conf"
 #define			SUNSHINE_FILE_LOG						"sunshine.log"
 #define			SUNSHINE_FILE_SVC						L"sunshine.exe"
+#define			HID_VENDOR_ID_VALVE					0x28DE
 
 
 struct DisplayInfo {					// Display info
@@ -125,6 +127,10 @@ struct ControllerInfo { // Cache for raw input data stuff
 	PHIDP_PREPARSED_DATA ppd = NULL;
 	HIDP_CAPS caps = { 0 };
 	std::vector<int> axis_value;
+	std::vector<BYTE> last_hid_report;
+	DWORD vendor_id = 0;
+	USHORT usage_page = 0;
+	USHORT usage = 0;
 };
 
 // Globals:
@@ -260,37 +266,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		SetTimer(h_main_wnd, TIMER_CHECK_PROCESSES, TIMER_CHECK_PROCESSES_DELAY, (TIMERPROC)NULL);
 	if (Prefs.user_idle_mode_)
 	{
-		RAWINPUTDEVICE Rid[5];
-		Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
-		Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
-		Rid[0].dwFlags = daemon_is_visible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
-		Rid[0].hwndTarget = h_main_wnd;
-
-		Rid[1].usUsagePage = HID_USAGE_PAGE_GENERIC;
-		Rid[1].usUsage = HID_USAGE_GENERIC_JOYSTICK;
-		Rid[1].dwFlags = RIDEV_INPUTSINK;
-		Rid[1].hwndTarget = h_main_wnd;
-
-		Rid[2].usUsagePage = HID_USAGE_PAGE_GENERIC;
-		Rid[2].usUsage = HID_USAGE_GENERIC_GAMEPAD;
-		Rid[2].dwFlags = RIDEV_INPUTSINK;
-		Rid[2].hwndTarget = h_main_wnd;
-
-		Rid[3].usUsagePage = HID_USAGE_PAGE_GENERIC;
-		Rid[3].usUsage = HID_USAGE_GENERIC_KEYBOARD;
-		Rid[3].dwFlags = daemon_is_visible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY;
-		Rid[3].hwndTarget = h_main_wnd;
-
-		Rid[4].usUsagePage = HID_USAGE_PAGE_GENERIC;
-		Rid[4].usUsage = HID_USAGE_GENERIC_MULTI_AXIS_CONTROLLER;
-		Rid[4].dwFlags = RIDEV_INPUTSINK;
-		Rid[4].hwndTarget = h_main_wnd;
-
-		UINT deviceCount = sizeof(Rid) / sizeof(*Rid);
-		if (RegisterRawInputDevices(Rid, deviceCount, sizeof(Rid[0])) == FALSE)
-		{
-			log(L"Failed to register for Raw Input!");
-		}
+		RawInput_RegisterDevices(h_main_wnd);
 		time_of_last_raw_input = GetTickCount();
 		SetTimer(h_main_wnd, TIMER_MAIN, TIMER_MAIN_DELAY_WHEN_BUSY, (TIMERPROC)NULL);
 		SetTimer(h_main_wnd, TIMER_IDLE, Prefs.user_idle_mode_delay_ * 60 * 1000, (TIMERPROC)NULL);
@@ -493,7 +469,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			std::wstring devicePath(deviceName.data());
 			auto it = g_device_cache.find(devicePath);
 			if (it == g_device_cache.end()) {
-				if (!RawInput_AddToCache(devicePath))
+				if (!RawInput_AddToCache(devicePath, raw->header.hDevice))
 					return 0;
 				it = g_device_cache.find(devicePath); // Re-check after insertion attempt
 				if (it == g_device_cache.end())
@@ -572,6 +548,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						}
 					}
 				}
+			}
+			if (cache.vendor_id == HID_VENDOR_ID_VALVE && raw->data.hid.dwSizeHid > 0 && raw->data.hid.dwCount > 0)
+			{
+				DWORD reportSize = raw->data.hid.dwSizeHid * raw->data.hid.dwCount;
+				std::vector<BYTE> report(raw->data.hid.bRawData, raw->data.hid.bRawData + reportSize);
+				if (!cache.last_hid_report.empty() && cache.last_hid_report != report)
+				{
+					last_input_was_ignored = false;
+					time_of_last_raw_input = tick_now;
+				}
+				cache.last_hid_report = std::move(report);
 			}
 		}
 		return 0;
@@ -895,6 +882,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		//clear the raw input cache whenever a controller was connected/disconnected.
 		RawInput_ClearCache();
+		if (Prefs.user_idle_mode_)
+			RawInput_RegisterDevices(hWnd);
 
 		if (Prefs.remote_streaming_host_support_ && lParam && wParam)
 		{
@@ -1687,24 +1676,108 @@ bool IsWindowElevated(HWND hWnd) {
 	return isElevated;
 }
 
-bool RawInput_AddToCache(const std::wstring& devicePath) {
-	HANDLE hDevice = CreateFile(devicePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
-	if (hDevice == INVALID_HANDLE_VALUE) 
+static void RawInput_AddRegistration(std::vector<RAWINPUTDEVICE>& devices, std::unordered_set<DWORD>& registered, USHORT usagePage, USHORT usage, DWORD flags, HWND hwnd)
+{
+	DWORD key = ((DWORD)usagePage << 16) | usage;
+	if (registered.find(key) != registered.end())
+		return;
+
+	RAWINPUTDEVICE device = { 0 };
+	device.usUsagePage = usagePage;
+	device.usUsage = usage;
+	device.dwFlags = flags;
+	device.hwndTarget = hwnd;
+	devices.push_back(device);
+	registered.insert(key);
+}
+
+bool RawInput_RegisterDevices(HWND hwnd)
+{
+	std::vector<RAWINPUTDEVICE> devices;
+	std::unordered_set<DWORD> registered;
+
+	RawInput_AddRegistration(devices, registered, HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE,
+		daemon_is_visible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY, hwnd);
+	RawInput_AddRegistration(devices, registered, HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_JOYSTICK,
+		RIDEV_INPUTSINK, hwnd);
+	RawInput_AddRegistration(devices, registered, HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_GAMEPAD,
+		RIDEV_INPUTSINK, hwnd);
+	RawInput_AddRegistration(devices, registered, HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD,
+		daemon_is_visible ? RIDEV_INPUTSINK : RIDEV_INPUTSINK | RIDEV_NOLEGACY, hwnd);
+	RawInput_AddRegistration(devices, registered, HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MULTI_AXIS_CONTROLLER,
+		RIDEV_INPUTSINK, hwnd);
+
+	UINT deviceCount = 0;
+	if (GetRawInputDeviceList(nullptr, &deviceCount, sizeof(RAWINPUTDEVICELIST)) == 0 && deviceCount > 0)
+	{
+		std::vector<RAWINPUTDEVICELIST> rawDevices(deviceCount);
+		if (GetRawInputDeviceList(rawDevices.data(), &deviceCount, sizeof(RAWINPUTDEVICELIST)) != (UINT)-1)
+		{
+			for (UINT i = 0; i < deviceCount; ++i)
+			{
+				if (rawDevices[i].dwType != RIM_TYPEHID)
+					continue;
+
+				RID_DEVICE_INFO deviceInfo = { 0 };
+				UINT deviceInfoSize = sizeof(deviceInfo);
+				deviceInfo.cbSize = sizeof(deviceInfo);
+				if (GetRawInputDeviceInfo(rawDevices[i].hDevice, RIDI_DEVICEINFO, &deviceInfo, &deviceInfoSize) == (UINT)-1)
+					continue;
+				if (deviceInfo.dwType != RIM_TYPEHID || deviceInfo.hid.dwVendorId != HID_VENDOR_ID_VALVE)
+					continue;
+
+				// Steam Controller 2 exposes active controls through vendor-defined HID collections.
+				RawInput_AddRegistration(devices, registered, deviceInfo.hid.usUsagePage, deviceInfo.hid.usUsage, RIDEV_INPUTSINK, hwnd);
+			}
+		}
+	}
+
+	if (RegisterRawInputDevices(devices.data(), (UINT)devices.size(), sizeof(devices[0])) == FALSE)
+	{
+		log(L"Failed to register for Raw Input!");
 		return false;
+	}
+	return true;
+}
+
+bool RawInput_AddToCache(const std::wstring& devicePath, HANDLE rawInputDevice) {
+	ControllerInfo info;
+	RID_DEVICE_INFO deviceInfo = { 0 };
+	UINT deviceInfoSize = sizeof(deviceInfo);
+	deviceInfo.cbSize = sizeof(deviceInfo);
+	if (GetRawInputDeviceInfo(rawInputDevice, RIDI_DEVICEINFO, &deviceInfo, &deviceInfoSize) != (UINT)-1
+		&& deviceInfo.dwType == RIM_TYPEHID)
+	{
+		info.vendor_id = deviceInfo.hid.dwVendorId;
+		info.usage_page = deviceInfo.hid.usUsagePage;
+		info.usage = deviceInfo.hid.usUsage;
+	}
+
+	HANDLE hDevice = CreateFile(devicePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+	if (hDevice == INVALID_HANDLE_VALUE)
+	{
+		g_device_cache[devicePath] = info;
+		return true;
+	}
 
 	PHIDP_PREPARSED_DATA ppd = nullptr;
 	if (!HidD_GetPreparsedData(hDevice, &ppd)) {
 		CloseHandle(hDevice);
-		return false;
+		g_device_cache[devicePath] = info;
+		return true;
 	}
 
 	HIDP_CAPS caps;
 	if (HidP_GetCaps(ppd, &caps) != HIDP_STATUS_SUCCESS) {
 		HidD_FreePreparsedData(ppd);
 		CloseHandle(hDevice);
-		return false;
+		g_device_cache[devicePath] = info;
+		return true;
 	}
-	g_device_cache[devicePath] = { hDevice, ppd, caps };
+	info.hDevice = hDevice;
+	info.ppd = ppd;
+	info.caps = caps;
+	g_device_cache[devicePath] = info;
 	return true;
 }
 
