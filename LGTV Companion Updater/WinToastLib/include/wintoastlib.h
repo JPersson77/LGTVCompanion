@@ -52,6 +52,8 @@ using namespace Windows::Foundation;
 
 namespace WinToastLib {
 
+    void setDebugOutputEnabled(bool enabled);
+
     class IWinToastHandler {
     public:
         enum WinToastDismissalReason {
@@ -63,7 +65,7 @@ namespace WinToastLib {
         virtual ~IWinToastHandler()                                      = default;
         virtual void toastActivated() const                              = 0;
         virtual void toastActivated(int actionIndex) const               = 0;
-        virtual void toastActivated(const char* response) const          = 0;
+        virtual void toastActivated(std::wstring response) const         = 0;
         virtual void toastDismissed(WinToastDismissalReason state) const = 0;
         virtual void toastFailed() const                                 = 0;
     };

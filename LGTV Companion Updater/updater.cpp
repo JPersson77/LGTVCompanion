@@ -86,7 +86,7 @@ public:
 			PostMessage(h_main_wnd, APP_FOCUS_WINDOW, NULL, NULL);
 		}
 	}
-	void toastActivated(const char* response) const override {
+	void toastActivated(std::wstring response) const override {
 		if (work == VERSION_CHECK)
 		{
 			ShowWindow(h_main_wnd, SW_SHOW);

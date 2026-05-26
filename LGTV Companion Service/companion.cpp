@@ -322,7 +322,6 @@ std::string Companion::Impl::validateDevices(std::vector<std::string> devices){
 	return return_value == "" ? "invalid device id or name" : return_value;
 }
 void Companion::Impl::dispatchEvent(Event& event) {
-	DEBUG("dispatchEvent()");
 	if (sessions_.size() == 0)
 		return;
 	// fix for only receiving DIMMED event when screensaver is active
@@ -826,6 +825,7 @@ void Companion::Impl::ipcCallback(std::wstring message, bool recursive)
 					user_idle_mode_log_ = true;
 				}
 				event(EVENT_SYSTEM_USERBUSY);
+				sendToIpc(EVENT_SYSTEM_USERBUSY);
 				continue;
 			}
 			else if (daemon_command == "useridle")
@@ -836,6 +836,7 @@ void Companion::Impl::ipcCallback(std::wstring message, bool recursive)
 					user_idle_mode_log_ = false;
 				}
 				event(EVENT_SYSTEM_USERIDLE);
+				sendToIpc(EVENT_SYSTEM_USERIDLE);
 				continue;
 			}
 			else if (daemon_command == "topology")

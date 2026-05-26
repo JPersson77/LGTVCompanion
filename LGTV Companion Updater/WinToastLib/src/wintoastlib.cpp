@@ -32,24 +32,31 @@
 #pragma comment(lib, "shlwapi")
 #pragma comment(lib, "user32")
 
-#ifdef NDEBUG
-#    define DEBUG_MSG(str)                                                                                                                 \
-        do {                                                                                                                               \
-        } while (false)
-#else
-#    define DEBUG_MSG(str)                                                                                                                 \
-        do {                                                                                                                               \
-            std::wcout << str << std::endl;                                                                                                \
-        } while (false)
-#endif
-
 #define DEFAULT_SHELL_LINKS_PATH L"\\Microsoft\\Windows\\Start Menu\\Programs\\"
 #define DEFAULT_LINK_FORMAT      L".lnk"
 #define STATUS_SUCCESS           (0x00000000)
 
+#ifdef NDEBUG
+static bool DebugOutputEnabled = false;
+#else
+static bool DebugOutputEnabled = true;
+#endif
+
+#define DEBUG_MSG(str)                                                                                                                     \
+    do {                                                                                                                                   \
+        if (DebugOutputEnabled) {                                                                                                          \
+            std::wcout << str << std::endl;                                                                                                \
+        }                                                                                                                                  \
+    } while (false)
+
 // Quickstart: Handling toast activations from Win32 apps in Windows 10
 // https://blogs.msdn.microsoft.com/tiles_and_toasts/2015/10/16/quickstart-handling-toast-activations-from-win32-apps-in-windows-10/
 using namespace WinToastLib;
+
+void WinToastLib::setDebugOutputEnabled(bool enabled) {
+    DebugOutputEnabled = enabled;
+}
+
 namespace DllImporter {
 
     // Function load a function from library
@@ -333,17 +340,11 @@ namespace Util {
                                                 hr = propertyValue->GetString(&userInput);
 
                                                 // Convert the HSTRING to a wide string
-                                                PCWSTR strValueW = AsString(userInput);
-
-                                                // Convert the wide string to a STL std::string to pass it as parameter
-                                                // into the event.
-                                                std::wstring ogWstr(strValueW);
-                                                std::string str(ogWstr.length(), ' ');
-                                                std::copy(ogWstr.begin(), ogWstr.end(), str.begin());
+                                                PCWSTR strValue = AsString(userInput);
 
                                                 if (SUCCEEDED(hr))
                                                 {
-                                                    eventHandler->toastActivated(str.c_str());
+                                                    eventHandler->toastActivated(std::wstring(strValue));
                                                     return S_OK;
                                                 }
                                             }
