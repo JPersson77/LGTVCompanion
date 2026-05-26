@@ -112,6 +112,7 @@ LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 "LGTV Companion.exe" -mute Device1
 ```
 ## Button commands (LGTV Companion and LGTVcli)
+👉 Please note that the virtual button press functionality was deprecated and made obsolete by firmware changes from LG in 2026
 - *-button [button]* 	- virtual remote key press, values below are allowed
 - *-button_nocheck [button]* 	- virtual remote key press, no verification of input value
 
