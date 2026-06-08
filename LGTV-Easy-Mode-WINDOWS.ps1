@@ -10,11 +10,11 @@
     4. Supervises the idle daemon in the background, restarting it if it crashes
        and periodically pulling updates. All errors go to a persistent log.
 
-  Usage (from PowerShell, or via launcher.bat by double-click):
-    .\launcher.ps1                 # set up if needed, then supervise (foreground)
-    .\launcher.ps1 -Background     # detach and supervise in the background
-    .\launcher.ps1 -Setup          # force the setup wizard, then exit
-    .\launcher.ps1 -Stop           # stop a running background supervisor
+  Usage (from PowerShell, or just double-click LGTV-Easy-Mode-WINDOWS.bat):
+    .\LGTV-Easy-Mode-WINDOWS.ps1              # set up if needed, then supervise
+    .\LGTV-Easy-Mode-WINDOWS.ps1 -Background  # detach and supervise in background
+    .\LGTV-Easy-Mode-WINDOWS.ps1 -Setup       # force the setup wizard, then exit
+    .\LGTV-Easy-Mode-WINDOWS.ps1 -Stop        # stop a running background supervisor
 #>
 [CmdletBinding()]
 param(
@@ -28,11 +28,14 @@ $ErrorActionPreference = "Continue"
 
 # ---- configuration ----------------------------------------------------------
 $RepoUrl    = if ($env:LGTV_EASY_REPO)   { $env:LGTV_EASY_REPO }   else { "https://github.com/routine88/lgtvcompanion-easier.git" }
-$RepoBranch = if ($env:LGTV_EASY_BRANCH) { $env:LGTV_EASY_BRANCH } else { "claude/great-goldberg-a190g3" }
+# Track the repository's default branch (master). Override with LGTV_EASY_BRANCH.
+$RepoBranch = if ($env:LGTV_EASY_BRANCH) { $env:LGTV_EASY_BRANCH } else { "master" }
 $AppHome    = if ($env:LGTV_EASY_APP_HOME) { $env:LGTV_EASY_APP_HOME } else { Join-Path $env:LOCALAPPDATA "lgtv-companion-easy\app" }
 $StateDir   = if ($env:LGTV_EASY_HOME) { $env:LGTV_EASY_HOME } else { Join-Path $env:APPDATA "LGTV Companion Easy Mode" }
 $UpdateEvery = if ($env:LGTV_EASY_UPDATE_INTERVAL) { [int]$env:LGTV_EASY_UPDATE_INTERVAL } else { 3600 }
+# The Python app lives in EasyMode/; this launcher lives at the repo root.
 $SubDir = "EasyMode"
+$LauncherName = "LGTV-Easy-Mode-WINDOWS.ps1"
 
 $LogFile = Join-Path $StateDir "launcher.log"
 $PidFile = Join-Path $StateDir "launcher.pid"
@@ -91,7 +94,7 @@ function Sync-Repo {
 }
 
 function Maybe-SelfUpdate {
-    $repoLauncher = Join-Path $AppHome "$SubDir\launcher\launcher.ps1"
+    $repoLauncher = Join-Path $AppHome $LauncherName
     if (-not (Test-Path $repoLauncher)) { return }
     if (-not $SelfPath) { return }
     try { $selfFull = (Resolve-Path $SelfPath).Path } catch { return }
@@ -198,7 +201,7 @@ if ($Background) {
     }
     if (Needs-Setup) { Log "First run: setup wizard."; Run-Cli @("wizard") }
     Log "Detaching to background. Log: $LogFile"
-    $repoSelf = Join-Path $AppHome "$SubDir\launcher\launcher.ps1"
+    $repoSelf = Join-Path $AppHome $LauncherName
     $useSelf = if (Test-Path $repoSelf) { $repoSelf } else { $PSCommandPath }
     Start-Process -FilePath "powershell.exe" -WindowStyle Hidden `
         -ArgumentList @("-ExecutionPolicy","Bypass","-File",$useSelf,"-Supervise")

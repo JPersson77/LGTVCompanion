@@ -18,21 +18,28 @@ the original LGTV Companion, so the two are compatible.
 
 ## The fastest way to use it
 
+The launchers live in the **repository root** with obvious names — you can't
+miss them:
+
+| Platform | File (at the repo root) |
+|----------|-------------------------|
+| Windows  | `LGTV-Easy-Mode-WINDOWS.bat` (double-click) — uses `LGTV-Easy-Mode-WINDOWS.ps1` |
+| Ubuntu/Linux | `LGTV-Easy-Mode-UBUNTU.sh` |
+
 ### Windows
-1. Download this repository (or just the `EasyMode/launcher/launcher.bat` +
-   `launcher.ps1`).
-2. **Double-click `launcher.bat`.**
+1. Download this repository.
+2. **Double-click `LGTV-Easy-Mode-WINDOWS.bat`.**
 
 That's it. The launcher installs Git and Python if needed, downloads the app,
 runs a 3-step setup wizard, and then keeps your TV sleeping in the background —
-restarting itself and pulling updates automatically.
+restarting itself and pulling updates automatically from the default branch.
 
 ### Ubuntu / Linux
 ```bash
-chmod +x EasyMode/launcher/launcher.sh
-./EasyMode/launcher/launcher.sh            # set up, then run in the foreground
+chmod +x LGTV-Easy-Mode-UBUNTU.sh
+./LGTV-Easy-Mode-UBUNTU.sh            # set up, then run in the foreground
 # or run it detached in the background:
-./EasyMode/launcher/launcher.sh --background
+./LGTV-Easy-Mode-UBUNTU.sh --background
 ```
 
 The first run opens the setup wizard (graphical if a desktop is available,
@@ -91,12 +98,13 @@ lgtv-easy wizard               # interactive text setup wizard
 
 ## The self-updating launchers
 
-`launcher.sh` (Linux) and `launcher.ps1` / `launcher.bat` (Windows) are
-supervisors that:
+`LGTV-Easy-Mode-UBUNTU.sh` (Linux) and `LGTV-Easy-Mode-WINDOWS.ps1` /
+`LGTV-Easy-Mode-WINDOWS.bat` (Windows) are supervisors that:
 
 1. install dependencies,
-2. clone/update the app from GitHub — **including updating the launcher script
-   itself** (it re-executes the new version when a pull rewrites it),
+2. clone/update the app from GitHub's **default branch** — **including updating
+   the launcher script itself** (it re-executes the new version when a pull
+   rewrites it),
 3. run setup on first use, and
 4. keep the idle daemon alive in the background, restarting it on crashes and
    checking for updates hourly.
@@ -106,7 +114,8 @@ All launcher and daemon activity is appended to a persistent log:
 - Linux: `~/.config/lgtv-companion-easy/launcher.log`
 - Windows: `%APPDATA%\LGTV Companion Easy Mode\launcher.log`
 
-Stop a background supervisor with `launcher.sh --stop` (or `launcher.ps1 -Stop`).
+Stop a background supervisor with `./LGTV-Easy-Mode-UBUNTU.sh --stop`
+(or `LGTV-Easy-Mode-WINDOWS.ps1 -Stop`).
 
 ## Files & settings
 

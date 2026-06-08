@@ -2,19 +2,19 @@
 #
 # LGTV Companion Easy Mode - self-updating launcher (Ubuntu / Linux)
 # -----------------------------------------------------------------------------
-# One command to rule them all. This script:
+# This is the ONE file Linux users run. It:
 #   1. Installs dependencies (git, python3, tkinter for the GUI).
-#   2. Clones or updates the app from GitHub - INCLUDING updates to this very
-#      launcher (it re-executes itself if it changed).
+#   2. Clones or updates the app from GitHub's default branch - INCLUDING
+#      updates to this very launcher (it re-executes itself if it changed).
 #   3. Runs the setup wizard on first use.
 #   4. Supervises the idle daemon in the background, restarting it if it crashes
 #      and periodically pulling updates. All errors go to a persistent log.
 #
 # Usage:
-#   ./launcher.sh            # set up (if needed) and run supervised in foreground
-#   ./launcher.sh --background   # detach and run as a background supervisor
-#   ./launcher.sh --setup        # force the setup wizard, then exit
-#   ./launcher.sh --stop         # stop a running background supervisor
+#   ./LGTV-Easy-Mode-UBUNTU.sh              # set up (if needed), run in foreground
+#   ./LGTV-Easy-Mode-UBUNTU.sh --background # detach and run as a background daemon
+#   ./LGTV-Easy-Mode-UBUNTU.sh --setup      # force the setup wizard, then exit
+#   ./LGTV-Easy-Mode-UBUNTU.sh --stop       # stop a running background supervisor
 #
 # Safe to re-run any time; it is idempotent.
 # -----------------------------------------------------------------------------
@@ -22,14 +22,17 @@ set -uo pipefail
 
 # ---- configuration ----------------------------------------------------------
 REPO_URL="${LGTV_EASY_REPO:-https://github.com/routine88/lgtvcompanion-easier.git}"
-REPO_BRANCH="${LGTV_EASY_BRANCH:-claude/great-goldberg-a190g3}"
+# Track the repository's default branch (master). Override with LGTV_EASY_BRANCH.
+REPO_BRANCH="${LGTV_EASY_BRANCH:-master}"
 APP_HOME="${LGTV_EASY_APP_HOME:-$HOME/.local/share/lgtv-companion-easy}"
 STATE_DIR="${LGTV_EASY_HOME:-$HOME/.config/lgtv-companion-easy}"
 LOG_FILE="$STATE_DIR/launcher.log"
 PID_FILE="$STATE_DIR/launcher.pid"
 UPDATE_EVERY_SECONDS="${LGTV_EASY_UPDATE_INTERVAL:-3600}"
-# EasyMode lives in a subdirectory of the repo.
+# The Python app lives in the EasyMode/ subdirectory of the repo; this launcher
+# lives at the repo root.
 SUBDIR="EasyMode"
+LAUNCHER_NAME="LGTV-Easy-Mode-UBUNTU.sh"
 
 mkdir -p "$STATE_DIR"
 
@@ -90,7 +93,7 @@ sync_repo() {
 #  - If we ARE the repo copy and git rewrote it underneath us, re-exec the new
 #    version (detected by comparing the start-time hash to the on-disk hash).
 maybe_self_update() {
-  local repo_launcher="$APP_HOME/$SUBDIR/launcher/launcher.sh"
+  local repo_launcher="$APP_HOME/$LAUNCHER_NAME"
   [ -f "$repo_launcher" ] || return 0
   local target; target="$(readlink -f "$repo_launcher")"
   if [ "$SELF_PATH" != "$target" ]; then

@@ -4,10 +4,11 @@
 > Try **[Easy Mode](EasyMode/README.md)** — a cross-platform (Windows **and**
 > Ubuntu), beginner-friendly companion with a 3-step setup wizard and a single
 > slider for *“turn the screen off after X minutes of inactivity.”*
-> Double-click `EasyMode/launcher/launcher.bat` (Windows) or run
-> `EasyMode/launcher/launcher.sh` (Linux) and you're done — it installs itself,
-> sets up, self-updates, and runs in the background. The full-featured Windows
-> application below remains available for power users.
+> The launchers are right here in the repository root:
+> **double-click `LGTV-Easy-Mode-WINDOWS.bat`** (Windows) or run
+> **`./LGTV-Easy-Mode-UBUNTU.sh`** (Linux) and you're done — it installs itself,
+> sets up, self-updates from the default branch, and runs in the background.
+> The full-featured Windows application below remains available for power users.
 
 ## Download and install instructions
 **The installer for the latest version can be downloaded from the [Releases](https://github.com/JPersson77/LGTVCompanion/releases) page. Alternatively you can use Winget via Windows Terminal/PowerShell to install: `winget install LGTVCompanion`**
