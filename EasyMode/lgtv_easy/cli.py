@@ -31,7 +31,7 @@ def _print(msg: str = "") -> None:
 def cmd_scan(args) -> int:
     from .discovery import discover
     _print("Scanning the network for LG TVs (a few seconds)...")
-    found = discover(timeout=args.timeout)
+    found = discover(timeout=args.timeout, log=_print)
     if not found:
         _print("No TVs found. You can still add one by IP with: lgtv-easy pair <ip>")
         return 1
@@ -48,11 +48,17 @@ def cmd_pair(args) -> int:
     def on_prompt():
         _print(">> Look at your TV and press OK / Accept on the pairing prompt.")
 
+    from .webos import pair_with_fallback
     try:
-        key = client.connect(client_key=cfg.device.key if cfg.device.ip == args.ip else "",
-                             on_prompt=on_prompt, prompt_timeout=args.timeout)
+        key = pair_with_fallback(
+            client,
+            client_key=cfg.device.key if cfg.device.ip == args.ip else "",
+            on_prompt=on_prompt, prompt_timeout=args.timeout, log=_print)
     except Exception as exc:  # noqa: BLE001
         _print(f"Pairing failed: {exc}")
+        from .netdiag import probe_tv
+        _print("--- Connection diagnostics ---")
+        probe_tv(args.ip, _print)
         return 1
     finally:
         client.close()
@@ -140,7 +146,19 @@ def cmd_run(args) -> int:
 
 def cmd_wizard(args) -> int:
     from .wizard_text import run_text_wizard
-    return run_text_wizard()
+    rc = run_text_wizard()
+    if rc != 0:
+        from .netdiag import env_summary
+        _print("")
+        _print("=" * 60)
+        _print("  Setup did not finish. If you need help, copy everything")
+        _print("  above plus these details into a bug report:")
+        _print("=" * 60)
+        for line in env_summary():
+            _print("  " + line)
+        _print(f"  Log file    : {log_path()}")
+        _print("=" * 60)
+    return rc
 
 
 def build_parser() -> argparse.ArgumentParser:

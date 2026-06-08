@@ -25,7 +25,8 @@ from .config import Config, Device
 from .daemon import Daemon
 from . import idle as idle_mod
 from .discovery import discover
-from .webos import WebOSClient
+from .netdiag import probe_tv
+from .webos import WebOSClient, pair_with_fallback
 
 PAD = 12
 
@@ -34,8 +35,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("LGTV Companion Easy Mode")
-        self.geometry("460x440")
-        self.minsize(440, 420)
+        self.geometry("480x560")
+        self.minsize(460, 520)
         try:
             self.tk.call("tk", "scaling", 1.2)
         except tk.TclError:
@@ -133,6 +134,27 @@ class SetupWizard(ttk.Frame):
         for c in self.winfo_children():
             c.destroy()
 
+    def _make_diag(self, height=6):
+        """A read-only, scrollable text area for diagnostics, plus a thread-safe
+        appender. Worker threads call the returned function via app.post()."""
+        frame = ttk.Frame(self)
+        frame.pack(fill="both", expand=True, pady=(6, 0))
+        text = tk.Text(frame, height=height, wrap="word", font=("Consolas", 9),
+                       state="disabled", background="#f4f4f4", relief="flat")
+        sb = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        text.pack(side="left", fill="both", expand=True)
+
+        def append(line):
+            text.configure(state="normal")
+            text.insert(tk.END, line + "\n")
+            text.see(tk.END)
+            text.configure(state="disabled")
+
+        # Thread-safe wrapper so worker threads can log into it.
+        return lambda line: self.app.post(lambda: append(line))
+
     # ----- step 1: find ------------------------------------------------
     def _build_step1(self):
         self._reset()
@@ -151,6 +173,9 @@ class SetupWizard(ttk.Frame):
         ttk.Label(row, text="  or type the IP: ").pack(side="left")
         ttk.Entry(row, textvariable=self.selected_ip, width=16).pack(side="left")
 
+        ttk.Label(self, text="Details:", style="Sub.TLabel").pack(anchor="w")
+        self.diag = self._make_diag(height=5)
+
         ttk.Button(self, text="Next  ▶", style="Big.TButton",
                    command=self._goto_pair).pack(side="bottom", anchor="e")
 
@@ -159,7 +184,7 @@ class SetupWizard(ttk.Frame):
         self.listbox.delete(0, tk.END)
 
         def worker():
-            results = discover()
+            results = discover(log=self.diag)
             self.app.post(lambda: self._scan_done(results))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -198,6 +223,9 @@ class SetupWizard(ttk.Frame):
         self.progress = ttk.Progressbar(self, mode="indeterminate")
         self.progress.pack(fill="x")
         self.progress.start(12)
+        ttk.Label(self, text="Details:", style="Sub.TLabel").pack(anchor="w",
+                                                                   pady=(PAD, 0))
+        self.diag = self._make_diag(height=6)
         nav = ttk.Frame(self)
         nav.pack(side="bottom", fill="x")
         ttk.Button(nav, text="◀  Back",
@@ -210,12 +238,14 @@ class SetupWizard(ttk.Frame):
         def worker():
             client = WebOSClient(ip)
             try:
-                key = client.connect(
+                key = pair_with_fallback(
+                    client,
                     client_key=self.client_key,
                     on_prompt=lambda: self.app.post(self._prompt_accept),
-                    prompt_timeout=120.0)
+                    prompt_timeout=120.0, log=self.diag)
                 self.app.post(lambda: self._pair_done(key))
             except Exception as exc:  # noqa: BLE001
+                probe_tv(ip, self.diag)
                 self.app.post(lambda e=exc: self._pair_failed(e))
             finally:
                 client.close()

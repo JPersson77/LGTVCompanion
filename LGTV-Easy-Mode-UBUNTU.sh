@@ -38,6 +38,20 @@ mkdir -p "$STATE_DIR"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [launcher] $*" | tee -a "$LOG_FILE" >&2; }
 
+# Keep the terminal open after a failure so the user can read and report the
+# diagnostics printed above (the window otherwise closes the instant we exit).
+pause_before_exit() {
+  if [ -t 0 ]; then
+    echo ""
+    echo "----------------------------------------------------------------------"
+    echo "  Setup did not finish. The diagnostics above (and the log file"
+    echo "  $LOG_FILE) can be shared to get help."
+    echo "  This window will stay open so nothing is lost."
+    echo "----------------------------------------------------------------------"
+    read -r -p "Press Enter to close this window... " _ || true
+  fi
+}
+
 # Hash of this script as it was when we started, so we can tell if a git update
 # rewrote it underneath us and re-execute the new version.
 SELF_PATH="$(readlink -f "$0" 2>/dev/null || echo "$0")"
@@ -181,8 +195,11 @@ main() {
   case "${1:-}" in
     --setup)
       log "Running setup wizard (forced)."
-      run_cli wizard
-      exit $?
+      if ! run_cli wizard; then
+        pause_before_exit
+        exit 1
+      fi
+      exit 0
       ;;
     --background)
       if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
@@ -192,6 +209,11 @@ main() {
       if needs_setup; then
         log "First run: launching setup wizard before backgrounding."
         run_cli wizard
+        if needs_setup; then
+          log "Setup not completed; not backgrounding."
+          pause_before_exit
+          exit 1
+        fi
       fi
       log "Detaching to background. Log: $LOG_FILE"
       setsid "$0" --supervise </dev/null >>"$LOG_FILE" 2>&1 &
@@ -203,7 +225,11 @@ main() {
     *)
       if needs_setup; then
         log "First run: launching setup wizard."
-        run_cli wizard || { log "Setup not completed."; exit 1; }
+        if ! run_cli wizard || needs_setup; then
+          log "Setup not completed."
+          pause_before_exit
+          exit 1
+        fi
       fi
       supervise "$@"
       ;;
