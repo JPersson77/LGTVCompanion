@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lgtv-companion-easy"
+version = "1.0.0"
+description = "Easy-mode companion that sleeps your LG WebOS TV after X minutes idle"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "LGTV Companion contributors" }]
+keywords = ["lg", "webos", "oled", "monitor", "burn-in", "idle", "screen-off"]
+# Intentionally zero runtime dependencies: everything uses the standard library
+# (tkinter, which ships with Python, is only needed for the optional GUI).
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+lgtv-easy = "lgtv_easy.cli:main"
+
+[project.gui-scripts]
+lgtv-easy-gui = "lgtv_easy.gui:main"
+
+[tool.setuptools]
+packages = ["lgtv_easy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

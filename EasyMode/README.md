@@ -1,0 +1,135 @@
+# LGTV Companion — Easy Mode
+
+**Make your LG OLED TV behave like a normal PC monitor: the screen turns off
+after a few minutes of inactivity and wakes the instant you touch the mouse or
+keyboard.**
+
+This is the *easy* front-end to LGTV Companion, built for one job and almost no
+configuration. If you use an LG B-/C-/G-series OLED as your monitor and just
+want it to sleep when you step away (to save power and prevent burn-in), this is
+for you.
+
+It is cross-platform (Windows **and** Ubuntu/Linux), has **zero third-party
+runtime dependencies** (pure Python standard library; the optional GUI uses
+`tkinter`, which ships with Python), and speaks the exact same WebOS protocol as
+the original LGTV Companion, so the two are compatible.
+
+---
+
+## The fastest way to use it
+
+### Windows
+1. Download this repository (or just the `EasyMode/launcher/launcher.bat` +
+   `launcher.ps1`).
+2. **Double-click `launcher.bat`.**
+
+That's it. The launcher installs Git and Python if needed, downloads the app,
+runs a 3-step setup wizard, and then keeps your TV sleeping in the background —
+restarting itself and pulling updates automatically.
+
+### Ubuntu / Linux
+```bash
+chmod +x EasyMode/launcher/launcher.sh
+./EasyMode/launcher/launcher.sh            # set up, then run in the foreground
+# or run it detached in the background:
+./EasyMode/launcher/launcher.sh --background
+```
+
+The first run opens the setup wizard (graphical if a desktop is available,
+otherwise a friendly text wizard). After that it just works.
+
+---
+
+## The setup wizard (3 steps)
+
+| Step | What you do |
+|------|-------------|
+| **1. Find your TV** | Click **Scan** (or type the IP). Your TV appears in a list. |
+| **2. Pair** | Press **OK** on the pairing prompt that pops up on the TV. |
+| **3. Timeout** | Drag the slider to choose how many minutes of inactivity before the screen sleeps. 7 minutes is a good default. |
+
+Then the everyday window is a single, Windows-style panel:
+
+- a big **“Turn the screen off when I’m away”** switch,
+- a **minutes** slider,
+- an optional **“mute the speakers when sleeping”** checkbox,
+- a **Test my TV** button, and a **Re-run setup** button.
+
+Screenshots of all three screens live in `docs/` of the project discussion.
+
+---
+
+## Using it from the command line
+
+Everything the GUI does is also available headless:
+
+```bash
+lgtv-easy scan                 # discover LG TVs on the network
+lgtv-easy pair 192.168.1.50    # pair with a TV by IP (accept on the TV)
+lgtv-easy set --minutes 7      # sleep after 7 minutes idle
+lgtv-easy set --enabled false  # temporarily disable
+lgtv-easy status               # show current settings + idle detection backend
+lgtv-easy test                 # blink the screen off/on to confirm it works
+lgtv-easy run                  # run the idle-monitoring daemon in the foreground
+lgtv-easy wizard               # interactive text setup wizard
+```
+
+(Without an installed console script, use `python3 -m lgtv_easy <command>`.)
+
+---
+
+## How it works
+
+- **Idle detection** uses the OS input timer: `GetLastInputInfo` on Windows;
+  `xprintidle` or the X ScreenSaver extension on Linux. `lgtv-easy status` shows
+  which backend is active.
+- When you cross the timeout, it sends the WebOS `turnOffScreen` command (an
+  OLED-friendly screen blank, not a full power-off). Any keypress/mouse move
+  resets the OS idle timer, and the daemon sends `turnOnScreen`.
+- If the panel dropped to standby, a Wake-on-LAN magic packet is sent first
+  (set the MAC with `lgtv-easy set --mac AA:BB:CC:DD:EE:FF`).
+
+## The self-updating launchers
+
+`launcher.sh` (Linux) and `launcher.ps1` / `launcher.bat` (Windows) are
+supervisors that:
+
+1. install dependencies,
+2. clone/update the app from GitHub — **including updating the launcher script
+   itself** (it re-executes the new version when a pull rewrites it),
+3. run setup on first use, and
+4. keep the idle daemon alive in the background, restarting it on crashes and
+   checking for updates hourly.
+
+All launcher and daemon activity is appended to a persistent log:
+
+- Linux: `~/.config/lgtv-companion-easy/launcher.log`
+- Windows: `%APPDATA%\LGTV Companion Easy Mode\launcher.log`
+
+Stop a background supervisor with `launcher.sh --stop` (or `launcher.ps1 -Stop`).
+
+## Files & settings
+
+- Config (JSON): `~/.config/lgtv-companion-easy/config.json` (Linux) or
+  `%APPDATA%\LGTV Companion Easy Mode\config.json` (Windows).
+- Daemon log: `easy-mode.log` in the same folder.
+
+## Development & tests
+
+```bash
+cd EasyMode
+python3 -m pytest                 # unit + integration tests (no TV needed)
+python3 tests/simulate_session.py # live end-to-end simulation against a mock TV
+xvfb-run python3 tests/gui_smoke.py   # headless GUI smoke test
+```
+
+The tests include a built-in **mock WebOS TV** (`lgtv_easy/mock_tv.py`) so the
+whole flow — discovery, pairing, idle-sleep, wake — is verified without any real
+hardware.
+
+## Compatibility with the original app
+
+This shares the WebOS protocol, ports and pairing manifest with the original
+Windows C++ LGTV Companion. You can run either; they store their settings
+separately. Easy Mode focuses on the single most-requested monitor use case
+(sleep when idle) with a tiny, approachable interface.

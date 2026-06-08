@@ -1,0 +1,13 @@
+# Python build / cache artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg-link
+build/
+dist/
+.pytest_cache/
+.eggs/
+
+# Local runtime state (config/logs live in the user config dir, but ignore any
+# that get created inside the tree during testing)
+*.log
