@@ -55,6 +55,18 @@ function Log($msg) {
 
 function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 
+# Keep the window open after a failure so the user can read and report the
+# diagnostics printed above (it otherwise closes the instant we exit).
+function Pause-BeforeExit {
+    Write-Host ""
+    Write-Host "----------------------------------------------------------------------"
+    Write-Host "  Setup did not finish. The diagnostics above (and the log file"
+    Write-Host "  $LogFile) can be shared to get help."
+    Write-Host "  This window will stay open so nothing is lost."
+    Write-Host "----------------------------------------------------------------------"
+    try { Read-Host "Press Enter to close this window" | Out-Null } catch {}
+}
+
 # ---- dependency installation ------------------------------------------------
 function Install-Deps {
     if (-not (Have "winget")) {
@@ -187,6 +199,7 @@ Maybe-SelfUpdate
 if ($Setup) {
     Log "Running setup wizard (forced)."
     Run-Cli @("wizard")
+    if (Needs-Setup) { Pause-BeforeExit; exit 1 }
     exit 0
 }
 
@@ -199,7 +212,11 @@ if ($Background) {
             Log "Already running in background (pid $oldPid)."; exit 0
         }
     }
-    if (Needs-Setup) { Log "First run: setup wizard."; Run-Cli @("wizard") }
+    if (Needs-Setup) {
+        Log "First run: setup wizard."
+        Run-Cli @("wizard")
+        if (Needs-Setup) { Log "Setup not completed; not backgrounding."; Pause-BeforeExit; exit 1 }
+    }
     Log "Detaching to background. Log: $LogFile"
     $repoSelf = Join-Path $AppHome $LauncherName
     $useSelf = if (Test-Path $repoSelf) { $repoSelf } else { $PSCommandPath }
@@ -212,6 +229,6 @@ if ($Background) {
 if (Needs-Setup) {
     Log "First run: launching setup wizard."
     Run-Cli @("wizard")
-    if (Needs-Setup) { Log "Setup not completed."; exit 1 }
+    if (Needs-Setup) { Log "Setup not completed."; Pause-BeforeExit; exit 1 }
 }
 Start-Supervisor

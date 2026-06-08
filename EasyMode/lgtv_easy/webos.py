@@ -67,6 +67,37 @@ class PairingError(Exception):
     pass
 
 
+def pair_with_fallback(client: "WebOSClient", client_key: str = "",
+                       on_prompt=None, prompt_timeout: float = 120.0,
+                       log=None) -> str:
+    """Pair, automatically falling back from plain ws (3000) to secure wss (3001).
+
+    Older WebOS TVs accept the plain WebSocket on port 3000; many newer ones only
+    answer the TLS WebSocket on port 3001. Beginners can't be expected to know
+    which, so we try both and report each attempt. The supplied ``client`` is
+    reused (its ``secure`` flag is toggled), which keeps it testable with a mock.
+
+    Returns the client-key on success; raises the last error if both fail.
+    """
+    out = log or (lambda _m: None)
+    last_exc: Optional[Exception] = None
+    for secure, label in ((False, "plain ws (port 3000)"),
+                          (True, "secure wss (port 3001)")):
+        client.secure = secure
+        out(f"Attempting {label}...")
+        try:
+            return client.connect(client_key=client_key, on_prompt=on_prompt,
+                                  prompt_timeout=prompt_timeout, log=out)
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            out(f"{label} did not work: {exc}")
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
+    raise last_exc if last_exc else PairingError("pairing failed")
+
+
 class WebOSClient:
     """Synchronous WebOS client.
 
@@ -102,14 +133,21 @@ class WebOSClient:
         return f"{scheme}://{self.ip}:{port}/"
 
     def connect(self, client_key: str = "", on_prompt=None,
-                prompt_timeout: float = 60.0) -> str:
+                prompt_timeout: float = 60.0, log=None) -> str:
         """Open the socket and register. Returns the (possibly new) client key.
 
         If the TV has not paired before it shows an on-screen prompt; ``on_prompt``
         (if given) is called once so the UI can tell the user to press OK on the
         remote. Blocks up to ``prompt_timeout`` seconds waiting for acceptance.
+
+        ``log`` (optional) receives stage-by-stage progress lines so the wizard
+        can show beginners exactly where a connection got stuck.
         """
-        self._ws = WebSocket.connect(self._url(), timeout=self.timeout)
+        out = log or (lambda _m: None)
+        url = self._url()
+        out(f"Opening WebSocket to {url} (connect timeout {self.timeout:.0f}s)...")
+        self._ws = WebSocket.connect(url, timeout=self.timeout)
+        out("Connected. Sending pairing/registration request to the TV...")
         self._ws.send_text(json.dumps(_register_payload(client_key)))
         # Pairing can take a while because the user must press OK on the remote.
         self._ws.sock.settimeout(prompt_timeout)
@@ -124,12 +162,15 @@ class WebOSClient:
                 key = msg.get("payload", {}).get("client-key", client_key)
                 self.client_key = key or client_key
                 self._ws.sock.settimeout(self.timeout)
+                out("TV accepted the registration. Paired.")
                 return self.client_key
             if mtype == "response" and msg.get("payload", {}).get(
                 "pairingType"
             ) == "PROMPT":
                 if on_prompt and not prompted:
                     prompted = True
+                    out(f"TV is showing a pairing prompt; waiting up to "
+                        f"{prompt_timeout:.0f}s for you to press Accept...")
                     on_prompt()
                 continue
             if mtype == "error":
