@@ -336,8 +336,9 @@ std::string ProcessCommand(std::vector<std::string>& words)
 	{
 		std::vector<std::string> devices = _Devices(words, 1);
 		std::vector<std::string> newCmdLine;
-		newCmdLine.push_back("-button");
-		newCmdLine.push_back("IN_START");
+		newCmdLine.push_back("-start_app_with_param");
+		newCmdLine.push_back("com.webos.app.factorywin");
+		newCmdLine.push_back("{\"irKey\":\"inStart\"}");
 		newCmdLine.insert(std::end(newCmdLine), std::begin(devices), std::end(devices));
 		return ProcessCommand(newCmdLine);
 	}

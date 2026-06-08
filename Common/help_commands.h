@@ -41,7 +41,7 @@ Commands are case-insensitive, but JSON typically is case-sensitive.
 -screenOn                                       unblank the screen (and power on if device is off)
 
 ## Button commands ##
--button [button]                                virtual remote button press
+-button [button]                                virtual remote button press (deprecated due to LG's firmware changes)
 -freesyncinfo                                   show freesync info panel with FPS (the 7 x tap on green button)
 
 ## Get system, picture or audio settings ##

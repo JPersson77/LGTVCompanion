@@ -1045,7 +1045,7 @@ void Companion::Impl::ipcCallback(std::wstring message, bool recursive)
 		else if (command == "servicemenu")									// SHOW SERVICE MENU
 		{
 			std::vector<std::string> devices = grabDevices(words, 1);
-			std::string cmd_line_service_menu = "-button IN_START";
+			std::string cmd_line_service_menu = "-start_app_with_param com.webos.app.factorywin \"{\\\"irKey\\\": \\\"inStart\\\"}\"";
 			for (auto& dev : devices)
 			{
 				cmd_line_service_menu += " ";
