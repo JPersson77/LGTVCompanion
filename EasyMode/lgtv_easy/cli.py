@@ -184,7 +184,9 @@ def cmd_run(args) -> int:
     if not lock.acquire(wait=wait):
         _print("Another Easy Mode watcher is already running; nothing to do.")
         return 0
-    daemon = Daemon(cfg)
+    # Show the daemon's activity live in this window (screen off/on, errors).
+    from .applog import get_logger
+    daemon = Daemon(cfg, logger=get_logger(to_console=True))
     _print(f"Idle daemon running. Screen sleeps after {cfg.idle_minutes} min. "
            "Press Ctrl+C to stop.")
     try:
