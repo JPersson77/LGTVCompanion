@@ -204,6 +204,9 @@ function Needs-Setup {
 function Start-Supervisor {
     Set-Content -Path $PidFile -Value $PID
     Log "Supervisor started (pid $PID). Daemon errors are logged here."
+    # If another watcher (e.g. the login auto-start) already holds the lock, our
+    # daemon child should wait for it rather than spin-restart.
+    $env:LGTV_EASY_WAIT_LOCK = "1"
     $lastUpdate = Get-Date
     try {
         while ($true) {
@@ -278,27 +281,29 @@ if ($Setup) {
 if ($Supervise) { Start-Supervisor; exit 0 }
 
 if ($Background) {
+    # A manual launch is a little control panel: open the setup/settings wizard
+    # (quick when already set up - it just asks what to change), then make sure
+    # the background watcher is running.
+    Log "Opening setup/settings wizard."
+    Run-Cli @("wizard")
+    if (Needs-Setup) { Log "Setup not completed."; Pause-BeforeExit; exit 1 }
+
     if (Test-Path $PidFile) {
         $oldPid = Get-Content $PidFile
         if (Get-Process -Id $oldPid -ErrorAction SilentlyContinue) {
-            Log "Already running in background (pid $oldPid)."
-            Pause-Info @("Easy Mode is already running in the background (pid $oldPid).",
+            Log "Watcher already running (pid $oldPid)."
+            Pause-Info @("Settings saved. Easy Mode is already running in the background (pid $oldPid).",
                          "Your LG TV will blank/sleep when the PC is idle.",
                          "To stop it: run this launcher again with  -Stop")
             exit 0
         }
     }
-    if (Needs-Setup) {
-        Log "First run: setup wizard."
-        Run-Cli @("wizard")
-        if (Needs-Setup) { Log "Setup not completed; not backgrounding."; Pause-BeforeExit; exit 1 }
-    }
-    Log "Detaching to background. Log: $LogFile"
+    Log "Detaching watcher to background. Log: $LogFile"
     $repoSelf = Join-Path $AppHome $LauncherName
     $useSelf = if (Test-Path $repoSelf) { $repoSelf } else { $PSCommandPath }
     Start-Process -FilePath "powershell.exe" -WindowStyle Hidden `
         -ArgumentList @("-ExecutionPolicy","Bypass","-File",$useSelf,"-Supervise")
-    Pause-Info @("Easy Mode is now running in the background.",
+    Pause-Info @("Settings saved. Easy Mode is now running in the background.",
                  "Your LG TV will blank/sleep when the PC is idle, and wake when you",
                  "move the mouse or press a key.",
                  "Closing this window does NOT stop it. To stop: run with  -Stop")

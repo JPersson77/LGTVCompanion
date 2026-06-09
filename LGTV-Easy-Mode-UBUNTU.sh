@@ -141,6 +141,9 @@ supervise() {
   echo $$ > "$PID_FILE"
   trap 'log "Supervisor stopping."; rm -f "$PID_FILE"; exit 0' INT TERM
   log "Supervisor started (pid $$). Daemon errors are logged here."
+  # If another watcher (e.g. the login auto-start) already holds the lock, our
+  # daemon child should wait for it rather than spin-restart.
+  export LGTV_EASY_WAIT_LOCK=1
   local last_update; last_update=$(date +%s)
 
   while true; do
@@ -223,13 +226,13 @@ main() {
       supervise "$@"
       ;;
     *)
-      if needs_setup; then
-        log "First run: launching setup wizard."
-        if ! run_cli wizard || needs_setup; then
-          log "Setup not completed."
-          pause_before_exit
-          exit 1
-        fi
+      # A manual run is a control panel: open the setup/settings wizard (quick
+      # when already set up), then run the watcher in the foreground.
+      log "Opening setup/settings wizard."
+      if ! run_cli wizard || needs_setup; then
+        log "Setup not completed."
+        pause_before_exit
+        exit 1
       fi
       supervise "$@"
       ;;

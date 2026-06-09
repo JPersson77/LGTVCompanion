@@ -21,6 +21,7 @@ from tkinter import messagebox, ttk
 from typing import Optional
 
 from . import __version__
+from . import autostart as autostart_mod
 from .config import Config, Device
 from .daemon import Daemon
 from . import idle as idle_mod
@@ -320,6 +321,7 @@ class SettingsPanel(ttk.Frame):
         self.mute = tk.BooleanVar(value=cfg.mute_on_sleep)
         self.deep = tk.BooleanVar(value=cfg.deep_off_enabled)
         self.deep_minutes = tk.DoubleVar(value=cfg.deep_off_minutes)
+        self.autostart = tk.BooleanVar(value=autostart_mod.is_enabled())
         self._build()
 
     def _build(self):
@@ -363,6 +365,10 @@ class SettingsPanel(ttk.Frame):
         spin.bind("<Return>", lambda e: self._apply())
         spin.bind("<FocusOut>", lambda e: self._apply())
 
+        ttk.Checkbutton(self, text="Start automatically when I log in",
+                        variable=self.autostart,
+                        command=self._apply_autostart).pack(anchor="w")
+
         self.status = ttk.Label(self, text="", style="Sub.TLabel",
                                 wraplength=410)
         self.status.pack(anchor="w", pady=(PAD, 0))
@@ -396,6 +402,10 @@ class SettingsPanel(ttk.Frame):
             pass
         cfg.save()
         self.app.start_daemon()
+        self._refresh_status()
+
+    def _apply_autostart(self):
+        autostart_mod.set_enabled(self.autostart.get())
         self._refresh_status()
 
     def _refresh_status(self):

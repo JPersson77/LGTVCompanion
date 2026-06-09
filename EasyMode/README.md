@@ -82,7 +82,9 @@ lgtv-easy set --deep-off true --deep-off-minutes 30   # full power-off after 30 
 lgtv-easy status               # show current settings + idle detection backend
 lgtv-easy test                 # blink the screen off/on to confirm it works
 lgtv-easy run                  # run the idle-monitoring daemon in the foreground
-lgtv-easy wizard               # interactive text setup wizard
+lgtv-easy wizard               # interactive setup / settings wizard
+lgtv-easy autostart enable     # start the watcher automatically at login
+lgtv-easy autostart disable    # stop starting it at login
 ```
 
 (Without an installed console script, use `python3 -m lgtv_easy <command>`.)
@@ -106,6 +108,12 @@ lgtv-easy wizard               # interactive text setup wizard
   TV’s “Turn on via Wi-Fi” / “Quick Start+” setting. The TV’s MAC is detected
   automatically at pairing (from the ARP table); set it manually if needed with
   `lgtv-easy set --mac AA:BB:CC:DD:EE:FF`.
+- **Start at login** (the wizard asks, or `lgtv-easy autostart enable`) registers
+  a per-user entry - a Startup-folder shortcut on Windows (run with `pythonw`, no
+  console window), a `~/.config/autostart` desktop entry on Linux - that launches
+  the watcher quietly each time you log in.
+- **Only one watcher runs at a time.** A pidfile lock means the login auto-start,
+  the supervising launcher, and a manual `run` never fight over the TV.
 
 ## The self-updating launchers
 

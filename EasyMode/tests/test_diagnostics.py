@@ -4,7 +4,7 @@ These cover the user-reported scenario: the TV can't be found/reached, and we
 need the wizard to explain why (instead of silently failing and the window
 closing) and let the user try again.
 """
-from lgtv_easy.config import Config
+from lgtv_easy.config import Config, Device
 from lgtv_easy.discovery import Discovered
 from lgtv_easy.mock_tv import MockTV
 from lgtv_easy.netdiag import (env_summary, mac_for_ip, same_subnet_guess,
@@ -52,6 +52,7 @@ def test_pair_with_fallback_succeeds_on_first_attempt():
 
 def test_wizard_emits_diagnostics_then_retries_to_success(tmp_path, monkeypatch):
     monkeypatch.setenv("LGTV_EASY_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with MockTV(require_pairing=True) as tv:
         answers = iter([
             "n",              # don't scan
@@ -64,6 +65,7 @@ def test_wizard_emits_diagnostics_then_retries_to_success(tmp_path, monkeypatch)
             "7",              # screen-off minutes
             "",               # energy: don't mute
             "",               # energy: don't fully power off
+            "n",              # don't start at login
         ])
         transcript = []
 
@@ -96,9 +98,10 @@ def test_mac_for_ip_is_graceful_on_loopback():
 
 def test_wizard_saves_energy_options(tmp_path, monkeypatch):
     monkeypatch.setenv("LGTV_EASY_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with MockTV(require_pairing=True) as tv:
-        # n scan, IP, name, 3-min screen off, mute=y, deep=y, deep=20 min
-        answers = iter(["n", "127.0.0.1", "TV", "3", "y", "y", "20"])
+        # n scan, IP, name, 3-min screen off, mute=y, deep=y, deep=20 min, autostart=n
+        answers = iter(["n", "127.0.0.1", "TV", "3", "y", "y", "20", "n"])
 
         def cf(ip):
             c = WebOSClient(ip)
@@ -114,6 +117,31 @@ def test_wizard_saves_energy_options(tmp_path, monkeypatch):
         assert saved.mute_on_sleep is True
         assert saved.deep_off_enabled is True
         assert saved.deep_off_minutes == 20
+
+
+def test_wizard_settings_mode_skips_pairing(tmp_path, monkeypatch):
+    """An already-paired config can change settings without re-pairing."""
+    monkeypatch.setenv("LGTV_EASY_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = Config()
+    cfg.setup_complete = True
+    cfg.device = Device(name="Lounge", ip="192.0.2.7", key="KEY", mac="")
+
+    # keep TV? y; 9 min; mute n; deep n; autostart n
+    answers = iter(["y", "9", "n", "n", "n"])
+    transcript = []
+
+    def boom(ip):  # pairing must NOT be attempted in settings mode
+        raise AssertionError("settings mode should not pair")
+
+    rc = run_text_wizard(input_fn=lambda p: next(answers),
+                         output_fn=transcript.append, client_factory=boom,
+                         config=cfg)
+    assert rc == 0
+    saved = Config.load()
+    assert saved.device.ip == "192.0.2.7"  # unchanged
+    assert saved.idle_minutes == 9
+    assert "Already set up" in "\n".join(transcript)
 
 
 def test_wizard_cancels_cleanly_when_user_declines_retry(tmp_path, monkeypatch):

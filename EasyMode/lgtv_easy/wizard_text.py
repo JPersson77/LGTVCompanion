@@ -15,15 +15,23 @@ from __future__ import annotations
 
 from typing import Callable, List, Optional, Tuple
 
+from . import autostart as autostart_mod
 from .config import Config, Device
 from .discovery import Discovered, discover
 from .netdiag import env_summary, mac_for_ip, probe_tv
 from .webos import WebOSClient, pair_with_fallback
 
 
+def _yes(value: str, default_yes: bool = False) -> bool:
+    v = value.strip().lower()
+    if v == "":
+        return default_yes
+    return v in ("y", "yes")
+
+
 def _choose_tv(input_fn, out, discover_fn) -> Tuple[str, str]:
     """Step 1: let the user pick a discovered TV or type an IP. Returns (ip, name)."""
-    out("Step 1 of 4: Find your TV")
+    out("Step 1: Find your TV")
     out("Make sure the TV is on and connected to the same network.")
     name = "My LG TV"
     answer = input_fn("Scan the network automatically? [Y/n]: ").strip().lower()
@@ -70,6 +78,16 @@ def run_text_wizard(
         out("  " + line)
     out("")
 
+    # Settings mode: if a TV is already paired, don't make the user re-pair just
+    # to change a timeout or toggle auto-start - offer to keep it and skip ahead.
+    if cfg.setup_complete and cfg.device.paired:
+        out(f"Already set up: {cfg.device.name} at {cfg.device.ip}.")
+        if _yes(input_fn("Keep this TV and just change settings? [Y/n]: "),
+                default_yes=True):
+            return _finish(cfg, cfg.device.ip, cfg.device.name, cfg.device.key,
+                           cfg.device.mac, input_fn, out)
+        out("")
+
     key = ""
     ip = ""
     name = "My LG TV"
@@ -83,7 +101,7 @@ def run_text_wizard(
             return 1
 
         out("")
-        out("Step 2 of 4: Pair with the TV")
+        out("Step 2: Pair with the TV")
         out(f"Connecting to {ip} ...")
         client = client_factory(ip)
 
@@ -125,9 +143,18 @@ def run_text_wizard(
             mac = detected
             out(f"Found the TV's hardware address ({mac}) for Wake-on-LAN.")
 
+    return _finish(cfg, ip, name, key, mac, input_fn, out)
+
+
+def _finish(cfg, ip, name, key, mac, input_fn, out) -> int:
+    """Steps 3-5 (timeout, energy, start-at-login), then save and summarise.
+
+    Shared by first-time setup and the "just change settings" path, so both flows
+    expose exactly the same options.
+    """
     # --- Step 3: screen-off timeout -----------------------------------
     out("")
-    out("Step 3 of 4: Screen-off timeout")
+    out("Step 3: Screen-off timeout")
     raw = input_fn(
         f"Blank the screen after how many minutes idle? "
         f"(type a number, or press Enter to keep {cfg.idle_minutes:g}): "
@@ -141,14 +168,11 @@ def run_text_wizard(
 
     # --- Step 4: energy saving (optional) -----------------------------
     out("")
-    out("Step 4 of 4: Energy saving (optional - press Enter to skip each)")
-    mute = input_fn(
-        "Mute the TV speakers while the screen is off? [y/N]: "
-    ).strip().lower() in ("y", "yes")
-    deep = input_fn(
+    out("Step 4: Energy saving (optional - press Enter to skip each)")
+    mute = _yes(input_fn("Mute the TV speakers while the screen is off? [y/N]: "))
+    deep = _yes(input_fn(
         "For the LOWEST power use, fully switch the TV off after a longer idle? "
-        "[y/N]: "
-    ).strip().lower() in ("y", "yes")
+        "[y/N]: "))
     deep_minutes = cfg.deep_off_minutes
     if deep:
         out("  Note: this uses Wake-on-LAN to switch the TV back on, so enable")
@@ -163,6 +187,13 @@ def run_text_wizard(
                 deep_minutes = max(minutes + 0.5, float(raw2))
             except ValueError:
                 pass
+
+    # --- Step 5: start at login ---------------------------------------
+    out("")
+    out("Step 5: Start automatically")
+    auto = _yes(input_fn(
+        "Start Easy Mode automatically when you log in? [Y/n]: "), default_yes=True)
+    auto_msg = autostart_mod.set_enabled(auto)
 
     cfg.device = Device(name=name, ip=ip, mac=mac, key=key)
     cfg.idle_minutes = minutes
@@ -184,6 +215,7 @@ def run_text_wizard(
         out("  waking on a key press or mouse move.")
     else:
         out("  and wake the moment you move the mouse or press a key.")
+    out(f"  {auto_msg[0].upper()}{auto_msg[1:]}.")
     out("")
     out("  Start it now with:  lgtv-easy run")
     out("  (the launcher does this automatically in the background)")
