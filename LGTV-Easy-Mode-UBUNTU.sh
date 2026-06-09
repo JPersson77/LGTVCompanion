@@ -29,6 +29,9 @@ STATE_DIR="${LGTV_EASY_HOME:-$HOME/.config/lgtv-companion-easy}"
 LOG_FILE="$STATE_DIR/launcher.log"
 PID_FILE="$STATE_DIR/launcher.pid"
 UPDATE_EVERY_SECONDS="${LGTV_EASY_UPDATE_INTERVAL:-3600}"
+# Set LGTV_EASY_NO_UPDATE=1 to freeze the code: no git fetch/clone, no
+# self-update, no periodic pulls. Run only the code already on disk.
+NO_UPDATE="${LGTV_EASY_NO_UPDATE:-0}"
 # The Python app lives in the EasyMode/ subdirectory of the repo; this launcher
 # lives at the repo root.
 SUBDIR="EasyMode"
@@ -156,7 +159,7 @@ supervise() {
     while kill -0 "$daemon_pid" 2>/dev/null; do
       sleep 15
       local now; now=$(date +%s)
-      if [ $(( now - last_update )) -ge "$UPDATE_EVERY_SECONDS" ]; then
+      if [ "$NO_UPDATE" != "1" ] && [ $(( now - last_update )) -ge "$UPDATE_EVERY_SECONDS" ]; then
         last_update=$now
         log "Periodic update check."
         if sync_repo; then
@@ -192,8 +195,12 @@ main() {
   esac
 
   install_deps
-  sync_repo || log "Continuing with existing copy."
-  maybe_self_update "$@"
+  if [ "$NO_UPDATE" = "1" ]; then
+    log "Auto-update disabled (LGTV_EASY_NO_UPDATE=1); using the on-disk copy."
+  else
+    sync_repo || log "Continuing with existing copy."
+    maybe_self_update "$@"
+  fi
 
   case "${1:-}" in
     --setup)

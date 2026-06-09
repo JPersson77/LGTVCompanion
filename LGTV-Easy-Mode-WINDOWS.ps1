@@ -33,6 +33,9 @@ $RepoBranch = if ($env:LGTV_EASY_BRANCH) { $env:LGTV_EASY_BRANCH } else { "maste
 $AppHome    = if ($env:LGTV_EASY_APP_HOME) { $env:LGTV_EASY_APP_HOME } else { Join-Path $env:LOCALAPPDATA "lgtv-companion-easy\app" }
 $StateDir   = if ($env:LGTV_EASY_HOME) { $env:LGTV_EASY_HOME } else { Join-Path $env:APPDATA "LGTV Companion Easy Mode" }
 $UpdateEvery = if ($env:LGTV_EASY_UPDATE_INTERVAL) { [int]$env:LGTV_EASY_UPDATE_INTERVAL } else { 3600 }
+# Set LGTV_EASY_NO_UPDATE=1 to freeze the code: no git fetch/clone, no
+# self-update, no periodic pulls. Run only the code already on disk.
+$NoUpdate = ($env:LGTV_EASY_NO_UPDATE -eq "1")
 # The Python app lives in EasyMode/; this launcher lives at the repo root.
 $SubDir = "EasyMode"
 $LauncherName = "LGTV-Easy-Mode-WINDOWS.ps1"
@@ -216,7 +219,7 @@ function Start-Supervisor {
                 -RedirectStandardError $LogFile -RedirectStandardOutput $LogFile
             while (-not $proc.HasExited) {
                 Start-Sleep -Seconds 15
-                if (((Get-Date) - $lastUpdate).TotalSeconds -ge $UpdateEvery) {
+                if (-not $NoUpdate -and ((Get-Date) - $lastUpdate).TotalSeconds -ge $UpdateEvery) {
                     $lastUpdate = Get-Date
                     Log "Periodic update check."
                     if (Sync-Repo) {
@@ -268,8 +271,12 @@ trap {
 Install-Deps
 Log-Diagnostics
 Require-Python
-Sync-Repo | Out-Null
-Maybe-SelfUpdate
+if ($NoUpdate) {
+    Log "Auto-update disabled (LGTV_EASY_NO_UPDATE=1); using the on-disk copy."
+} else {
+    Sync-Repo | Out-Null
+    Maybe-SelfUpdate
+}
 
 if ($Setup) {
     Log "Running setup wizard (forced)."
