@@ -138,6 +138,30 @@ All launcher and daemon activity is appended to a persistent log:
 Stop a background supervisor with `./LGTV-Easy-Mode-UBUNTU.sh --stop`
 (or `LGTV-Easy-Mode-WINDOWS.ps1 -Stop`).
 
+### Security note on auto-update
+
+The launchers pull the latest code from GitHub over HTTPS and run it, and the
+supervisor repeats this hourly. That means **whoever controls the source repo can
+run code on your machine** (at your user privilege) the next time it updates —
+the normal trade-off of any self-updater. GitHub's HTTPS protects the download in
+transit, but there is no separate signature check, so the trust is in the repo
+and its owning account.
+
+If you'd rather pin to the code you've already reviewed, freeze updates:
+
+```bash
+# Linux
+LGTV_EASY_NO_UPDATE=1 ./LGTV-Easy-Mode-UBUNTU.sh
+```
+```powershell
+# Windows (set once for your user, then launch normally)
+setx LGTV_EASY_NO_UPDATE 1
+```
+
+With it set, the launcher never fetches, self-updates, or pulls on a timer — it
+runs only the code already on disk. You can also point updates at a specific fork
+with `LGTV_EASY_REPO` / `LGTV_EASY_BRANCH`.
+
 ## Files & settings
 
 - Config (JSON): `~/.config/lgtv-companion-easy/config.json` (Linux) or

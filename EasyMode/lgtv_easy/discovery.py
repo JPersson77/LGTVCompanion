@@ -18,6 +18,7 @@ import socket
 import threading
 from dataclasses import dataclass
 from typing import Callable, List, Optional
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from .netdiag import local_ipv4s
@@ -87,12 +88,29 @@ def _search_on(src_ip: Optional[str], targets: List[str],
         sock.close()
 
 
-def _friendly_name(location: str, timeout: float = 2.0) -> Optional[str]:
+def _friendly_name(location: str, expected_ip: Optional[str] = None,
+                   timeout: float = 2.0) -> Optional[str]:
+    """Fetch a device's friendly name from its description URL.
+
+    The URL comes from an SSDP ``LOCATION`` header, i.e. untrusted data from
+    whatever answered on the LAN. To avoid being turned into a request forgery
+    (e.g. ``file://`` reads or probing internal services), only plain http(s) is
+    followed, only to the host that actually responded, and the response is size
+    capped.
+    """
     if not location:
         return None
     try:
-        with urlopen(location, timeout=timeout) as resp:
-            xml = resp.read().decode("utf-8", "replace")
+        parsed = urlparse(location)
+    except ValueError:
+        return None
+    if parsed.scheme not in ("http", "https"):
+        return None
+    if expected_ip and parsed.hostname != expected_ip:
+        return None
+    try:
+        with urlopen(location, timeout=timeout) as resp:  # noqa: S310 - scheme checked
+            xml = resp.read(65536).decode("utf-8", "replace")
     except Exception:
         return None
     match = re.search(r"<friendlyName>(.*?)</friendlyName>", xml, re.IGNORECASE)
@@ -152,7 +170,7 @@ def discover(timeout: float = 3.0,
 
     results = []
     for entry in seen.values():
-        name = _friendly_name(entry.location)
+        name = _friendly_name(entry.location, expected_ip=entry.ip)
         if name:
             entry.name = name
         results.append(entry)

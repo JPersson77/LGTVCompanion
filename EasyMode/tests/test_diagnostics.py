@@ -96,6 +96,15 @@ def test_mac_for_ip_is_graceful_on_loopback():
     assert mac_for_ip("127.0.0.1") == ""
 
 
+def test_friendly_name_rejects_non_http_and_foreign_hosts():
+    from lgtv_easy.discovery import _friendly_name
+    # file:// and other schemes must never be fetched (SSRF / local file read).
+    assert _friendly_name("file:///etc/passwd") is None
+    assert _friendly_name("ftp://192.0.2.10/x") is None
+    # An http URL whose host isn't the device that answered is refused.
+    assert _friendly_name("http://10.0.0.1/desc.xml", expected_ip="192.0.2.10") is None
+
+
 def test_wizard_saves_energy_options(tmp_path, monkeypatch):
     monkeypatch.setenv("LGTV_EASY_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
