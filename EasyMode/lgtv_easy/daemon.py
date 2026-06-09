@@ -66,10 +66,19 @@ class Daemon:
             pair_with_fallback(client, client_key=self.config.device.key,
                                on_prompt=None, prompt_timeout=client.timeout,
                                prefer_secure=self.config.device.secure)
-            # Remember (and persist) the port that actually worked, so later
-            # reconnects and restarts go straight to it.
+            # Remember (and persist) what we learned about the TV: the port that
+            # worked, and its MAC (asked straight from the TV) for Wake-on-LAN.
+            changed = False
             if client.secure != self.config.device.secure:
                 self.config.device.secure = client.secure
+                changed = True
+            if not self.config.device.mac:
+                mac = client.get_mac()
+                if mac:
+                    self.config.device.mac = mac
+                    changed = True
+                    self.logger.info("Detected TV MAC for Wake-on-LAN: %s", mac)
+            if changed:
                 try:
                     self.config.save()
                 except Exception:  # noqa: BLE001 - persistence is best-effort

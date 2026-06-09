@@ -19,6 +19,17 @@ URI_POWER_OFF = "ssap://system/turnOff"
 URI_GET_POWER_STATE = "ssap://com.webos.service.tvpower/power/getPowerState"
 URI_SET_MUTE = "ssap://audio/setMute"
 URI_CREATE_TOAST = "ssap://system.notifications/createToast"
+URI_GET_NETWORK_STATUS = "ssap://com.webos.service.connectionmanager/getStatus"
+URI_GET_SW_INFO = "ssap://com.webos.service.update/getCurrentSWInformation"
+
+
+def _normalize_mac(mac: str) -> str:
+    """Return a MAC as AA:BB:CC:DD:EE:FF, or '' if it isn't a valid one."""
+    from .wol import normalize_mac
+    try:
+        return ":".join(f"{b:02X}" for b in normalize_mac(mac))
+    except ValueError:
+        return ""
 
 # Registration manifest. The permission set matches what the C++ client asks for.
 _MANIFEST = {
@@ -225,6 +236,37 @@ class WebOSClient:
 
     def toast(self, message: str) -> Optional[dict]:
         return self.request(URI_CREATE_TOAST, {"message": message})
+
+    def get_mac(self) -> str:
+        """Ask the TV for its own MAC address (for Wake-on-LAN).
+
+        Reads it straight from the TV over the open connection, which is far more
+        reliable than parsing the OS ARP table. Prefers the interface that holds
+        the IP we're talking to (usually Wi-Fi). Returns '' if unavailable.
+        """
+        host = self.ip.rpartition(":")[0] if ":" in self.ip else self.ip
+        try:
+            payload = (self.request(URI_GET_NETWORK_STATUS) or {}).get("payload", {})
+            candidates = []
+            for key in ("wifi", "wired"):
+                info = payload.get(key) or {}
+                mac = info.get("macAddress") or info.get("macaddress") or ""
+                ip = info.get("ipAddress") or info.get("ipaddress") or ""
+                if mac:
+                    candidates.append((ip, _normalize_mac(mac)))
+            for ip, mac in candidates:
+                if mac and host and ip == host:
+                    return mac
+            for _ip, mac in candidates:
+                if mac:
+                    return mac
+        except Exception:  # noqa: BLE001 - fall through to the other source
+            pass
+        try:
+            payload = (self.request(URI_GET_SW_INFO) or {}).get("payload", {})
+            return _normalize_mac(payload.get("device_id", ""))
+        except Exception:  # noqa: BLE001
+            return ""
 
     def close(self) -> None:
         if self._ws is not None:

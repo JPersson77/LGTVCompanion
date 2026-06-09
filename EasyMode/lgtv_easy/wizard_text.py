@@ -109,12 +109,18 @@ def run_text_wizard(
         def on_prompt():
             out(">> A prompt should appear ON YOUR TV. Press OK / Accept with the remote.")
 
+        detected_mac = ""
         try:
             key = pair_with_fallback(
                 client,
                 client_key=cfg.device.key if cfg.device.ip == ip else "",
                 on_prompt=on_prompt, prompt_timeout=120.0,
                 log=lambda m: out("  " + m))
+            # Ask the TV for its MAC while we're still connected (reliable).
+            try:
+                detected_mac = client.get_mac()
+            except Exception:  # noqa: BLE001
+                detected_mac = ""
         except Exception as exc:  # noqa: BLE001
             out("")
             out(f"Could not pair with the TV at {ip}: {exc}")
@@ -134,8 +140,8 @@ def run_text_wizard(
         break
 
     out("Paired successfully.")
-    return _finish(cfg, ip, name, key, cfg.device.mac, client.secure,
-                   input_fn, out)
+    return _finish(cfg, ip, name, key, cfg.device.mac or detected_mac,
+                   client.secure, input_fn, out)
 
 
 def _finish(cfg, ip, name, key, mac, secure, input_fn, out) -> int:

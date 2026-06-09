@@ -35,6 +35,35 @@ def test_fallback_prefer_secure_tries_secure_first():
     assert c.attempts[0] is True  # went straight to 3001
 
 
+def test_get_mac_prefers_interface_with_our_ip():
+    from lgtv_easy.webos import URI_GET_NETWORK_STATUS, WebOSClient
+    c = WebOSClient("192.168.1.50")
+
+    def fake_request(uri, payload=None, wait=True):
+        if uri == URI_GET_NETWORK_STATUS:
+            return {"payload": {
+                "wired": {"ipAddress": "", "macAddress": "00:11:22:33:44:55"},
+                "wifi": {"ipAddress": "192.168.1.50", "macAddress": "a8:23:fe:11:22:33"},
+            }}
+        return {"payload": {}}
+
+    c.request = fake_request
+    assert c.get_mac() == "A8:23:FE:11:22:33"
+
+
+def test_get_mac_falls_back_to_software_info():
+    from lgtv_easy.webos import URI_GET_SW_INFO, WebOSClient
+    c = WebOSClient("192.168.1.50")
+
+    def fake_request(uri, payload=None, wait=True):
+        if uri == URI_GET_SW_INFO:
+            return {"payload": {"device_id": "aa-bb-cc-dd-ee-ff"}}
+        return {"payload": {}}  # connectionmanager has nothing useful
+
+    c.request = fake_request
+    assert c.get_mac() == "AA:BB:CC:DD:EE:FF"
+
+
 def _client_for(tv: MockTV) -> WebOSClient:
     c = WebOSClient("127.0.0.1")
     c._url = lambda: tv.url  # point the client at the mock's random port
