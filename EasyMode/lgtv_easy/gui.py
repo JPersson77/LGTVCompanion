@@ -25,7 +25,7 @@ from .config import Config, Device
 from .daemon import Daemon
 from . import idle as idle_mod
 from .discovery import discover
-from .netdiag import probe_tv
+from .netdiag import probe_tv, subnet_report
 from .webos import WebOSClient, pair_with_fallback
 
 PAD = 12
@@ -175,6 +175,10 @@ class SetupWizard(ttk.Frame):
 
         ttk.Label(self, text="Details:", style="Sub.TLabel").pack(anchor="w")
         self.diag = self._make_diag(height=5)
+        # Show which network this PC is on up front: a TV that won't be found is
+        # most often simply on a different network/subnet than the PC.
+        threading.Thread(target=lambda: subnet_report("", self.diag),
+                         daemon=True).start()
 
         ttk.Button(self, text="Next  ▶", style="Big.TButton",
                    command=self._goto_pair).pack(side="bottom", anchor="e")
@@ -236,6 +240,9 @@ class SetupWizard(ttk.Frame):
         ip = self.selected_ip.get().strip()
 
         def worker():
+            # Surface the subnet check immediately (incl. the Google/Nest Wifi
+            # double-NAT hint) so a mismatch is obvious before any timeout.
+            subnet_report(ip, self.diag)
             client = WebOSClient(ip)
             try:
                 key = pair_with_fallback(
