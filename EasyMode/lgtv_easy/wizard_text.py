@@ -20,6 +20,7 @@ from .config import Config, Device
 from .discovery import Discovered, discover
 from .netdiag import env_summary, mac_for_ip, probe_tv
 from .webos import WebOSClient, pair_with_fallback
+from .wol import normalize_mac
 
 
 def _yes(value: str, default_yes: bool = False) -> bool:
@@ -187,6 +188,25 @@ def _finish(cfg, ip, name, key, mac, secure, input_fn, out) -> int:
                 deep_minutes = max(minutes + 0.5, float(raw2))
             except ValueError:
                 pass
+        # Wake-on-LAN needs the TV's MAC; auto-detect it, but let the user
+        # confirm/override (and supply one if detection came up empty).
+        detected = mac or mac_for_ip(ip)
+        prompt = (f"  TV's Wake-on-LAN MAC [{detected}]: " if detected
+                  else "  TV's Wake-on-LAN MAC (e.g. AA:BB:CC:DD:EE:FF): ")
+        typed = input_fn(prompt).strip()
+        if typed:
+            try:
+                normalize_mac(typed)
+                mac = typed
+            except ValueError:
+                out("  That doesn't look like a MAC address; leaving it unset.")
+                mac = detected
+        else:
+            mac = detected
+        if not mac:
+            out("  No MAC set, so the TV can't be woken from a full power-off -")
+            out("  it will only blank the screen. Add one later with: "
+                "lgtv-easy set --mac <addr>")
 
     # --- Step 5: start at login ---------------------------------------
     out("")

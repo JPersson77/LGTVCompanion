@@ -109,8 +109,10 @@ def test_wizard_saves_energy_options(tmp_path, monkeypatch):
     monkeypatch.setenv("LGTV_EASY_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with MockTV(require_pairing=True) as tv:
-        # n scan, IP, name, 3-min screen off, mute=y, deep=y, deep=20 min, autostart=n
-        answers = iter(["n", "127.0.0.1", "TV", "3", "y", "y", "20", "n"])
+        # n scan, IP, name, 3-min screen off, mute=y, deep=y, deep=20 min,
+        # WOL MAC, autostart=n
+        answers = iter(["n", "127.0.0.1", "TV", "3", "y", "y", "20",
+                        "AA:BB:CC:DD:EE:FF", "n"])
 
         def cf(ip):
             c = WebOSClient(ip)
@@ -126,6 +128,7 @@ def test_wizard_saves_energy_options(tmp_path, monkeypatch):
         assert saved.mute_on_sleep is True
         assert saved.deep_off_enabled is True
         assert saved.deep_off_minutes == 20
+        assert saved.device.mac == "AA:BB:CC:DD:EE:FF"
 
 
 def test_wizard_settings_mode_skips_pairing(tmp_path, monkeypatch):
