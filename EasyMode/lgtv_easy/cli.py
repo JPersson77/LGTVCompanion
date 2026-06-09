@@ -131,7 +131,8 @@ def cmd_test(args) -> int:
     if not cfg.device.ip:
         _print("No TV configured. Run 'lgtv-easy pair <ip>' first.")
         return 1
-    from .webos import pair_with_fallback
+    from .webos import (URI_GET_NETWORK_STATUS, URI_GET_SW_INFO,
+                        pair_with_fallback)
     client = WebOSClient(cfg.device.ip, secure=cfg.device.secure)
     try:
         pair_with_fallback(client, client_key=cfg.device.key,
@@ -141,6 +142,18 @@ def cmd_test(args) -> int:
         time.sleep(3)
         _print("Turning screen ON...")
         client.screen_on()
+        # While connected, learn (and save) the TV's MAC for Wake-on-LAN.
+        mac = client.get_mac()
+        if mac:
+            if mac != cfg.device.mac:
+                cfg.device.mac = mac
+                cfg.save()
+            _print(f"TV MAC for Wake-on-LAN: {mac}  (saved)")
+        else:
+            _print("Could not read the TV's MAC. Raw network info follows so it")
+            _print("can be reported:")
+            _print(f"  getStatus: {client.request(URI_GET_NETWORK_STATUS)}")
+            _print(f"  swInfo   : {client.request(URI_GET_SW_INFO)}")
     except Exception as exc:  # noqa: BLE001
         _print(f"Test failed: {exc}")
         return 1
