@@ -8,9 +8,12 @@ is best-effort and never raises; on any error it returns empty/safe values.
 from __future__ import annotations
 
 import platform
+import re
 import socket
+import subprocess
+import sys
 import time
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 # WebOS control ports: plain WebSocket (3000) and TLS WebSocket (3001).
 WEBOS_PORTS = (3000, 3001)
@@ -128,6 +131,45 @@ def probe_tv(tv_ip: str, log) -> None:
         log(f"  [{mark}] TCP {tv_ip}:{port} ({kind}) - {detail}")
     log("If both ports FAIL: confirm the TV's IP (Settings > Network), and that")
     log("the TV setting 'LG Connect Apps' / 'Mobile TV On' / network control is enabled.")
+
+
+_MAC_RE = re.compile(r"([0-9a-fA-F]{2}(?:[:-][0-9a-fA-F]{2}){5})")
+
+
+def mac_for_ip(ip: str, timeout: float = 4.0) -> str:
+    """Best-effort lookup of a device's MAC from the OS ARP/neighbour table.
+
+    Called right after we've connected to the TV (so it's already in the cache),
+    this lets Easy Mode store the TV's hardware address automatically and use
+    Wake-on-LAN to power it back on from deep standby - no manual MAC hunting.
+    Returns "" if it can't be determined; never raises.
+    """
+    if not ip or ip.startswith("127.") or ip in ("localhost", "::1"):
+        return ""
+    commands = []
+    if sys.platform.startswith("win"):
+        commands.append(["arp", "-a", ip])
+    else:
+        commands.append(["ip", "neigh", "show", ip])
+        commands.append(["arp", "-n", ip])
+    for cmd in commands:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=timeout).stdout
+        except Exception:  # noqa: BLE001 - tool missing, timeout, etc.
+            continue
+        # On Windows the line also contains the IP (which has no hex pairs), so
+        # the first MAC-shaped token on a line mentioning the IP is the right one.
+        for line in out.splitlines():
+            if ip not in line and len(out.splitlines()) > 1:
+                continue
+            m = _MAC_RE.search(line)
+            if m:
+                return m.group(1).replace("-", ":").upper()
+        m = _MAC_RE.search(out)
+        if m:
+            return m.group(1).replace("-", ":").upper()
+    return ""
 
 
 def env_summary() -> List[str]:

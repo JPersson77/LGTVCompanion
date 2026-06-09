@@ -22,7 +22,9 @@ def test_full_journey_setup_then_idle_sleep_wake(tmp_path, monkeypatch):
         answers = iter([
             "y",        # scan automatically?
             "1",        # pick the first discovered TV
-            "7",        # 7 minute timeout (the user's request)
+            "7",        # 7 minute screen-off timeout (the user's request)
+            "",         # energy step: don't mute
+            "",         # energy step: don't fully power off
         ])
         transcript = []
 

@@ -60,6 +60,8 @@ Then the everyday window is a single, Windows-style panel:
 - a big **“Turn the screen off when I’m away”** switch,
 - a **minutes** slider,
 - an optional **“mute the speakers when sleeping”** checkbox,
+- a **“Maximum energy saving”** box to **fully power the TV off** after a longer
+  idle (waking it again via Wake-on-LAN), and
 - a **Test my TV** button, and a **Re-run setup** button.
 
 Screenshots of all three screens live in `docs/` of the project discussion.
@@ -73,8 +75,10 @@ Everything the GUI does is also available headless:
 ```bash
 lgtv-easy scan                 # discover LG TVs on the network
 lgtv-easy pair 192.168.1.50    # pair with a TV by IP (accept on the TV)
-lgtv-easy set --minutes 7      # sleep after 7 minutes idle
+lgtv-easy set --minutes 7      # blank the screen after 7 minutes idle
 lgtv-easy set --enabled false  # temporarily disable
+lgtv-easy set --mute true      # mute the TV speakers while the screen is off
+lgtv-easy set --deep-off true --deep-off-minutes 30   # full power-off after 30 min
 lgtv-easy status               # show current settings + idle detection backend
 lgtv-easy test                 # blink the screen off/on to confirm it works
 lgtv-easy run                  # run the idle-monitoring daemon in the foreground
@@ -93,8 +97,15 @@ lgtv-easy wizard               # interactive text setup wizard
 - When you cross the timeout, it sends the WebOS `turnOffScreen` command (an
   OLED-friendly screen blank, not a full power-off). Any keypress/mouse move
   resets the OS idle timer, and the daemon sends `turnOnScreen`.
-- If the panel dropped to standby, a Wake-on-LAN magic packet is sent first
-  (set the MAC with `lgtv-easy set --mac AA:BB:CC:DD:EE:FF`).
+- **Two-stage energy saving (optional).** With “deep off” enabled, after a longer
+  idle the daemon fully powers the TV off (`system/turnOff`, true ~0.5W standby)
+  instead of just blanking it. This is like a monitor sleeping and then the PC
+  powering down: the screen blanks first (instant wake, keeps the HDMI link so
+  Windows doesn’t rearrange), then the TV switches off for the lowest power use.
+- **Waking from full power-off** uses a Wake-on-LAN magic packet, so enable the
+  TV’s “Turn on via Wi-Fi” / “Quick Start+” setting. The TV’s MAC is detected
+  automatically at pairing (from the ARP table); set it manually if needed with
+  `lgtv-easy set --mac AA:BB:CC:DD:EE:FF`.
 
 ## The self-updating launchers
 

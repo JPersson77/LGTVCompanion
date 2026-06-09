@@ -318,6 +318,8 @@ class SettingsPanel(ttk.Frame):
         self.enabled = tk.BooleanVar(value=cfg.idle_enabled)
         self.minutes = tk.DoubleVar(value=cfg.idle_minutes)
         self.mute = tk.BooleanVar(value=cfg.mute_on_sleep)
+        self.deep = tk.BooleanVar(value=cfg.deep_off_enabled)
+        self.deep_minutes = tk.DoubleVar(value=cfg.deep_off_minutes)
         self._build()
 
     def _build(self):
@@ -346,6 +348,21 @@ class SettingsPanel(ttk.Frame):
                         variable=self.mute,
                         command=self._apply).pack(anchor="w")
 
+        energy = ttk.LabelFrame(self, text="Maximum energy saving", padding=PAD)
+        energy.pack(fill="x", pady=PAD)
+        ttk.Checkbutton(
+            energy,
+            text="Fully power the TV off after a longer idle (wakes via Wake-on-LAN)",
+            variable=self.deep, command=self._apply).pack(anchor="w")
+        drow = ttk.Frame(energy)
+        drow.pack(fill="x", pady=(4, 0))
+        ttk.Label(drow, text="Power off after (minutes):").pack(side="left")
+        spin = ttk.Spinbox(drow, from_=2, to=240, width=6,
+                           textvariable=self.deep_minutes, command=self._apply)
+        spin.pack(side="left", padx=6)
+        spin.bind("<Return>", lambda e: self._apply())
+        spin.bind("<FocusOut>", lambda e: self._apply())
+
         self.status = ttk.Label(self, text="", style="Sub.TLabel",
                                 wraplength=410)
         self.status.pack(anchor="w", pady=(PAD, 0))
@@ -372,6 +389,11 @@ class SettingsPanel(ttk.Frame):
         cfg.idle_enabled = self.enabled.get()
         cfg.idle_minutes = round(self.minutes.get())
         cfg.mute_on_sleep = self.mute.get()
+        cfg.deep_off_enabled = self.deep.get()
+        try:
+            cfg.deep_off_minutes = max(2.0, float(self.deep_minutes.get()))
+        except (tk.TclError, ValueError):
+            pass
         cfg.save()
         self.app.start_daemon()
         self._refresh_status()
@@ -382,9 +404,11 @@ class SettingsPanel(ttk.Frame):
         warn = "" if idle_mod.is_real_backend() else \
             "  (warning: OS idle detection unavailable here)"
         state = "ON" if cfg.idle_enabled else "OFF"
+        deep = (f" Full power-off after {round(cfg.deep_off_minutes)} min."
+                if cfg.deep_off_enabled else "")
         self.status.config(
             text=f"Status: idle-sleep is {state}, after {round(cfg.idle_minutes)} "
-                 f"min. Idle detection: {backend}.{warn}")
+                 f"min.{deep} Idle detection: {backend}.{warn}")
 
     def _test(self):
         cfg = self.app.cfg

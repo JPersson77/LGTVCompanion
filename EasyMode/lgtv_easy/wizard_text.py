@@ -17,13 +17,13 @@ from typing import Callable, List, Optional, Tuple
 
 from .config import Config, Device
 from .discovery import Discovered, discover
-from .netdiag import env_summary, probe_tv
+from .netdiag import env_summary, mac_for_ip, probe_tv
 from .webos import WebOSClient, pair_with_fallback
 
 
 def _choose_tv(input_fn, out, discover_fn) -> Tuple[str, str]:
     """Step 1: let the user pick a discovered TV or type an IP. Returns (ip, name)."""
-    out("Step 1 of 3: Find your TV")
+    out("Step 1 of 4: Find your TV")
     out("Make sure the TV is on and connected to the same network.")
     name = "My LG TV"
     answer = input_fn("Scan the network automatically? [Y/n]: ").strip().lower()
@@ -63,7 +63,7 @@ def run_text_wizard(
     out("=" * 60)
     out("")
     out("This wizard sets your LG TV to sleep after a few minutes of")
-    out("inactivity, just like a normal PC monitor. Three quick steps.")
+    out("inactivity, just like a normal PC monitor. A few quick steps.")
     out("")
     out("System info (handy if you need to report a problem):")
     for line in env_summary():
@@ -83,7 +83,7 @@ def run_text_wizard(
             return 1
 
         out("")
-        out("Step 2 of 3: Pair with the TV")
+        out("Step 2 of 4: Pair with the TV")
         out(f"Connecting to {ip} ...")
         client = client_factory(ip)
 
@@ -116,11 +116,20 @@ def run_text_wizard(
 
     out("Paired successfully.")
 
-    # --- Step 3: timeout ----------------------------------------------
+    # Grab the TV's hardware (MAC) address while we're connected, so Wake-on-LAN
+    # can switch it back on if the energy-saving "full power off" is enabled.
+    mac = cfg.device.mac
+    if not mac:
+        detected = mac_for_ip(ip)
+        if detected:
+            mac = detected
+            out(f"Found the TV's hardware address ({mac}) for Wake-on-LAN.")
+
+    # --- Step 3: screen-off timeout -----------------------------------
     out("")
-    out("Step 3 of 3: Sleep timeout")
+    out("Step 3 of 4: Screen-off timeout")
     raw = input_fn(
-        f"Turn the screen off after how many minutes idle? "
+        f"Blank the screen after how many minutes idle? "
         f"(type a number, or press Enter to keep {cfg.idle_minutes:g}): "
     ).strip()
     minutes = cfg.idle_minutes
@@ -130,9 +139,37 @@ def run_text_wizard(
         except ValueError:
             out(f"Not a number; keeping {cfg.idle_minutes:g} minutes.")
 
-    cfg.device = Device(name=name, ip=ip, mac=cfg.device.mac, key=key)
+    # --- Step 4: energy saving (optional) -----------------------------
+    out("")
+    out("Step 4 of 4: Energy saving (optional - press Enter to skip each)")
+    mute = input_fn(
+        "Mute the TV speakers while the screen is off? [y/N]: "
+    ).strip().lower() in ("y", "yes")
+    deep = input_fn(
+        "For the LOWEST power use, fully switch the TV off after a longer idle? "
+        "[y/N]: "
+    ).strip().lower() in ("y", "yes")
+    deep_minutes = cfg.deep_off_minutes
+    if deep:
+        out("  Note: this uses Wake-on-LAN to switch the TV back on, so enable")
+        out("  'Turn on via Wi-Fi'/'Quick Start+' on the TV. Windows may briefly")
+        out("  rearrange windows when the TV powers off and on.")
+        raw2 = input_fn(
+            f"  Fully power off after how many TOTAL minutes idle? "
+            f"(more than {minutes:g}) [{deep_minutes:g}]: "
+        ).strip()
+        if raw2:
+            try:
+                deep_minutes = max(minutes + 0.5, float(raw2))
+            except ValueError:
+                pass
+
+    cfg.device = Device(name=name, ip=ip, mac=mac, key=key)
     cfg.idle_minutes = minutes
     cfg.idle_enabled = True
+    cfg.mute_on_sleep = mute
+    cfg.deep_off_enabled = deep
+    cfg.deep_off_minutes = deep_minutes
     cfg.setup_complete = True
     cfg.save()
 
@@ -140,8 +177,13 @@ def run_text_wizard(
     out("")
     out("=" * 60)
     out("  All set!")
-    out(f"  {name} will sleep after {minutes:g} {unit} of inactivity")
-    out("  and wake the moment you move the mouse or press a key.")
+    out(f"  {name} will blank after {minutes:g} {unit} of inactivity")
+    if deep:
+        du = "minute" if deep_minutes == 1 else "minutes"
+        out(f"  and fully power off after {deep_minutes:g} {du} for the lowest energy use,")
+        out("  waking on a key press or mouse move.")
+    else:
+        out("  and wake the moment you move the mouse or press a key.")
     out("")
     out("  Start it now with:  lgtv-easy run")
     out("  (the launcher does this automatically in the background)")

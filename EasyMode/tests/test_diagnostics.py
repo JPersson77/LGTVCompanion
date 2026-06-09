@@ -7,7 +7,8 @@ closing) and let the user try again.
 from lgtv_easy.config import Config
 from lgtv_easy.discovery import Discovered
 from lgtv_easy.mock_tv import MockTV
-from lgtv_easy.netdiag import env_summary, same_subnet_guess, tcp_probe
+from lgtv_easy.netdiag import (env_summary, mac_for_ip, same_subnet_guess,
+                               tcp_probe)
 from lgtv_easy.webos import WebOSClient, pair_with_fallback
 from lgtv_easy.wizard_text import run_text_wizard
 
@@ -60,7 +61,9 @@ def test_wizard_emits_diagnostics_then_retries_to_success(tmp_path, monkeypatch)
             "n",              # don't scan
             "127.0.0.1",      # good IP (the mock)
             "Good TV",        # name
-            "7",              # minutes
+            "7",              # screen-off minutes
+            "",               # energy: don't mute
+            "",               # energy: don't fully power off
         ])
         transcript = []
 
@@ -84,6 +87,33 @@ def test_wizard_emits_diagnostics_then_retries_to_success(tmp_path, monkeypatch)
         saved = Config.load()
         assert saved.device.ip == "127.0.0.1"
         assert saved.setup_complete is True
+
+
+def test_mac_for_ip_is_graceful_on_loopback():
+    # Loopback has no ARP entry; must return "" rather than raise.
+    assert mac_for_ip("127.0.0.1") == ""
+
+
+def test_wizard_saves_energy_options(tmp_path, monkeypatch):
+    monkeypatch.setenv("LGTV_EASY_HOME", str(tmp_path))
+    with MockTV(require_pairing=True) as tv:
+        # n scan, IP, name, 3-min screen off, mute=y, deep=y, deep=20 min
+        answers = iter(["n", "127.0.0.1", "TV", "3", "y", "y", "20"])
+
+        def cf(ip):
+            c = WebOSClient(ip)
+            c._url = lambda: tv.url
+            return c
+
+        rc = run_text_wizard(input_fn=lambda p: next(answers),
+                             output_fn=lambda m: None, client_factory=cf,
+                             config=Config())
+        assert rc == 0
+        saved = Config.load()
+        assert saved.idle_minutes == 3
+        assert saved.mute_on_sleep is True
+        assert saved.deep_off_enabled is True
+        assert saved.deep_off_minutes == 20
 
 
 def test_wizard_cancels_cleanly_when_user_declines_retry(tmp_path, monkeypatch):
