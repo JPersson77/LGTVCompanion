@@ -55,16 +55,24 @@ function Log($msg) {
 
 function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 
-# Keep the window open after a failure so the user can read and report the
-# diagnostics printed above (it otherwise closes the instant we exit).
+# Print-only banners. The actual "keep the window open" pause lives in the .bat
+# (the single, version-robust place a double-click goes through), so these just
+# explain what happened; they must NOT block, or we'd pause twice.
 function Pause-BeforeExit {
     Write-Host ""
     Write-Host "----------------------------------------------------------------------"
     Write-Host "  Setup did not finish. The diagnostics above (and the log file"
     Write-Host "  $LogFile) can be shared to get help."
-    Write-Host "  This window will stay open so nothing is lost."
     Write-Host "----------------------------------------------------------------------"
-    try { Read-Host "Press Enter to close this window" | Out-Null } catch {}
+}
+
+# Positive confirmation for the common "already set up" case: the watcher runs as
+# a detached background process. Closing the window does NOT stop it.
+function Pause-Info([string[]]$lines) {
+    Write-Host ""
+    Write-Host "======================================================================"
+    foreach ($l in $lines) { Write-Host "  $l" }
+    Write-Host "======================================================================"
 }
 
 # ---- dependency installation ------------------------------------------------
@@ -273,7 +281,11 @@ if ($Background) {
     if (Test-Path $PidFile) {
         $oldPid = Get-Content $PidFile
         if (Get-Process -Id $oldPid -ErrorAction SilentlyContinue) {
-            Log "Already running in background (pid $oldPid)."; exit 0
+            Log "Already running in background (pid $oldPid)."
+            Pause-Info @("Easy Mode is already running in the background (pid $oldPid).",
+                         "Your LG TV will blank/sleep when the PC is idle.",
+                         "To stop it: run this launcher again with  -Stop")
+            exit 0
         }
     }
     if (Needs-Setup) {
@@ -286,6 +298,10 @@ if ($Background) {
     $useSelf = if (Test-Path $repoSelf) { $repoSelf } else { $PSCommandPath }
     Start-Process -FilePath "powershell.exe" -WindowStyle Hidden `
         -ArgumentList @("-ExecutionPolicy","Bypass","-File",$useSelf,"-Supervise")
+    Pause-Info @("Easy Mode is now running in the background.",
+                 "Your LG TV will blank/sleep when the PC is idle, and wake when you",
+                 "move the mouse or press a key.",
+                 "Closing this window does NOT stop it. To stop: run with  -Stop")
     exit 0
 }
 

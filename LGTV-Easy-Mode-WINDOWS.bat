@@ -23,16 +23,21 @@ if not exist "%PS1%" (
   exit /b 1
 )
 
+echo Starting LGTV Companion Easy Mode... (this window will stay open)
+echo.
 powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%PS1%" -Background %*
 set "RC=%ERRORLEVEL%"
 
+echo.
 if not "%RC%"=="0" (
-  echo.
   echo ----------------------------------------------------------------------
   echo  The launcher exited with an error ^(code %RC%^).
-  echo  Scroll up to read the messages above - they explain what went wrong.
-  echo  This window is staying open so nothing is lost.
+  echo  Scroll up to read the messages above - they explain what went wrong,
+  echo  and can be shared to get help.
   echo ----------------------------------------------------------------------
-  pause
 )
+REM Always pause so the window never just vanishes on a double-click. The TV
+REM watcher, when started, runs as a separate background process and keeps
+REM running after this window is closed.
+pause
 endlocal
