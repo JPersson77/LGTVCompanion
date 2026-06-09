@@ -151,18 +151,29 @@ function Maybe-SelfUpdate {
     try { $selfFull = (Resolve-Path $SelfPath).Path } catch { return }
     try { $repoFull = (Resolve-Path $repoLauncher).Path } catch { return }
     if ($selfFull -ine $repoFull) {
-        # Started from a bootstrap copy: hand off to the canonical repo copy.
-        Log "Handing off to the canonical repo launcher."
-        $argList = @("-ExecutionPolicy","Bypass","-File",$repoFull) + $script:ForwardArgs
-        Start-Process -FilePath "powershell.exe" -ArgumentList $argList
-        exit 0
+        # Started from a bootstrap/Desktop copy: run the up-to-date repo copy IN
+        # THIS SAME WINDOW and adopt its exit code. Running it in place (rather
+        # than Start-Process, which opens a detached window and loses the exit
+        # code) keeps everything in one console, so the .bat's "keep window open
+        # on failure" safety net still works and nothing flashes past.
+        Log "Running the up-to-date launcher from $AppHome."
+        $fwd = @($script:ForwardArgs)
+        & powershell.exe -ExecutionPolicy Bypass -NoProfile -File $repoFull @fwd
+        exit $LASTEXITCODE
     }
-    # We ARE the repo copy; if git rewrote it underneath us, re-launch it.
+    # We ARE the repo copy; if git rewrote it underneath us, re-run the new one.
     if ((Get-FileHash $selfFull).Hash -ne $LauncherStartHash) {
-        Log "Launcher updated itself; re-launching new version."
-        $argList = @("-ExecutionPolicy","Bypass","-File",$selfFull) + $script:ForwardArgs
-        Start-Process -FilePath "powershell.exe" -ArgumentList $argList
-        exit 0
+        Log "Launcher updated itself; re-running the new version."
+        $fwd = @($script:ForwardArgs)
+        if ($Supervise) {
+            # The hidden background supervisor restarts itself detached, so the
+            # old process doesn't linger waiting on the new one.
+            Start-Process -FilePath "powershell.exe" -WindowStyle Hidden `
+                -ArgumentList (@("-ExecutionPolicy","Bypass","-NoProfile","-File",$selfFull) + $fwd)
+            exit 0
+        }
+        & powershell.exe -ExecutionPolicy Bypass -NoProfile -File $selfFull @fwd
+        exit $LASTEXITCODE
     }
 }
 
