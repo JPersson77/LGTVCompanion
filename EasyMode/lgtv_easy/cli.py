@@ -179,11 +179,11 @@ def cmd_autostart(args) -> int:
     action = getattr(args, "action", None) or "status"
     if action == "enable":
         try:
-            path = autostart.enable()
+            path = autostart.enable(method=getattr(args, "method", "") or "")
         except Exception as exc:  # noqa: BLE001
             _print(f"Could not enable auto-start: {exc}")
             return 1
-        _print(f"Auto-start at login ENABLED.\n  {path}")
+        _print(f"Auto-start at login ENABLED via {path}")
     elif action == "disable":
         autostart.disable()
         _print("Auto-start at login DISABLED.")
@@ -255,6 +255,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("autostart", help="start automatically at login")
     s.add_argument("action", nargs="?", choices=["enable", "disable", "status"],
                    default="status")
+    s.add_argument("--method", choices=["startup", "task", "desktop"], default="",
+                   help="Windows: 'startup' folder (default) or 'task' "
+                        "(Task Scheduler, for locked-down Startup folders)")
     s.set_defaults(func=cmd_autostart)
     return p
 

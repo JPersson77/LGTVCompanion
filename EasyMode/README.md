@@ -111,7 +111,9 @@ lgtv-easy autostart disable    # stop starting it at login
 - **Start at login** (the wizard asks, or `lgtv-easy autostart enable`) registers
   a per-user entry - a Startup-folder shortcut on Windows (run with `pythonw`, no
   console window), a `~/.config/autostart` desktop entry on Linux - that launches
-  the watcher quietly each time you log in.
+  the watcher quietly each time you log in. On Windows, if the Startup folder is
+  restricted by group policy, use a per-user Scheduled Task instead:
+  `lgtv-easy autostart enable --method task`.
 - **Only one watcher runs at a time.** A pidfile lock means the login auto-start,
   the supervising launcher, and a manual `run` never fight over the TV.
 
