@@ -54,6 +54,10 @@ class SingleInstance:
             return None
         return pid if _alive(pid) else None
 
+    def holder(self) -> Optional[int]:
+        """PID of the live process currently holding the lock, or None."""
+        return self._holder()
+
     def _write(self) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path, "w", encoding="utf-8") as fh:
