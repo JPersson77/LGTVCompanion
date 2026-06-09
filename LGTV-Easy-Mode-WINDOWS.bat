@@ -2,19 +2,26 @@
 REM ===========================================================================
 REM  LGTV Companion Easy Mode - Windows launcher  (just double-click this file)
 REM ===========================================================================
-REM  Runs the PowerShell launcher in background mode. The first run shows the
-REM  setup wizard; after that it quietly keeps your TV sleeping when you're away,
-REM  and self-updates from GitHub's default branch.
-REM
-REM  This .bat deliberately keeps the window OPEN if anything fails, so error
-REM  messages and setup diagnostics can be read and reported.
+REM  This file is a tiny, stable shim: it finds the real PowerShell launcher and
+REM  runs it. It deliberately prefers the SELF-UPDATING internal copy (kept in
+REM  %LOCALAPPDATA%) over the copy next to this file, so all the real logic stays
+REM  current even though this .bat never changes. The window is kept open at the
+REM  end so it can never just vanish on a double-click.
 setlocal
-set "SCRIPT_DIR=%~dp0"
-set "PS1=%SCRIPT_DIR%LGTV-Easy-Mode-WINDOWS.ps1"
+set "APP_PS1=%LOCALAPPDATA%\lgtv-companion-easy\app\LGTV-Easy-Mode-WINDOWS.ps1"
+set "LOCAL_PS1=%~dp0LGTV-Easy-Mode-WINDOWS.ps1"
+
+REM Prefer the auto-updated internal copy; fall back to the one beside this file
+REM (needed for the very first run, before anything has been cloned).
+if exist "%APP_PS1%" (
+  set "PS1=%APP_PS1%"
+) else (
+  set "PS1=%LOCAL_PS1%"
+)
 
 if not exist "%PS1%" (
   echo.
-  echo ERROR: Could not find the PowerShell launcher next to this file:
+  echo ERROR: Could not find the PowerShell launcher:
   echo   "%PS1%"
   echo Make sure LGTV-Easy-Mode-WINDOWS.bat and LGTV-Easy-Mode-WINDOWS.ps1
   echo are BOTH in the same folder, then run this again.

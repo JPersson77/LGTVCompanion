@@ -120,6 +120,8 @@ def cmd_status(args) -> int:
     _print(f"  Idle backend: {idle_mod.idle_backend_name()} "
            f"(real={idle_mod.is_real_backend()})")
     _print(f"  Current idle: {idle_mod.get_idle_seconds():.0f}s")
+    from . import autostart
+    _print(f"  Auto-start  : {autostart.status()}")
     return 0
 
 
@@ -150,6 +152,15 @@ def cmd_run(args) -> int:
     if not cfg.device.ip:
         _print("No TV configured yet. Run the wizard or 'lgtv-easy pair <ip>'.")
         return 1
+    # Only one daemon should drive the TV. A supervised child (LGTV_EASY_WAIT_LOCK)
+    # waits its turn; a manual run exits politely if one is already going.
+    import os
+    from .singleton import SingleInstance
+    lock = SingleInstance("daemon")
+    wait = os.environ.get("LGTV_EASY_WAIT_LOCK") == "1"
+    if not lock.acquire(wait=wait):
+        _print("Another Easy Mode watcher is already running; nothing to do.")
+        return 0
     daemon = Daemon(cfg)
     _print(f"Idle daemon running. Screen sleeps after {cfg.idle_minutes} min. "
            "Press Ctrl+C to stop.")
@@ -158,6 +169,26 @@ def cmd_run(args) -> int:
     except KeyboardInterrupt:
         daemon.stop()
         _print("\nStopped.")
+    finally:
+        lock.release()
+    return 0
+
+
+def cmd_autostart(args) -> int:
+    from . import autostart
+    action = getattr(args, "action", None) or "status"
+    if action == "enable":
+        try:
+            path = autostart.enable()
+        except Exception as exc:  # noqa: BLE001
+            _print(f"Could not enable auto-start: {exc}")
+            return 1
+        _print(f"Auto-start at login ENABLED.\n  {path}")
+    elif action == "disable":
+        autostart.disable()
+        _print("Auto-start at login DISABLED.")
+    else:
+        _print(f"Auto-start at login: {autostart.status()}")
     return 0
 
 
@@ -220,6 +251,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("wizard", help="interactive text setup wizard")
     s.set_defaults(func=cmd_wizard)
+
+    s = sub.add_parser("autostart", help="start automatically at login")
+    s.add_argument("action", nargs="?", choices=["enable", "disable", "status"],
+                   default="status")
+    s.set_defaults(func=cmd_autostart)
     return p
 
 

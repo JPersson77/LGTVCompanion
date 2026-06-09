@@ -16,6 +16,7 @@ from lgtv_easy.wizard_text import run_text_wizard
 
 def test_full_journey_setup_then_idle_sleep_wake(tmp_path, monkeypatch):
     monkeypatch.setenv("LGTV_EASY_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))  # keep autostart in tmp
 
     with MockTV(require_pairing=True) as tv:
         # ---- Scripted wizard interaction (as if the user were typing) ----
@@ -25,6 +26,7 @@ def test_full_journey_setup_then_idle_sleep_wake(tmp_path, monkeypatch):
             "7",        # 7 minute screen-off timeout (the user's request)
             "",         # energy step: don't mute
             "",         # energy step: don't fully power off
+            "n",        # don't start automatically at login
         ])
         transcript = []
 
