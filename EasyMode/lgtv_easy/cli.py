@@ -123,6 +123,9 @@ def cmd_status(args) -> int:
     _print(f"  Current idle: {idle_mod.get_idle_seconds():.0f}s")
     from . import autostart
     _print(f"  Auto-start  : {autostart.status()}")
+    from .singleton import SingleInstance
+    holder = SingleInstance("daemon").holder()
+    _print(f"  Watcher     : {'RUNNING (pid ' + str(holder) + ')' if holder else 'NOT running'}")
     return 0
 
 
