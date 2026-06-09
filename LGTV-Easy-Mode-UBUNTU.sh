@@ -115,11 +115,13 @@ maybe_self_update() {
   local target; target="$(readlink -f "$repo_launcher")"
   if [ "$SELF_PATH" != "$target" ]; then
     log "Handing off to the canonical repo launcher."
+    export LGTV_EASY_HANDOFF=1
     exec "$repo_launcher" "$@"
   fi
   local now_hash; now_hash="$( (sha1sum "$SELF_PATH" 2>/dev/null || echo none) | cut -d' ' -f1)"
   if [ "$now_hash" != "$LAUNCHER_START_HASH" ]; then
     log "Launcher updated itself; re-executing new version."
+    export LGTV_EASY_HANDOFF=1
     exec "$SELF_PATH" "$@"
   fi
 }
@@ -196,12 +198,18 @@ main() {
     --stop) stop_background; exit 0 ;;
   esac
 
-  install_deps
-  if [ "$NO_UPDATE" = "1" ]; then
-    log "Auto-update disabled (LGTV_EASY_NO_UPDATE=1); using the on-disk copy."
+  # The bootstrap copy installs deps and self-updates, then hands off to the
+  # up-to-date internal copy (LGTV_EASY_HANDOFF=1) - which skips redoing all that.
+  if [ "${LGTV_EASY_HANDOFF:-0}" = "1" ]; then
+    log "Running the up-to-date launcher."
   else
-    sync_repo || log "Continuing with existing copy."
-    maybe_self_update "$@"
+    install_deps
+    if [ "$NO_UPDATE" = "1" ]; then
+      log "Auto-update disabled (LGTV_EASY_NO_UPDATE=1); using the on-disk copy."
+    else
+      sync_repo || log "Continuing with existing copy."
+      maybe_self_update "$@"
+    fi
   fi
 
   case "${1:-}" in
