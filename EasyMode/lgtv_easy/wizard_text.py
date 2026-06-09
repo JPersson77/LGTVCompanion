@@ -120,7 +120,8 @@ def run_text_wizard(
     out("")
     out("Step 3 of 3: Sleep timeout")
     raw = input_fn(
-        f"Turn the screen off after how many minutes idle? [{cfg.idle_minutes:g}]: "
+        f"Turn the screen off after how many minutes idle? "
+        f"(type a number, or press Enter to keep {cfg.idle_minutes:g}): "
     ).strip()
     minutes = cfg.idle_minutes
     if raw:
@@ -135,10 +136,11 @@ def run_text_wizard(
     cfg.setup_complete = True
     cfg.save()
 
+    unit = "minute" if minutes == 1 else "minutes"
     out("")
     out("=" * 60)
     out("  All set!")
-    out(f"  {name} will sleep after {minutes:g} minutes of inactivity")
+    out(f"  {name} will sleep after {minutes:g} {unit} of inactivity")
     out("  and wake the moment you move the mouse or press a key.")
     out("")
     out("  Start it now with:  lgtv-easy run")
