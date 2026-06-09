@@ -193,25 +193,24 @@ def _finish(cfg, ip, name, key, mac, secure, input_fn, out) -> int:
                 deep_minutes = max(minutes + 0.5, float(raw2))
             except ValueError:
                 pass
-        # Wake-on-LAN needs the TV's MAC; auto-detect it, but let the user
-        # confirm/override (and supply one if detection came up empty).
-        detected = mac or mac_for_ip(ip)
-        prompt = (f"  TV's Wake-on-LAN MAC [{detected}]: " if detected
-                  else "  TV's Wake-on-LAN MAC (e.g. AA:BB:CC:DD:EE:FF): ")
-        typed = input_fn(prompt).strip()
-        if typed:
-            try:
-                normalize_mac(typed)
-                mac = typed
-            except ValueError:
-                out("  That doesn't look like a MAC address; leaving it unset.")
-                mac = detected
+        # Wake-on-LAN needs the TV's MAC. We already auto-detected it above, so
+        # only ask the user when detection genuinely came up empty.
+        if mac:
+            out(f"  Wake-on-LAN will use the TV's address {mac}.")
         else:
-            mac = detected
-        if not mac:
-            out("  No MAC set, so the TV can't be woken from a full power-off -")
-            out("  it will only blank the screen. Add one later with: "
-                "lgtv-easy set --mac <addr>")
+            typed = input_fn(
+                "  Couldn't detect the TV's MAC - type it for Wake-on-LAN "
+                "(or press Enter to skip): ").strip()
+            if typed:
+                try:
+                    normalize_mac(typed)
+                    mac = typed
+                except ValueError:
+                    out("  That doesn't look like a MAC address; leaving it unset.")
+            if not mac:
+                out("  No MAC set, so the TV can't be woken from a full power-off -")
+                out("  it will only blank the screen. Add one later with: "
+                    "lgtv-easy set --mac <addr>")
 
     # --- Step 5: start at login ---------------------------------------
     out("")
