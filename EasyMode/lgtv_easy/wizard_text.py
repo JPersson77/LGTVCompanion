@@ -134,17 +134,8 @@ def run_text_wizard(
         break
 
     out("Paired successfully.")
-
-    # Grab the TV's hardware (MAC) address while we're connected, so Wake-on-LAN
-    # can switch it back on if the energy-saving "full power off" is enabled.
-    mac = cfg.device.mac
-    if not mac:
-        detected = mac_for_ip(ip)
-        if detected:
-            mac = detected
-            out(f"Found the TV's hardware address ({mac}) for Wake-on-LAN.")
-
-    return _finish(cfg, ip, name, key, mac, client.secure, input_fn, out)
+    return _finish(cfg, ip, name, key, cfg.device.mac, client.secure,
+                   input_fn, out)
 
 
 def _finish(cfg, ip, name, key, mac, secure, input_fn, out) -> int:
@@ -153,6 +144,14 @@ def _finish(cfg, ip, name, key, mac, secure, input_fn, out) -> int:
     Shared by first-time setup and the "just change settings" path, so both flows
     expose exactly the same options.
     """
+    # Auto-detect the TV's hardware (MAC) address for Wake-on-LAN whenever we
+    # don't already have one. This runs in every path (first-time setup and the
+    # settings path), so WOL works without the user ever hunting for a MAC.
+    if not mac and ip:
+        mac = mac_for_ip(ip)
+        if mac:
+            out(f"Detected the TV's Wake-on-LAN address: {mac}")
+
     # --- Step 3: screen-off timeout -----------------------------------
     out("")
     out("Step 3: Screen-off timeout")
