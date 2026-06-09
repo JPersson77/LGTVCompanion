@@ -66,6 +66,11 @@ def tcp_probe(host: str, port: int, timeout: float = 2.0) -> Tuple[bool, str]:
         return False, f"{type(exc).__name__}: {exc} ({ms:.0f} ms)"
 
 
+def _is_google_wifi(ip: str) -> bool:
+    """192.168.86.x is the default LAN that Google/Nest Wifi routers hand out."""
+    return ip.startswith("192.168.86.")
+
+
 def same_subnet_guess(pc_ips: List[str], tv_ip: str) -> str:
     """A friendly note about whether the TV looks like it's on the PC's network.
 
@@ -80,9 +85,22 @@ def same_subnet_guess(pc_ips: List[str], tv_ip: str) -> str:
             return f"TV {tv_ip} looks like it's on the same network as {ip}. Good."
     if pc_ips:
         joined = ", ".join(pc_ips)
-        return (f"WARNING: TV {tv_ip} does not look like it's on the same network "
-                f"as this PC ({joined}). They must share a subnet to talk to each "
-                f"other - check both are on the same router/SSID.")
+        msg = (f"WARNING: TV {tv_ip} does not look like it's on the same network "
+               f"as this PC ({joined}). They must share a subnet to talk to each "
+               f"other - check both are on the same router/SSID.")
+        # Catch the very common Google/Nest Wifi double-NAT case, where one side
+        # sits behind the Google router (192.168.86.x) and the other is upstream.
+        if _is_google_wifi(tv_ip) and not any(_is_google_wifi(p) for p in pc_ips):
+            msg += ("\n  NOTE: The TV's 192.168.86.x address means it's on a "
+                    "Google/Nest Wifi network, but this PC is not. Connect the PC "
+                    "to the same Google Wifi (plug its Ethernet into a Google Wifi "
+                    "LAN port, or join that Wi-Fi) so both get a 192.168.86.x "
+                    "address, then run setup again.")
+        elif any(_is_google_wifi(p) for p in pc_ips) and not _is_google_wifi(tv_ip):
+            msg += ("\n  NOTE: This PC is on a Google/Nest Wifi network "
+                    "(192.168.86.x) but the TV is not. Put the TV on the same "
+                    "Google Wifi network so they share a subnet.")
+        return msg
     return ""
 
 
