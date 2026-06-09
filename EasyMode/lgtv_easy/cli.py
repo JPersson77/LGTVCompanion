@@ -125,6 +125,9 @@ def cmd_status(args) -> int:
            "(power the TV off when the PC shuts down)")
     _print(f"  Idle backend: {idle_mod.idle_backend_name()} "
            f"(real={idle_mod.is_real_backend()})")
+    if not idle_mod.is_real_backend():
+        _print("      ^ no OS idle source here (e.g. a non-GNOME Wayland "
+               "session); the screen won't auto-blank. An Xorg login session works.")
     _print(f"  Current idle: {idle_mod.get_idle_seconds():.0f}s")
     from . import autostart
     _print(f"  Auto-start  : {autostart.status()}")
