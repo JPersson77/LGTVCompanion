@@ -169,6 +169,7 @@ function Maybe-SelfUpdate {
         # on failure" safety net still works and nothing flashes past.
         Log "Running the up-to-date launcher from $AppHome."
         $fwd = @($script:ForwardArgs)
+        $env:LGTV_EASY_HANDOFF = "1"
         & powershell.exe -ExecutionPolicy Bypass -NoProfile -File $repoFull @fwd
         exit $LASTEXITCODE
     }
@@ -176,6 +177,7 @@ function Maybe-SelfUpdate {
     if ((Get-FileHash $selfFull).Hash -ne $LauncherStartHash) {
         Log "Launcher updated itself; re-running the new version."
         $fwd = @($script:ForwardArgs)
+        $env:LGTV_EASY_HANDOFF = "1"
         if ($Supervise) {
             # The hidden background supervisor restarts itself detached, so the
             # old process doesn't linger waiting on the new one.
@@ -268,14 +270,20 @@ trap {
     exit 1
 }
 
-Install-Deps
-Log-Diagnostics
-Require-Python
-if ($NoUpdate) {
-    Log "Auto-update disabled (LGTV_EASY_NO_UPDATE=1); using the on-disk copy."
+# The bootstrap copy installs deps and self-updates, then hands off to the
+# up-to-date internal copy (LGTV_EASY_HANDOFF=1) - which skips redoing all that.
+if ($env:LGTV_EASY_HANDOFF -eq "1") {
+    Log "Running the up-to-date launcher."
 } else {
-    Sync-Repo | Out-Null
-    Maybe-SelfUpdate
+    Install-Deps
+    Log-Diagnostics
+    Require-Python
+    if ($NoUpdate) {
+        Log "Auto-update disabled (LGTV_EASY_NO_UPDATE=1); using the on-disk copy."
+    } else {
+        Sync-Repo | Out-Null
+        Maybe-SelfUpdate
+    }
 }
 
 if ($Setup) {
