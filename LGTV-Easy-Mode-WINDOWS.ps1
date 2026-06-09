@@ -27,7 +27,7 @@ param(
 $ErrorActionPreference = "Continue"
 
 # ---- configuration ----------------------------------------------------------
-$RepoUrl    = if ($env:LGTV_EASY_REPO)   { $env:LGTV_EASY_REPO }   else { "https://github.com/routine88/lgtvcompanion-easier.git" }
+$RepoUrl    = if ($env:LGTV_EASY_REPO)   { $env:LGTV_EASY_REPO }   else { "https://github.com/JPersson77/LGTVCompanion.git" }
 # Track the repository's default branch (master). Override with LGTV_EASY_BRANCH.
 $RepoBranch = if ($env:LGTV_EASY_BRANCH) { $env:LGTV_EASY_BRANCH } else { "master" }
 $AppHome    = if ($env:LGTV_EASY_APP_HOME) { $env:LGTV_EASY_APP_HOME } else { Join-Path $env:LOCALAPPDATA "lgtv-companion-easy\app" }

@@ -21,7 +21,7 @@
 set -uo pipefail
 
 # ---- configuration ----------------------------------------------------------
-REPO_URL="${LGTV_EASY_REPO:-https://github.com/routine88/lgtvcompanion-easier.git}"
+REPO_URL="${LGTV_EASY_REPO:-https://github.com/JPersson77/LGTVCompanion.git}"
 # Track the repository's default branch (master). Override with LGTV_EASY_BRANCH.
 REPO_BRANCH="${LGTV_EASY_BRANCH:-master}"
 APP_HOME="${LGTV_EASY_APP_HOME:-$HOME/.local/share/lgtv-companion-easy}"
