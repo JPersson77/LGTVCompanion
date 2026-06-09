@@ -136,16 +136,27 @@ def probe_tv(tv_ip: str, log) -> None:
 _MAC_RE = re.compile(r"([0-9a-fA-F]{2}(?:[:-][0-9a-fA-F]{2}){5})")
 
 
+def _warm_arp(ip: str) -> None:
+    """Provoke an ARP entry by briefly touching the host (the SYN resolves the
+    MAC even if the port is closed), so the lookup below has something to read."""
+    for port in (3001, 3000, 80):
+        try:
+            socket.create_connection((ip, port), timeout=0.6).close()
+            return
+        except OSError:
+            continue
+
+
 def mac_for_ip(ip: str, timeout: float = 4.0) -> str:
     """Best-effort lookup of a device's MAC from the OS ARP/neighbour table.
 
-    Called right after we've connected to the TV (so it's already in the cache),
-    this lets Easy Mode store the TV's hardware address automatically and use
+    Lets Easy Mode store the TV's hardware address automatically and use
     Wake-on-LAN to power it back on from deep standby - no manual MAC hunting.
     Returns "" if it can't be determined; never raises.
     """
     if not ip or ip.startswith("127.") or ip in ("localhost", "::1"):
         return ""
+    _warm_arp(ip)
     commands = []
     if sys.platform.startswith("win"):
         commands.append(["arp", "-a", ip])
