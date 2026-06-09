@@ -1,6 +1,8 @@
 """Cross-platform "seconds since last user input" detection.
 
 * Windows: ``GetLastInputInfo`` via ctypes (no dependencies).
+* Linux/Wayland (GNOME): ``org.gnome.Mutter.IdleMonitor`` over D-Bus (via
+  ``gdbus``), since the X11 tools can't see input on a Wayland session.
 * Linux/X11: ``xprintidle`` if present, else libXScreenSaver via ctypes.
 * Anything else / headless: a manual source that can be driven by tests or the
   environment variable ``LGTV_EASY_FAKE_IDLE`` (seconds).
@@ -13,6 +15,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -87,6 +90,52 @@ def _xss_backend():
     return ("libXss", _get)
 
 
+def _gdbus_call(dest: str, path: str, method: str) -> "str | None":
+    """Call a session-bus D-Bus method via gdbus; return stdout or None."""
+    gdbus = shutil.which("gdbus")
+    if not gdbus:
+        return None
+    try:
+        return subprocess.check_output(
+            [gdbus, "call", "--session", "--dest", dest,
+             "--object-path", path, "--method", method],
+            stderr=subprocess.DEVNULL, timeout=2, text=True).strip()
+    except Exception:
+        return None
+
+
+def _parse_uint(text: "str | None") -> "int | None":
+    """Pull the value out of a gdbus reply like '(uint64 12345,)'.
+
+    Note the type token itself contains digits (uint64), so match the integer
+    that *follows* the type; fall back to a bare integer for plain replies.
+    """
+    if not text:
+        return None
+    m = re.search(r"u?int\d+\s+(\d+)", text)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"\d+", text)
+    return int(m.group(0)) if m else None
+
+
+def _mutter_idle_backend():
+    """GNOME's IdleMonitor - works on both Wayland and X11. Returns ms idle."""
+    method = "org.gnome.Mutter.IdleMonitor.GetIdletime"
+    dest = "org.gnome.Mutter.IdleMonitor"
+    path = "/org/gnome/Mutter/IdleMonitor/Core"
+    if _parse_uint(_gdbus_call(dest, path, method)) is None:
+        return None  # not GNOME, or no session bus - don't pick it
+
+    def _get() -> float:
+        ms = _parse_uint(_gdbus_call(dest, path, method))
+        # On a transient failure report "active" (0) rather than risk a huge
+        # value that would sleep the TV spuriously.
+        return max(0.0, (ms or 0) / 1000.0)
+
+    return ("gnome-idlemonitor", _get)
+
+
 class ManualIdle:
     """A controllable idle source for tests and headless fallback."""
 
@@ -119,7 +168,13 @@ def _select_backend():
         except Exception:
             pass
     if sys.platform.startswith("linux"):
-        for factory in (_xprintidle_backend, _xss_backend):
+        # On Wayland the X11 idle tools can't see input (they'd read 0 forever),
+        # so prefer the GNOME IdleMonitor there; on X11 keep the proven tools.
+        session = (os.environ.get("XDG_SESSION_TYPE") or "").lower()
+        wayland = session == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
+        x11 = [_xprintidle_backend, _xss_backend]
+        dbus = [_mutter_idle_backend]
+        for factory in (dbus + x11 if wayland else x11 + dbus):
             backend = factory()
             if backend:
                 return backend
