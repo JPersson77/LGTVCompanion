@@ -68,6 +68,11 @@ function Pause-BeforeExit {
 }
 
 # ---- dependency installation ------------------------------------------------
+function Refresh-Path {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path","User")
+}
+
 function Install-Deps {
     if (-not (Have "winget")) {
         Log "winget not found. Please install Git and Python 3 manually from python.org and git-scm.com."
@@ -75,18 +80,52 @@ function Install-Deps {
     if (-not (Have "git")) {
         Log "Installing Git via winget..."
         winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+        Refresh-Path
     }
     if (-not (Have "python")) {
         Log "Installing Python 3 via winget..."
         winget install --id Python.Python.3.12 -e --source winget --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
-                    [System.Environment]::GetEnvironmentVariable("Path","User")
+        Refresh-Path
     }
     # tkinter check (ships with the official installer).
     & python -c "import tkinter" 2>$null
     if ($LASTEXITCODE -ne 0) {
         Log "WARNING: tkinter not available in this Python. The graphical wizard needs it; the text wizard still works."
     }
+}
+
+# Report what we actually have to work with - the first thing to check when the
+# program "won't launch" is whether Python and Git are even on PATH.
+function Log-Diagnostics {
+    if (Have "python") {
+        Log ("Python: " + ((& python --version 2>&1) -join " "))
+    } else {
+        Log "Python: NOT FOUND on PATH."
+    }
+    if (Have "git") {
+        Log ("Git: " + ((& git --version 2>&1) -join " "))
+    } else {
+        Log "Git: NOT FOUND on PATH."
+    }
+    Log "App folder: $AppHome"
+    Log "Log file  : $LogFile"
+}
+
+# If Python still isn't usable we cannot run the app at all - say so plainly and
+# keep the window open, instead of failing somewhere deeper with a cryptic error.
+function Require-Python {
+    if (Have "python") {
+        & python -c "import sys" 2>$null
+        if ($LASTEXITCODE -eq 0) { return }
+    }
+    Log "ERROR: Python 3 is required but was not found (or won't run)."
+    Write-Host ""
+    Write-Host "Python 3 could not be found on this PC. Easy Mode needs it to run."
+    Write-Host "Fix: install Python 3 from https://www.python.org/downloads/ and,"
+    Write-Host "on the first installer screen, TICK 'Add python.exe to PATH'."
+    Write-Host "Then run this launcher again."
+    Pause-BeforeExit
+    exit 1
 }
 
 # ---- repository / self-update ----------------------------------------------
@@ -192,7 +231,21 @@ if ($Setup)      { $script:ForwardArgs += "-Setup" }
 
 if ($Stop) { Stop-Background; exit 0 }
 
+# Catch-all backstop: any unexpected error prints clearly and keeps the window
+# open, rather than the console vanishing before it can be read.
+trap {
+    Log "FATAL: $($_.Exception.Message)"
+    Write-Host ""
+    Write-Host "Unexpected error while starting Easy Mode:"
+    Write-Host "  $($_.Exception.Message)"
+    if ($_.ScriptStackTrace) { Write-Host $_.ScriptStackTrace }
+    Pause-BeforeExit
+    exit 1
+}
+
 Install-Deps
+Log-Diagnostics
+Require-Python
 Sync-Repo | Out-Null
 Maybe-SelfUpdate
 

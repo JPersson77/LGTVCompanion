@@ -25,6 +25,13 @@ def test_same_subnet_guess():
     assert same_subnet_guess([], "") == ""
 
 
+def test_same_subnet_guess_flags_google_wifi_double_nat():
+    # PC upstream, TV behind Google/Nest Wifi (192.168.86.x).
+    note = same_subnet_guess(["192.168.0.104"], "192.168.86.43")
+    assert "WARNING" in note
+    assert "Google" in note and "192.168.86.x" in note
+
+
 def test_tcp_probe_unreachable_is_graceful():
     ok, detail = tcp_probe("203.0.113.5", 3000, timeout=0.5)
     assert ok is False
