@@ -69,7 +69,7 @@ def cmd_pair(args) -> int:
         if mac:
             _print(f"Detected TV hardware address {mac} for Wake-on-LAN.")
     cfg.device = Device(name=args.name or cfg.device.name or "My LG TV",
-                        ip=args.ip, mac=mac, key=key)
+                        ip=args.ip, mac=mac, key=key, secure=client.secure)
     cfg.setup_complete = True
     cfg.save()
     _print(f"Paired! Saved TV '{cfg.device.name}' at {args.ip}.")
@@ -109,7 +109,8 @@ def cmd_status(args) -> int:
     _print(f"  Log file    : {log_path()}")
     _print(f"  Setup done  : {cfg.setup_complete}")
     _print(f"  TV          : {cfg.device.name} @ {cfg.device.ip or '(none)'}"
-           f"  paired={cfg.device.paired}")
+           f"  paired={cfg.device.paired}  "
+           f"port={'3001/wss' if cfg.device.secure else '3000/ws'}")
     _print(f"  Idle sleep  : {'ON' if cfg.idle_enabled else 'OFF'} after "
            f"{cfg.idle_minutes} min  (mute={cfg.mute_on_sleep})")
     if cfg.deep_off_enabled:
@@ -130,9 +131,11 @@ def cmd_test(args) -> int:
     if not cfg.device.ip:
         _print("No TV configured. Run 'lgtv-easy pair <ip>' first.")
         return 1
-    client = WebOSClient(cfg.device.ip)
+    from .webos import pair_with_fallback
+    client = WebOSClient(cfg.device.ip, secure=cfg.device.secure)
     try:
-        client.connect(client_key=cfg.device.key)
+        pair_with_fallback(client, client_key=cfg.device.key,
+                           prefer_secure=cfg.device.secure, log=_print)
         _print("Turning screen OFF for 3 seconds...")
         client.screen_off()
         time.sleep(3)

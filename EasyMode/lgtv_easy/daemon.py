@@ -49,17 +49,24 @@ class Daemon:
         self.wakes = 0
         self.deep_offs = 0
         self.last_error = ""
+        self._warned_no_wol = False
 
     # ----- TV connection ----------------------------------------------
     def _default_client_factory(self) -> WebOSClient:
-        return WebOSClient(self.config.device.ip)
+        return WebOSClient(self.config.device.ip, secure=self.config.device.secure)
 
     def _ensure_client(self) -> Optional[WebOSClient]:
         if self._client and self._client.connected:
             return self._client
         try:
             client = self._client_factory()
-            client.connect(client_key=self.config.device.key)
+            # Try the port the TV actually accepts (3000 vs secure 3001),
+            # preferring whichever worked before. Newer panels only allow 3001.
+            from .webos import pair_with_fallback
+            pair_with_fallback(client, client_key=self.config.device.key,
+                               on_prompt=None, prompt_timeout=client.timeout,
+                               prefer_secure=self.config.device.secure)
+            self.config.device.secure = client.secure
             self._client = client
             return client
         except Exception as exc:  # noqa: BLE001 - network errors are expected
@@ -157,9 +164,19 @@ class Daemon:
             return
         idle = self._idle_fn()
         threshold = self.config.idle_seconds
-        # Deep power-off only makes sense strictly after the screen-off stage.
+        # Deep power-off only makes sense strictly after the screen-off stage,
+        # and only if we can wake the TV again (Wake-on-LAN needs its MAC) -
+        # otherwise it would switch off and never come back on its own.
         deep = (self.config.deep_off_enabled
                 and self.config.deep_off_seconds > threshold)
+        if deep and not self.config.device.mac:
+            deep = False
+            if not self._warned_no_wol:
+                self._warned_no_wol = True
+                self.logger.warning(
+                    "Deep power-off is on but no Wake-on-LAN MAC is set, so the "
+                    "TV could not be woken again - skipping full power-off. Set "
+                    "the MAC (lgtv-easy set --mac ..) or turn deep-off off.")
         if self.screen_state == STATE_ON and idle >= threshold:
             self.sleep_screen()
         elif (self.screen_state == STATE_OFF and deep

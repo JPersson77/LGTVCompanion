@@ -85,7 +85,7 @@ def run_text_wizard(
         if _yes(input_fn("Keep this TV and just change settings? [Y/n]: "),
                 default_yes=True):
             return _finish(cfg, cfg.device.ip, cfg.device.name, cfg.device.key,
-                           cfg.device.mac, input_fn, out)
+                           cfg.device.mac, cfg.device.secure, input_fn, out)
         out("")
 
     key = ""
@@ -143,10 +143,10 @@ def run_text_wizard(
             mac = detected
             out(f"Found the TV's hardware address ({mac}) for Wake-on-LAN.")
 
-    return _finish(cfg, ip, name, key, mac, input_fn, out)
+    return _finish(cfg, ip, name, key, mac, client.secure, input_fn, out)
 
 
-def _finish(cfg, ip, name, key, mac, input_fn, out) -> int:
+def _finish(cfg, ip, name, key, mac, secure, input_fn, out) -> int:
     """Steps 3-5 (timeout, energy, start-at-login), then save and summarise.
 
     Shared by first-time setup and the "just change settings" path, so both flows
@@ -196,7 +196,7 @@ def _finish(cfg, ip, name, key, mac, input_fn, out) -> int:
 
     # Save the configuration FIRST, so setup is complete no matter what happens
     # when we (best-effort) register the auto-start entry.
-    cfg.device = Device(name=name, ip=ip, mac=mac, key=key)
+    cfg.device = Device(name=name, ip=ip, mac=mac, key=key, secure=secure)
     cfg.idle_minutes = minutes
     cfg.idle_enabled = True
     cfg.mute_on_sleep = mute

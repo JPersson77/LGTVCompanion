@@ -43,6 +43,9 @@ class Device:
     ip: str = ""
     mac: str = ""
     key: str = ""
+    # Which WebSocket the TV actually accepts: False = ws://:3000,
+    # True = wss://:3001. Newer panels (C2 etc.) only allow the secure one.
+    secure: bool = False
 
     @property
     def paired(self) -> bool:

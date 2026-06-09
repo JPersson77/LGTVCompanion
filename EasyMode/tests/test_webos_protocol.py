@@ -1,6 +1,38 @@
 """Protocol-level tests: pairing handshake and SSAP requests against MockTV."""
 from lgtv_easy.mock_tv import MockTV
-from lgtv_easy.webos import WebOSClient
+from lgtv_easy.webos import WebOSClient, pair_with_fallback
+
+
+class _FakeClient:
+    """Records the order of ws/wss attempts; succeeds only on a chosen mode."""
+
+    def __init__(self, succeed_on_secure):
+        self.secure = False
+        self.succeed_on_secure = succeed_on_secure
+        self.attempts = []
+
+    def connect(self, client_key="", on_prompt=None, prompt_timeout=0, log=None):
+        self.attempts.append(self.secure)
+        if self.secure == self.succeed_on_secure:
+            return "CLIENT-KEY"
+        raise OSError("Connection closed during handshake")
+
+    def close(self):
+        pass
+
+
+def test_fallback_default_tries_plain_then_secure():
+    c = _FakeClient(succeed_on_secure=True)  # only wss works (a C2-style TV)
+    key = pair_with_fallback(c)
+    assert key == "CLIENT-KEY"
+    assert c.attempts == [False, True]  # tried 3000, then 3001
+
+
+def test_fallback_prefer_secure_tries_secure_first():
+    c = _FakeClient(succeed_on_secure=True)
+    key = pair_with_fallback(c, prefer_secure=True)
+    assert key == "CLIENT-KEY"
+    assert c.attempts[0] is True  # went straight to 3001
 
 
 def _client_for(tv: MockTV) -> WebOSClient:
