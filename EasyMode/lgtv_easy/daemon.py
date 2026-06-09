@@ -214,6 +214,13 @@ class Daemon:
                 "Idle detection is using the manual fallback; the OS-level "
                 "input timer is unavailable in this environment."
             )
+        # Connect once up front to learn and persist the TV's port and MAC,
+        # even before the first idle event, so the config self-populates promptly.
+        try:
+            if self._ensure_client():
+                self._drop_client()
+        except Exception:  # noqa: BLE001 - best effort, never block startup
+            pass
         while not self._stop.is_set():
             try:
                 self.tick()
