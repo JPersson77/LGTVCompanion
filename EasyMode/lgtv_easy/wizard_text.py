@@ -176,23 +176,33 @@ def _finish(cfg, ip, name, key, mac, secure, input_fn, out) -> int:
     out("")
     out("Step 4: Energy saving (optional - press Enter to skip each)")
     mute = _yes(input_fn("Mute the TV speakers while the screen is off? [y/N]: "))
-    deep = _yes(input_fn(
+    # Accept a plain number here too: people naturally type "2" meaning "yes,
+    # after 2 minutes", not realising it's a yes/no question.
+    deep_ans = input_fn(
         "For the LOWEST power use, fully switch the TV off after a longer idle? "
-        "[y/N]: "))
+        "[y/N, or a number of minutes]: ").strip().lower()
     deep_minutes = cfg.deep_off_minutes
+    gave_number = False
+    try:
+        deep_minutes = max(minutes + 0.5, float(deep_ans))
+        deep = True
+        gave_number = True
+    except ValueError:
+        deep = deep_ans in ("y", "yes")
     if deep:
         out("  Note: this uses Wake-on-LAN to switch the TV back on, so enable")
         out("  'Turn on via Wi-Fi'/'Quick Start+' on the TV. Windows may briefly")
         out("  rearrange windows when the TV powers off and on.")
-        raw2 = input_fn(
-            f"  Fully power off after how many TOTAL minutes idle? "
-            f"(more than {minutes:g}) [{deep_minutes:g}]: "
-        ).strip()
-        if raw2:
-            try:
-                deep_minutes = max(minutes + 0.5, float(raw2))
-            except ValueError:
-                pass
+        if not gave_number:
+            raw2 = input_fn(
+                f"  Fully power off after how many TOTAL minutes idle? "
+                f"(more than {minutes:g}) [{deep_minutes:g}]: "
+            ).strip()
+            if raw2:
+                try:
+                    deep_minutes = max(minutes + 0.5, float(raw2))
+                except ValueError:
+                    pass
         # Wake-on-LAN needs the TV's MAC. We already auto-detected it above, so
         # only ask the user when detection genuinely came up empty.
         if mac:
