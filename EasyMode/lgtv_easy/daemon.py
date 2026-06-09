@@ -66,7 +66,14 @@ class Daemon:
             pair_with_fallback(client, client_key=self.config.device.key,
                                on_prompt=None, prompt_timeout=client.timeout,
                                prefer_secure=self.config.device.secure)
-            self.config.device.secure = client.secure
+            # Remember (and persist) the port that actually worked, so later
+            # reconnects and restarts go straight to it.
+            if client.secure != self.config.device.secure:
+                self.config.device.secure = client.secure
+                try:
+                    self.config.save()
+                except Exception:  # noqa: BLE001 - persistence is best-effort
+                    pass
             self._client = client
             return client
         except Exception as exc:  # noqa: BLE001 - network errors are expected
