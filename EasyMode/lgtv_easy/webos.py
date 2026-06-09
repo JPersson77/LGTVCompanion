@@ -69,20 +69,24 @@ class PairingError(Exception):
 
 def pair_with_fallback(client: "WebOSClient", client_key: str = "",
                        on_prompt=None, prompt_timeout: float = 120.0,
-                       log=None) -> str:
-    """Pair, automatically falling back from plain ws (3000) to secure wss (3001).
+                       log=None, prefer_secure: bool = False) -> str:
+    """Pair/connect, trying both plain ws (3000) and secure wss (3001).
 
-    Older WebOS TVs accept the plain WebSocket on port 3000; many newer ones only
-    answer the TLS WebSocket on port 3001. Beginners can't be expected to know
-    which, so we try both and report each attempt. The supplied ``client`` is
+    Older WebOS TVs accept the plain WebSocket on port 3000; many newer ones
+    (e.g. C2) only answer the TLS WebSocket on port 3001. Beginners can't be
+    expected to know which, so we try both and report each attempt. Pass
+    ``prefer_secure=True`` to try 3001 first (once we know a TV wants it, this
+    avoids a wasted attempt on every reconnect). The supplied ``client`` is
     reused (its ``secure`` flag is toggled), which keeps it testable with a mock.
 
     Returns the client-key on success; raises the last error if both fail.
     """
     out = log or (lambda _m: None)
+    order = [(True, "secure wss (port 3001)"), (False, "plain ws (port 3000)")]
+    if not prefer_secure:
+        order.reverse()
     last_exc: Optional[Exception] = None
-    for secure, label in ((False, "plain ws (port 3000)"),
-                          (True, "secure wss (port 3001)")):
+    for secure, label in order:
         client.secure = secure
         out(f"Attempting {label}...")
         try:

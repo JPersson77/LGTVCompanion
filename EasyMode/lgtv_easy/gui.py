@@ -124,6 +124,7 @@ class SetupWizard(ttk.Frame):
         self.selected_name = tk.StringVar(value=app.cfg.device.name or "My LG TV")
         self.minutes = tk.DoubleVar(value=app.cfg.idle_minutes)
         self.client_key = app.cfg.device.key
+        self.secure = app.cfg.device.secure
         self._build_step1()
 
     def _header(self, title, subtitle):
@@ -250,8 +251,10 @@ class SetupWizard(ttk.Frame):
                     client,
                     client_key=self.client_key,
                     on_prompt=lambda: self.app.post(self._prompt_accept),
-                    prompt_timeout=120.0, log=self.diag)
-                self.app.post(lambda: self._pair_done(key))
+                    prompt_timeout=120.0, log=self.diag,
+                    prefer_secure=self.secure)
+                secure = client.secure
+                self.app.post(lambda: self._pair_done(key, secure))
             except Exception as exc:  # noqa: BLE001
                 probe_tv(ip, self.diag)
                 self.app.post(lambda e=exc: self._pair_failed(e))
@@ -265,8 +268,9 @@ class SetupWizard(ttk.Frame):
             text="👉  Look at your TV: press OK / Accept on the pairing prompt "
                  "with the remote.")
 
-    def _pair_done(self, key):
+    def _pair_done(self, key, secure=False):
         self.client_key = key
+        self.secure = secure
         self.progress.stop()
         self._build_step3()
 
@@ -301,7 +305,8 @@ class SetupWizard(ttk.Frame):
         cfg = self.app.cfg
         cfg.device = Device(name=self.selected_name.get(),
                             ip=self.selected_ip.get().strip(),
-                            mac=cfg.device.mac, key=self.client_key)
+                            mac=cfg.device.mac, key=self.client_key,
+                            secure=self.secure)
         cfg.idle_minutes = round(self.minutes.get())
         cfg.idle_enabled = True
         cfg.setup_complete = True
@@ -426,9 +431,10 @@ class SettingsPanel(ttk.Frame):
 
         def worker():
             ok, err = True, ""
-            client = WebOSClient(cfg.device.ip)
+            client = WebOSClient(cfg.device.ip, secure=cfg.device.secure)
             try:
-                client.connect(client_key=cfg.device.key)
+                pair_with_fallback(client, client_key=cfg.device.key,
+                                   prefer_secure=cfg.device.secure)
                 client.screen_off()
                 import time
                 time.sleep(2)

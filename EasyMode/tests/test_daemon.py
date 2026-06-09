@@ -103,6 +103,7 @@ def test_two_stage_screen_off_then_full_power_off_then_wake():
         cfg = _cfg(minutes=5.0)
         cfg.deep_off_enabled = True
         cfg.deep_off_minutes = 10.0
+        cfg.device.mac = "AA:BB:CC:DD:EE:FF"  # WOL available, so deep-off allowed
         d = _make(tv, cfg)
 
         d._idle_box["v"] = 4 * 60       # working: on
@@ -139,6 +140,21 @@ def test_deep_off_ignored_when_not_beyond_screen_off_threshold():
         d._idle_box["v"] = 99 * 60
         d.tick()  # screen off
         d.tick()  # would deep-off if it applied
+        assert tv.powered_on is True
+        assert d.deep_offs == 0
+
+
+def test_deep_off_skipped_without_wol_mac():
+    # Full power-off with no MAC would leave the TV unwakeable; the daemon must
+    # decline and just keep the screen blanked.
+    with MockTV(require_pairing=False) as tv:
+        cfg = _cfg(minutes=5.0)
+        cfg.deep_off_enabled = True
+        cfg.deep_off_minutes = 10.0  # but cfg.device.mac is "" (none)
+        d = _make(tv, cfg)
+        d._idle_box["v"] = 11 * 60
+        d.tick()  # screen off
+        d.tick()  # would deep-off, but no MAC -> must stay screen-off
         assert tv.powered_on is True
         assert d.deep_offs == 0
 
