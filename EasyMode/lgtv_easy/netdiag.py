@@ -104,13 +104,23 @@ def same_subnet_guess(pc_ips: List[str], tv_ip: str) -> str:
     return ""
 
 
-def probe_tv(tv_ip: str, log) -> None:
-    """Run and report the standard reachability checks for a TV IP."""
+def subnet_report(tv_ip: str, log) -> None:
+    """Report the PC's network address(es) and whether the TV shares the subnet.
+
+    Fast and non-blocking (no TCP connections), so callers can show it the moment
+    a TV IP is known - the subnet mismatch is the most common reason a TV can't be
+    reached, and the user shouldn't have to wait for a timeout to find out.
+    """
     pc_ips = local_ipv4s()
     log(f"This PC's network address(es): {', '.join(pc_ips) if pc_ips else '(none detected!)'}")
     note = same_subnet_guess(pc_ips, tv_ip)
     if note:
         log(note)
+
+
+def probe_tv(tv_ip: str, log) -> None:
+    """Run and report the standard reachability checks for a TV IP."""
+    subnet_report(tv_ip, log)
     for port in WEBOS_PORTS:
         kind = "plain ws" if port == 3000 else "secure wss"
         ok, detail = tcp_probe(tv_ip, port)
