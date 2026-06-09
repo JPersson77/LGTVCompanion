@@ -157,30 +157,43 @@ def mac_for_ip(ip: str, timeout: float = 4.0) -> str:
     if not ip or ip.startswith("127.") or ip in ("localhost", "::1"):
         return ""
     _warm_arp(ip)
-    commands = []
-    if sys.platform.startswith("win"):
-        commands.append(["arp", "-a", ip])
-    else:
-        commands.append(["ip", "neigh", "show", ip])
-        commands.append(["arp", "-n", ip])
-    for cmd in commands:
-        try:
-            out = subprocess.run(cmd, capture_output=True, text=True,
-                                 timeout=timeout).stdout
-        except Exception:  # noqa: BLE001 - tool missing, timeout, etc.
-            continue
-        # On Windows the line also contains the IP (which has no hex pairs), so
-        # the first MAC-shaped token on a line mentioning the IP is the right one.
+    for out in _arp_outputs(ip, timeout):
+        # Only trust a MAC found on a line that names the target IP, so we never
+        # pick up a neighbouring device's address from a full table dump.
         for line in out.splitlines():
-            if ip not in line and len(out.splitlines()) > 1:
+            if ip not in line:
                 continue
             m = _MAC_RE.search(line)
             if m:
                 return m.group(1).replace("-", ":").upper()
-        m = _MAC_RE.search(out)
-        if m:
-            return m.group(1).replace("-", ":").upper()
     return ""
+
+
+def _arp_commands(ip: str) -> "list":
+    if sys.platform.startswith("win"):
+        return [["arp", "-a", ip], ["arp", "-a"]]
+    return [["ip", "neigh", "show", ip], ["arp", "-n", ip],
+            ["ip", "neigh"], ["arp", "-n"]]
+
+
+def _arp_outputs(ip: str, timeout: float = 4.0):
+    for cmd in _arp_commands(ip):
+        try:
+            yield subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=timeout).stdout or ""
+        except Exception:  # noqa: BLE001 - tool missing, timeout, etc.
+            continue
+
+
+def arp_dump(ip: str) -> str:
+    """Raw ARP/neighbour output for the target IP, for diagnostics."""
+    _warm_arp(ip)
+    lines = []
+    for out in _arp_outputs(ip):
+        for line in out.splitlines():
+            if ip in line:
+                lines.append(line.strip())
+    return "\n".join(lines) if lines else "(no ARP entry found for this IP)"
 
 
 def env_summary() -> List[str]:
