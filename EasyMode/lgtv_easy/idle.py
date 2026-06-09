@@ -168,13 +168,16 @@ def _select_backend():
         except Exception:
             pass
     if sys.platform.startswith("linux"):
-        # On Wayland the X11 idle tools can't see input (they'd read 0 forever),
-        # so prefer the GNOME IdleMonitor there; on X11 keep the proven tools.
         session = (os.environ.get("XDG_SESSION_TYPE") or "").lower()
         wayland = session == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
-        x11 = [_xprintidle_backend, _xss_backend]
-        dbus = [_mutter_idle_backend]
-        for factory in (dbus + x11 if wayland else x11 + dbus):
+        if wayland:
+            # On Wayland the X11 tools (xprintidle/XScreenSaver) only see XWayland
+            # input - they report bogus idle - so use the compositor's own monitor
+            # (GNOME), and otherwise be honest (manual) instead of lying.
+            factories = [_mutter_idle_backend]
+        else:
+            factories = [_xprintidle_backend, _xss_backend, _mutter_idle_backend]
+        for factory in factories:
             backend = factory()
             if backend:
                 return backend

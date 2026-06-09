@@ -50,6 +50,30 @@ def test_wayland_session_prefers_gnome_idlemonitor(monkeypatch):
     assert abs(getter() - 12.3) < 0.5
 
 
+def test_wayland_without_gnome_falls_back_to_manual_not_x11(monkeypatch):
+    # On a non-GNOME Wayland session the X11 tools would lie, so we must NOT pick
+    # them even if present - report 'manual' honestly instead.
+    monkeypatch.setattr(idle_mod.sys, "platform", "linux")
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    monkeypatch.setenv("DISPLAY", ":0")          # XWayland present
+    monkeypatch.setattr(idle_mod.shutil, "which", lambda name: "/usr/bin/xprintidle")
+    monkeypatch.setattr(idle_mod, "_gdbus_call", lambda *a, **k: None)  # no Mutter
+    name, _ = idle_mod._select_backend()
+    assert name == "manual"
+
+
+def test_x11_session_uses_xprintidle(monkeypatch):
+    monkeypatch.setattr(idle_mod.sys, "platform", "linux")
+    monkeypatch.setenv("XDG_SESSION_TYPE", "x11")
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setattr(idle_mod.shutil, "which", lambda name: "/usr/bin/xprintidle")
+    monkeypatch.setattr(idle_mod.subprocess, "check_output", lambda *a, **k: b"5000")
+    name, getter = idle_mod._select_backend()
+    assert name == "xprintidle"
+    assert abs(getter() - 5.0) < 0.1
+
+
 def test_magic_packet_format():
     pkt = magic_packet("AA:BB:CC:DD:EE:FF")
     assert len(pkt) == 102

@@ -91,6 +91,16 @@ def test_wizard_emits_diagnostics_then_retries_to_success(tmp_path, monkeypatch)
         assert saved.setup_complete is True
 
 
+def test_wizard_yes_and_host_cleaning():
+    from lgtv_easy.wizard_text import _clean_host, _yes
+    assert _yes("y") and _yes("yes") and _yes("1") and _yes("true")
+    assert not _yes("n") and not _yes("0") and not _yes("2")
+    assert _yes("", default_yes=True) and not _yes("", default_yes=False)
+    assert _clean_host("  http://192.168.86.43/  ") == "192.168.86.43"
+    assert _clean_host("wss://192.168.86.43:3001/") == "192.168.86.43:3001"
+    assert _clean_host('"192.168.1.50"') == "192.168.1.50"
+
+
 def test_mac_for_ip_is_graceful_on_loopback():
     # Loopback has no ARP entry; must return "" rather than raise.
     assert mac_for_ip("127.0.0.1") == ""

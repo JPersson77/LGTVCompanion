@@ -27,7 +27,25 @@ def _yes(value: str, default_yes: bool = False) -> bool:
     v = value.strip().lower()
     if v == "":
         return default_yes
-    return v in ("y", "yes")
+    if v in ("y", "yes", "yeah", "yep", "1", "true", "on"):
+        return True
+    if v in ("n", "no", "nope", "0", "false", "off"):
+        return False
+    return default_yes
+
+
+def _clean_host(text: str) -> str:
+    """Tidy a typed IP/host: strip spaces, quotes, a pasted scheme and any path.
+
+    People paste things like ``http://192.168.1.50/`` or `` 192.168.1.50 `` -
+    accept those gracefully rather than failing to connect.
+    """
+    s = text.strip().strip('"').strip("'").strip()
+    for scheme in ("http://", "https://", "ws://", "wss://"):
+        if s.lower().startswith(scheme):
+            s = s[len(scheme):]
+    s = s.split("/")[0]          # drop any path
+    return s.strip()
 
 
 def _choose_tv(input_fn, out, discover_fn) -> Tuple[str, str]:
@@ -50,7 +68,7 @@ def _choose_tv(input_fn, out, discover_fn) -> Tuple[str, str]:
                 return sel.ip, sel.name
         else:
             out("No TVs found automatically - you can enter the IP by hand below.")
-    ip = input_fn("Enter your TV's IP address (e.g. 192.168.1.50): ").strip()
+    ip = _clean_host(input_fn("Enter your TV's IP address (e.g. 192.168.1.50): "))
     typed = input_fn("Give it a name [My LG TV]: ").strip()
     if typed:
         name = typed
