@@ -143,17 +143,24 @@ def cmd_test(args) -> int:
         _print("Turning screen ON...")
         client.screen_on()
         # While connected, learn (and save) the TV's MAC for Wake-on-LAN.
+        # Newer panels block the WebSocket info APIs, so fall back to the ARP
+        # table (the host is in it now, since we just connected).
+        host = cfg.device.ip.rpartition(":")[0] if ":" in cfg.device.ip else cfg.device.ip
         mac = client.get_mac()
+        if not mac:
+            from .netdiag import mac_for_ip
+            mac = mac_for_ip(host)
         if mac:
             if mac != cfg.device.mac:
                 cfg.device.mac = mac
                 cfg.save()
             _print(f"TV MAC for Wake-on-LAN: {mac}  (saved)")
         else:
-            _print("Could not read the TV's MAC. Raw network info follows so it")
-            _print("can be reported:")
-            _print(f"  getStatus: {client.request(URI_GET_NETWORK_STATUS)}")
-            _print(f"  swInfo   : {client.request(URI_GET_SW_INFO)}")
+            from .netdiag import arp_dump
+            _print("Could not auto-detect the TV's MAC (this panel blocks the")
+            _print("WebSocket info APIs). You can set it by hand with:")
+            _print("  lgtv-easy set --mac <the TV's Wi-Fi MAC>")
+            _print(f"  ARP says: {arp_dump(host)}")
     except Exception as exc:  # noqa: BLE001
         _print(f"Test failed: {exc}")
         return 1

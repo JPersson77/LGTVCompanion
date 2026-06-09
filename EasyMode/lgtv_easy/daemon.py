@@ -74,6 +74,11 @@ class Daemon:
                 changed = True
             if not self.config.device.mac:
                 mac = client.get_mac()
+                if not mac:
+                    from .netdiag import mac_for_ip
+                    host = (client.ip.rpartition(":")[0]
+                            if ":" in client.ip else client.ip)
+                    mac = mac_for_ip(host)
                 if mac:
                     self.config.device.mac = mac
                     changed = True
