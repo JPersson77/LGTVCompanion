@@ -103,6 +103,85 @@ def _disable_task() -> bool:
     return removed
 
 
+# ----- Windows: power-off-at-shutdown Scheduled Task --------------------------
+SHUTDOWN_TASK_NAME = "LGTV Companion Easy Mode Shutdown"
+
+
+def _shutdown_wrapper_path():
+    from .config import config_dir
+    return Path(config_dir()) / "shutdown-off.cmd"
+
+
+def _shutdown_wrapper_content() -> str:
+    return (
+        "@echo off\r\n"
+        f'cd /d "{_app_dir()}"\r\n'
+        f'"{_pythonw()}" -m lgtv_easy off --only-if-configured\r\n'
+    )
+
+
+def _shutdown_task_xml(wrapper: Path) -> str:
+    # Trigger on System-log event 1074 (User32) = a shutdown/restart/logoff was
+    # initiated - early enough that the network is still up to reach the TV.
+    sub = ("&lt;QueryList&gt;&lt;Query Id=\"0\" Path=\"System\"&gt;"
+           "&lt;Select Path=\"System\"&gt;*[System[Provider[@Name='User32'] "
+           "and (EventID=1074)]]&lt;/Select&gt;&lt;/Query&gt;&lt;/QueryList&gt;")
+    return (
+        '<?xml version="1.0" encoding="UTF-16"?>\r\n'
+        '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">\r\n'
+        '  <RegistrationInfo><Description>Power the LG TV off when the PC shuts down.</Description></RegistrationInfo>\r\n'
+        '  <Triggers><EventTrigger><Enabled>true</Enabled>'
+        f'<Subscription>{sub}</Subscription></EventTrigger></Triggers>\r\n'
+        '  <Principals><Principal id="Author"><LogonType>InteractiveToken</LogonType>'
+        '<RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\r\n'
+        '  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>'
+        '<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>'
+        '<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>'
+        '<ExecutionTimeLimit>PT30S</ExecutionTimeLimit><Enabled>true</Enabled></Settings>\r\n'
+        '  <Actions Context="Author"><Exec><Command>cmd</Command>'
+        f'<Arguments>/c "{wrapper}"</Arguments></Exec></Actions>\r\n'
+        '</Task>\r\n'
+    )
+
+
+def enable_shutdown_hook() -> str:
+    """Windows: register a task that powers the TV off when the PC shuts down.
+
+    On other platforms this is a no-op - the running daemon catches SIGTERM at
+    logout/shutdown and powers the TV off itself.
+    """
+    if os.name != "nt":
+        return "handled by the daemon (SIGTERM)"
+    import tempfile
+    wrapper = _shutdown_wrapper_path()
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    wrapper.write_text(_shutdown_wrapper_content(), encoding="utf-8")
+    fd, xml_path = tempfile.mkstemp(suffix=".xml")
+    os.close(fd)
+    try:
+        Path(xml_path).write_text(_shutdown_task_xml(wrapper), encoding="utf-16")
+        rc, out = _run(["schtasks", "/Create", "/TN", SHUTDOWN_TASK_NAME,
+                        "/XML", xml_path, "/F"])
+        if rc != 0:
+            raise OSError(f"schtasks could not create the shutdown task: {out.strip()}")
+    finally:
+        try:
+            os.remove(xml_path)
+        except OSError:
+            pass
+    return f"Scheduled Task '{SHUTDOWN_TASK_NAME}'"
+
+
+def disable_shutdown_hook() -> None:
+    if os.name != "nt":
+        return
+    _run(["schtasks", "/Delete", "/TN", SHUTDOWN_TASK_NAME, "/F"])
+    try:
+        _shutdown_wrapper_path().unlink()
+    except OSError:
+        pass
+
+
 # ----- Linux: autostart .desktop ----------------------------------------------
 def _linux_target() -> Path:
     base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
@@ -136,10 +215,19 @@ def is_enabled() -> bool:
         return False
 
 
+def _try_enable_shutdown_hook() -> None:
+    try:
+        enable_shutdown_hook()
+    except Exception:  # noqa: BLE001 - must not break login auto-start
+        pass
+
+
 def enable(method: str = "") -> str:
     """Create the auto-start entry. Returns a short label; raises on failure."""
     method = method or default_method()
     if os.name == "nt":
+        # Pair it with the "off at shutdown" task (best-effort; never fatal).
+        _try_enable_shutdown_hook()
         if method == "task":
             return _enable_task()
         path = _startup_target()
@@ -164,6 +252,7 @@ def disable() -> bool:
             pass
         if _disable_task():
             removed = True
+        disable_shutdown_hook()
         return removed
     try:
         if _linux_target().exists():
