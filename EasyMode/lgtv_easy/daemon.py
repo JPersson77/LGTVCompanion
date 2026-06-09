@@ -22,7 +22,8 @@ from .wol import send_wol
 
 # Screen state as tracked by the daemon.
 STATE_ON = "on"
-STATE_OFF = "off"
+STATE_OFF = "off"          # panel blanked, TV still powered and on the network
+STATE_STANDBY = "standby"  # TV fully powered off (deep energy saving)
 
 
 class Daemon:
@@ -46,6 +47,7 @@ class Daemon:
         # Counters make tests and the status command observable.
         self.sleeps = 0
         self.wakes = 0
+        self.deep_offs = 0
         self.last_error = ""
 
     # ----- TV connection ----------------------------------------------
@@ -94,6 +96,26 @@ class Daemon:
             self._drop_client()
             return False
 
+    def power_off_tv(self) -> bool:
+        """Fully power the TV off (deep standby) for maximum energy saving."""
+        client = self._ensure_client()
+        if not client:
+            return False
+        try:
+            client.power_off()
+            self.screen_state = STATE_STANDBY
+            self.deep_offs += 1
+            self.logger.info("TV powered off (deep energy saving) after %.0f min idle",
+                             self.config.deep_off_minutes)
+            # The socket dies as the TV powers down; reconnect on the next wake.
+            self._drop_client()
+            return True
+        except Exception as exc:  # noqa: BLE001
+            self.last_error = f"power_off: {exc}"
+            self.logger.warning("Failed to power off TV: %s", exc)
+            self._drop_client()
+            return False
+
     def wake_screen(self) -> bool:
         # If the panel went into standby it may need a magic packet first.
         if self.config.device.mac:
@@ -120,17 +142,30 @@ class Daemon:
 
     # ----- the loop ----------------------------------------------------
     def tick(self) -> None:
-        """Evaluate idle state once and act. Safe to call from tests."""
+        """Evaluate idle state once and act. Safe to call from tests.
+
+        Up to three stages, mirroring a real monitor that sleeps then lets the
+        PC power down:
+          ON       --(idle >= idle_minutes)-->        OFF (screen blanked)
+          OFF      --(idle >= deep_off_minutes)-->     STANDBY (TV powered off)
+          OFF/STANDBY --(activity)-->                  ON (wake, via WOL if off)
+        """
         if not self.config.idle_enabled:
-            # Disabled: make sure the screen isn't left off by us.
-            if self.screen_state == STATE_OFF:
+            # Disabled: make sure the screen isn't left off/standby by us.
+            if self.screen_state in (STATE_OFF, STATE_STANDBY):
                 self.wake_screen()
             return
         idle = self._idle_fn()
         threshold = self.config.idle_seconds
+        # Deep power-off only makes sense strictly after the screen-off stage.
+        deep = (self.config.deep_off_enabled
+                and self.config.deep_off_seconds > threshold)
         if self.screen_state == STATE_ON and idle >= threshold:
             self.sleep_screen()
-        elif self.screen_state == STATE_OFF and idle < threshold:
+        elif (self.screen_state == STATE_OFF and deep
+              and idle >= self.config.deep_off_seconds):
+            self.power_off_tv()
+        elif self.screen_state in (STATE_OFF, STATE_STANDBY) and idle < threshold:
             # Any input resets the OS idle timer, so this fires on wake.
             self.wake_screen()
 

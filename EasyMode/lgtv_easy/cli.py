@@ -62,8 +62,14 @@ def cmd_pair(args) -> int:
         return 1
     finally:
         client.close()
+    mac = args.mac or cfg.device.mac
+    if not mac:
+        from .netdiag import mac_for_ip
+        mac = mac_for_ip(args.ip)
+        if mac:
+            _print(f"Detected TV hardware address {mac} for Wake-on-LAN.")
     cfg.device = Device(name=args.name or cfg.device.name or "My LG TV",
-                        ip=args.ip, mac=args.mac or cfg.device.mac, key=key)
+                        ip=args.ip, mac=mac, key=key)
     cfg.setup_complete = True
     cfg.save()
     _print(f"Paired! Saved TV '{cfg.device.name}' at {args.ip}.")
@@ -82,6 +88,12 @@ def cmd_set(args) -> int:
     if args.mute is not None:
         cfg.mute_on_sleep = args.mute
         changed.append(f"mute_on_sleep={args.mute}")
+    if args.deep_off is not None:
+        cfg.deep_off_enabled = args.deep_off
+        changed.append(f"deep_off={args.deep_off}")
+    if args.deep_off_minutes is not None:
+        cfg.deep_off_minutes = args.deep_off_minutes
+        changed.append(f"deep_off_minutes={args.deep_off_minutes}")
     if args.mac is not None:
         cfg.device.mac = args.mac
         changed.append(f"mac={args.mac}")
@@ -100,6 +112,11 @@ def cmd_status(args) -> int:
            f"  paired={cfg.device.paired}")
     _print(f"  Idle sleep  : {'ON' if cfg.idle_enabled else 'OFF'} after "
            f"{cfg.idle_minutes} min  (mute={cfg.mute_on_sleep})")
+    if cfg.deep_off_enabled:
+        _print(f"  Deep off    : ON after {cfg.deep_off_minutes} min "
+               f"(full power-off, WOL mac={cfg.device.mac or '(none!)'})")
+    else:
+        _print("  Deep off    : OFF (screen blanks only; TV stays powered)")
     _print(f"  Idle backend: {idle_mod.idle_backend_name()} "
            f"(real={idle_mod.is_real_backend()})")
     _print(f"  Current idle: {idle_mod.get_idle_seconds():.0f}s")
@@ -182,9 +199,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_pair)
 
     s = sub.add_parser("set", help="change settings")
-    s.add_argument("--minutes", type=float, help="idle timeout in minutes")
+    s.add_argument("--minutes", type=float, help="screen-off timeout in minutes")
     s.add_argument("--enabled", type=_boolish, help="true/false")
     s.add_argument("--mute", type=_boolish, help="mute speakers on sleep")
+    s.add_argument("--deep-off", dest="deep_off", type=_boolish,
+                   help="fully power the TV off after a longer idle (true/false)")
+    s.add_argument("--deep-off-minutes", dest="deep_off_minutes", type=float,
+                   help="total idle minutes before fully powering off")
     s.add_argument("--mac", help="set Wake-on-LAN MAC address")
     s.set_defaults(func=cmd_set)
 

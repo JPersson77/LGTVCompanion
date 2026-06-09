@@ -2,7 +2,7 @@
 import logging
 
 from lgtv_easy.config import Config, Device
-from lgtv_easy.daemon import STATE_OFF, STATE_ON, Daemon
+from lgtv_easy.daemon import STATE_OFF, STATE_ON, STATE_STANDBY, Daemon
 from lgtv_easy.mock_tv import MockTV
 from lgtv_easy.webos import WebOSClient
 
@@ -96,6 +96,51 @@ def test_disabling_after_sleep_restores_screen():
         cfg.idle_enabled = False
         d.tick()
         assert tv.screen_on is True
+
+
+def test_two_stage_screen_off_then_full_power_off_then_wake():
+    with MockTV(require_pairing=False) as tv:
+        cfg = _cfg(minutes=5.0)
+        cfg.deep_off_enabled = True
+        cfg.deep_off_minutes = 10.0
+        d = _make(tv, cfg)
+
+        d._idle_box["v"] = 4 * 60       # working: on
+        d.tick()
+        assert d.screen_state == STATE_ON
+
+        d._idle_box["v"] = 6 * 60       # past 5 min: screen blanks, TV still powered
+        d.tick()
+        assert d.screen_state == STATE_OFF
+        assert tv.screen_on is False and tv.powered_on is True
+
+        d._idle_box["v"] = 8 * 60       # between 5 and 10: no deep-off yet
+        d.tick()
+        assert d.screen_state == STATE_OFF
+        assert tv.powered_on is True and d.deep_offs == 0
+
+        d._idle_box["v"] = 11 * 60      # past 10 min: full power off
+        d.tick()
+        assert d.screen_state == STATE_STANDBY
+        assert tv.powered_on is False and d.deep_offs == 1
+
+        d._idle_box["v"] = 0            # activity: wake back on
+        d.tick()
+        assert d.screen_state == STATE_ON
+        assert tv.screen_on is True and d.wakes == 1
+
+
+def test_deep_off_ignored_when_not_beyond_screen_off_threshold():
+    with MockTV(require_pairing=False) as tv:
+        cfg = _cfg(minutes=5.0)
+        cfg.deep_off_enabled = True
+        cfg.deep_off_minutes = 5.0  # not strictly greater: must be ignored
+        d = _make(tv, cfg)
+        d._idle_box["v"] = 99 * 60
+        d.tick()  # screen off
+        d.tick()  # would deep-off if it applied
+        assert tv.powered_on is True
+        assert d.deep_offs == 0
 
 
 def test_survives_tv_disconnect():

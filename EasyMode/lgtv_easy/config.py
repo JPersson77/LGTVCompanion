@@ -59,6 +59,12 @@ class Config:
     poll_seconds: float = 5.0
     # Mute the TV speakers when the screen sleeps (handy for some setups).
     mute_on_sleep: bool = False
+    # Energy saving: after a longer idle, fully power the TV OFF (true standby,
+    # ~0.5W) instead of just blanking the screen. Waking from this needs
+    # Wake-on-LAN (the TV's "Turn on via Wi-Fi"/"Quick Start+" setting), so the
+    # TV's MAC address is stored on the device for the magic packet.
+    deep_off_enabled: bool = False
+    deep_off_minutes: float = 30.0
     # True once the setup wizard has completed successfully.
     setup_complete: bool = False
     device: Device = field(default_factory=Device)
@@ -97,3 +103,7 @@ class Config:
     @property
     def idle_seconds(self) -> float:
         return max(1.0, float(self.idle_minutes) * 60.0)
+
+    @property
+    def deep_off_seconds(self) -> float:
+        return max(1.0, float(self.deep_off_minutes) * 60.0)
