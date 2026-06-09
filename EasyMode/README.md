@@ -94,8 +94,10 @@ lgtv-easy autostart disable    # stop starting it at login
 ## How it works
 
 - **Idle detection** uses the OS input timer: `GetLastInputInfo` on Windows;
-  `xprintidle` or the X ScreenSaver extension on Linux. `lgtv-easy status` shows
-  which backend is active.
+  GNOME's `org.gnome.Mutter.IdleMonitor` over D-Bus on a Wayland session;
+  `xprintidle` or the X ScreenSaver extension on X11. `lgtv-easy status` shows
+  which backend is active (`real=False`/`manual` means none was available - e.g.
+  a non-GNOME Wayland session; logging into an Xorg session fixes that).
 - When you cross the timeout, it sends the WebOS `turnOffScreen` command (an
   OLED-friendly screen blank, not a full power-off). Any keypress/mouse move
   resets the OS idle timer, and the daemon sends `turnOnScreen`.
