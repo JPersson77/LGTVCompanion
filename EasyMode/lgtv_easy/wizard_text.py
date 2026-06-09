@@ -193,8 +193,9 @@ def _finish(cfg, ip, name, key, mac, input_fn, out) -> int:
     out("Step 5: Start automatically")
     auto = _yes(input_fn(
         "Start Easy Mode automatically when you log in? [Y/n]: "), default_yes=True)
-    auto_msg = autostart_mod.set_enabled(auto)
 
+    # Save the configuration FIRST, so setup is complete no matter what happens
+    # when we (best-effort) register the auto-start entry.
     cfg.device = Device(name=name, ip=ip, mac=mac, key=key)
     cfg.idle_minutes = minutes
     cfg.idle_enabled = True
@@ -203,6 +204,8 @@ def _finish(cfg, ip, name, key, mac, input_fn, out) -> int:
     cfg.deep_off_minutes = deep_minutes
     cfg.setup_complete = True
     cfg.save()
+
+    auto_msg = autostart_mod.set_enabled(auto)
 
     unit = "minute" if minutes == 1 else "minutes"
     out("")

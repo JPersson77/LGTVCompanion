@@ -175,13 +175,19 @@ def disable() -> bool:
 
 
 def set_enabled(enabled: bool, method: str = "") -> str:
-    """Convenience: enable or disable, returning a short human status string."""
+    """Convenience: enable or disable, returning a short human status string.
+
+    Never raises - a failure to register auto-start must not abort setup.
+    """
     if enabled:
         try:
             return f"auto-start at login ENABLED via {enable(method)}"
-        except OSError as exc:
-            return f"could not enable auto-start: {exc}"
-    disable()
+        except Exception as exc:  # noqa: BLE001 - never let this break the wizard
+            return f"could NOT enable auto-start ({exc}); everything else is set"
+    try:
+        disable()
+    except Exception:  # noqa: BLE001
+        pass
     return "auto-start at login DISABLED"
 
 
