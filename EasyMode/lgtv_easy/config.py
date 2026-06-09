@@ -68,6 +68,8 @@ class Config:
     # TV's MAC address is stored on the device for the magic packet.
     deep_off_enabled: bool = False
     deep_off_minutes: float = 30.0
+    # Power the TV fully off when the PC shuts down or logs off.
+    tv_off_on_shutdown: bool = True
     # True once the setup wizard has completed successfully.
     setup_complete: bool = False
     device: Device = field(default_factory=Device)

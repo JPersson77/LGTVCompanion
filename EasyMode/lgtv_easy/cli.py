@@ -94,6 +94,9 @@ def cmd_set(args) -> int:
     if args.deep_off_minutes is not None:
         cfg.deep_off_minutes = args.deep_off_minutes
         changed.append(f"deep_off_minutes={args.deep_off_minutes}")
+    if args.off_on_shutdown is not None:
+        cfg.tv_off_on_shutdown = args.off_on_shutdown
+        changed.append(f"off_on_shutdown={args.off_on_shutdown}")
     if args.mac is not None:
         cfg.device.mac = args.mac
         changed.append(f"mac={args.mac}")
@@ -118,6 +121,8 @@ def cmd_status(args) -> int:
                f"(full power-off, WOL mac={cfg.device.mac or '(none!)'})")
     else:
         _print("  Deep off    : OFF (screen blanks only; TV stays powered)")
+    _print(f"  Off on quit : {'ON' if cfg.tv_off_on_shutdown else 'OFF'} "
+           "(power the TV off when the PC shuts down)")
     _print(f"  Idle backend: {idle_mod.idle_backend_name()} "
            f"(real={idle_mod.is_real_backend()})")
     _print(f"  Current idle: {idle_mod.get_idle_seconds():.0f}s")
@@ -173,6 +178,64 @@ def cmd_test(args) -> int:
     return 0
 
 
+def _tv_power_off(cfg, log=lambda m: None, timeout: float = 8.0) -> bool:
+    """Connect and fully power the TV off (used by `off` and shutdown hooks)."""
+    from .webos import pair_with_fallback
+    client = WebOSClient(cfg.device.ip, secure=cfg.device.secure, timeout=timeout)
+    try:
+        pair_with_fallback(client, client_key=cfg.device.key,
+                           prefer_secure=cfg.device.secure, prompt_timeout=timeout,
+                           log=log)
+        client.power_off()
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log(f"power off failed: {exc}")
+        return False
+    finally:
+        client.close()
+
+
+def cmd_off(args) -> int:
+    cfg = Config.load()
+    # The shutdown hook calls us with --only-if-configured so it honours the
+    # "power off when the PC shuts down" setting.
+    if getattr(args, "only_if_configured", False) and not cfg.tv_off_on_shutdown:
+        return 0
+    if not cfg.device.ip:
+        _print("No TV configured.")
+        return 1
+    ok = _tv_power_off(cfg, log=_print)
+    _print("TV powered off." if ok else "Could not power off the TV.")
+    return 0 if ok else 1
+
+
+def cmd_on(args) -> int:
+    cfg = Config.load()
+    if not cfg.device.ip:
+        _print("No TV configured.")
+        return 1
+    if cfg.device.mac:
+        from .wol import send_wol
+        try:
+            send_wol(cfg.device.mac)
+            _print(f"Sent Wake-on-LAN to {cfg.device.mac}.")
+        except Exception as exc:  # noqa: BLE001
+            _print(f"WOL failed: {exc}")
+    # Give the panel a moment to come up, then make sure the screen is on.
+    from .webos import pair_with_fallback
+    client = WebOSClient(cfg.device.ip, secure=cfg.device.secure)
+    try:
+        pair_with_fallback(client, client_key=cfg.device.key,
+                           prefer_secure=cfg.device.secure)
+        client.screen_on()
+        _print("TV is on.")
+    except Exception as exc:  # noqa: BLE001
+        _print(f"(Could not confirm screen-on, but WOL was sent: {exc})")
+    finally:
+        client.close()
+    return 0
+
+
 def cmd_run(args) -> int:
     cfg = Config.load()
     if not cfg.device.ip:
@@ -189,7 +252,9 @@ def cmd_run(args) -> int:
         return 0
     # Show the daemon's activity live in this window (screen off/on, errors).
     from .applog import get_logger
-    daemon = Daemon(cfg, logger=get_logger(to_console=True))
+    logger = get_logger(to_console=True)
+    daemon = Daemon(cfg, logger=logger)
+    _install_shutdown_hooks(cfg, daemon, logger)
     _print(f"Idle daemon running. Screen sleeps after {cfg.idle_minutes} min. "
            "Press Ctrl+C to stop.")
     try:
@@ -200,6 +265,61 @@ def cmd_run(args) -> int:
     finally:
         lock.release()
     return 0
+
+
+def _install_shutdown_hooks(cfg, daemon, logger) -> None:
+    """Power the TV off when the OS is shutting down / logging off.
+
+    Carefully distinguishes a real session end (power off the TV) from a routine
+    restart by the supervisor or a plain Ctrl+C (just stop, leave the TV alone):
+
+    * Linux: SIGTERM = session end -> off; SIGUSR1 = supervisor restart -> no off.
+    * Windows: console CTRL_SHUTDOWN/CTRL_LOGOFF -> off (works when a console is
+      attached; the pythonw auto-start uses the Scheduled Task hook instead).
+    """
+    import os
+    import signal
+
+    def power_off():
+        if cfg.tv_off_on_shutdown:
+            logger.info("Shutting down: powering the TV off.")
+            _tv_power_off(cfg, log=logger.info, timeout=5.0)
+
+    def on_term(_signum=None, _frame=None):
+        power_off()
+        daemon.stop()
+        raise SystemExit(0)
+
+    def on_restart(_signum=None, _frame=None):
+        daemon.stop()  # supervisor is restarting us; don't touch the TV
+        raise SystemExit(0)
+
+    try:
+        signal.signal(signal.SIGTERM, on_term)
+    except (ValueError, OSError, AttributeError):
+        pass
+    if hasattr(signal, "SIGUSR1"):
+        try:
+            signal.signal(signal.SIGUSR1, on_restart)
+        except (ValueError, OSError):
+            pass
+
+    if os.name == "nt":
+        try:
+            import ctypes
+            handler_type = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint)
+
+            def _ctrl(ctrl_type):  # 5=CTRL_LOGOFF, 6=CTRL_SHUTDOWN
+                if ctrl_type in (5, 6):
+                    power_off()
+                    daemon.stop()
+                return 0
+
+            cb = handler_type(_ctrl)
+            _install_shutdown_hooks._cb = cb  # keep a ref so it isn't GC'd
+            ctypes.windll.kernel32.SetConsoleCtrlHandler(cb, True)
+        except Exception:  # noqa: BLE001 - no console / not supported
+            pass
 
 
 def cmd_autostart(args) -> int:
@@ -265,6 +385,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="fully power the TV off after a longer idle (true/false)")
     s.add_argument("--deep-off-minutes", dest="deep_off_minutes", type=float,
                    help="total idle minutes before fully powering off")
+    s.add_argument("--off-on-shutdown", dest="off_on_shutdown", type=_boolish,
+                   help="power the TV off when the PC shuts down (true/false)")
     s.add_argument("--mac", help="set Wake-on-LAN MAC address")
     s.set_defaults(func=cmd_set)
 
@@ -276,6 +398,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("run", help="run the idle-monitoring daemon")
     s.set_defaults(func=cmd_run)
+
+    s = sub.add_parser("off", help="power the TV off now")
+    s.add_argument("--only-if-configured", dest="only_if_configured",
+                   action="store_true", help=argparse.SUPPRESS)
+    s.set_defaults(func=cmd_off)
+
+    s = sub.add_parser("on", help="turn the TV on (Wake-on-LAN + screen on)")
+    s.set_defaults(func=cmd_on)
 
     s = sub.add_parser("wizard", help="interactive text setup wizard")
     s.set_defaults(func=cmd_wizard)

@@ -164,9 +164,11 @@ supervise() {
         log "Periodic update check."
         if sync_repo; then
           maybe_self_update "$@"   # may re-exec and replace this process
-          # Restart the daemon to pick up any code changes.
+          # Restart the daemon to pick up any code changes. Use SIGUSR1 so the
+          # daemon stops WITHOUT powering off the TV (that's only for real
+          # shutdowns, which arrive as SIGTERM).
           log "Restarting daemon to apply updates."
-          kill "$daemon_pid" 2>/dev/null
+          kill -USR1 "$daemon_pid" 2>/dev/null || kill "$daemon_pid" 2>/dev/null
         fi
       fi
     done
