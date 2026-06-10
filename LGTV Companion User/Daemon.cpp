@@ -90,6 +90,11 @@
 #define			SUNSHINE_FILE_LOG						"sunshine.log"
 #define			SUNSHINE_FILE_SVC						L"sunshine.exe"
 #define			HID_VENDOR_ID_VALVE						0x28DE
+// Steam Controller 2 ("Triton") vendor HID input report IDs, per SDL's steam/controller_structs.h
+#define			HID_VALVE_TRITON_STATE					0x42
+#define			HID_VALVE_TRITON_STATE_BLE				0x45
+#define			HID_VALVE_TRITON_STATE_TIMESTAMP		0x47
+#define			HID_USAGE_PAGE_VENDOR_FIRST				0xFF00
 
 
 struct DisplayInfo {					// Display info
@@ -162,6 +167,8 @@ std::shared_ptr<IpcClient2>		p_pipe_client;
 Preferences						Prefs(CONFIG_FILE);
 std::string						session_id;
 std::unordered_map<std::wstring, ControllerInfo> g_device_cache; // Key = device path
+
+static bool RawInput_ValveVendorReportIsActivity(ControllerInfo& cache, const RAWHID& hid);
 
 //Application entry point
 int APIENTRY wWinMain(_In_ HINSTANCE Instance,
@@ -474,8 +481,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (it == g_device_cache.end())
 					return 0;
 			}
-			// Check whether a digital button was pressed on the controller
 			ControllerInfo& cache = it->second;
+			// Valve vendor-defined collections (Steam Controller 2) expose opaque data which
+			// cannot be interpreted via the generic button/axis path below. They stream
+			// continuously (sequence number, gyro/accelerometer), so only the user-actuated
+			// fields of the known state reports may count as activity.
+			if (cache.vendor_id == HID_VENDOR_ID_VALVE && cache.usage_page >= HID_USAGE_PAGE_VENDOR_FIRST)
+			{
+				if (RawInput_ValveVendorReportIsActivity(cache, raw->data.hid))
+				{
+					last_input_was_ignored = false;
+					time_of_last_raw_input = tick_now;
+				}
+				return 0;
+			}
+			// Check whether a digital button was pressed on the controller
 			if (cache.caps.NumberInputButtonCaps > 0)
 			{
 				std::vector<HIDP_BUTTON_CAPS> buttonCaps(cache.caps.NumberInputButtonCaps);
@@ -547,17 +567,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						}
 					}
 				}
-			}
-			if (cache.vendor_id == HID_VENDOR_ID_VALVE && raw->data.hid.dwSizeHid > 0 && raw->data.hid.dwCount > 0)
-			{
-				DWORD reportSize = raw->data.hid.dwSizeHid * raw->data.hid.dwCount;
-				std::vector<BYTE> report(raw->data.hid.bRawData, raw->data.hid.bRawData + reportSize);
-				if (!cache.last_hid_report.empty() && cache.last_hid_report != report)
-				{
-					last_input_was_ignored = false;
-					time_of_last_raw_input = tick_now;
-				}
-				cache.last_hid_report = std::move(report);
 			}
 		}
 		return 0;
@@ -1737,6 +1746,66 @@ bool RawInput_RegisterDevices(HWND hwnd)
 		return false;
 	}
 	return true;
+}
+
+static int RawInput_ReadInt16(const BYTE* data)
+{
+	short value;
+	memcpy(&value, data, sizeof(value));
+	return value;
+}
+
+// Compare the user-actuated fields of two Steam Controller 2 ("Triton") state reports.
+// Buffers start at the report ID byte; packed payload layout per SDL's
+// steam/controller_structs.h: seq_num (1 byte), buttons (4 bytes), then triggers,
+// sticks and trackpads as consecutive 16-bit values. The sequence number, trackpad
+// timestamp and IMU fields change on every packet regardless of user interaction
+// and must not count as activity.
+static bool RawInput_TritonStateChanged(const BYTE* previous, const BYTE* current, bool padsShifted)
+{
+	if (memcmp(previous + 2, current + 2, 4) != 0) // buttons bitmask, includes capacitive touch
+		return true;
+	const int sensitivity = (int)(0.045 * 65535); // same sensitivity as the generic axis detection
+	static const DWORD axisOffsets[] = { 6, 8, 10, 12, 14, 16 }; // triggers L/R, sticks LX/LY/RX/RY
+	for (DWORD offset : axisOffsets)
+	{
+		if (abs(RawInput_ReadInt16(previous + offset) - RawInput_ReadInt16(current + offset)) >= sensitivity)
+			return true;
+	}
+	// Trackpads: X, Y, pressure for left then right. The 0x47 report inserts a 16-bit
+	// trackpad timestamp before this block.
+	const DWORD padBase = padsShifted ? 20 : 18;
+	for (DWORD offset = padBase; offset < padBase + 12; offset += 2)
+	{
+		if (abs(RawInput_ReadInt16(previous + offset) - RawInput_ReadInt16(current + offset)) >= sensitivity)
+			return true;
+	}
+	return false;
+}
+
+static bool RawInput_ValveVendorReportIsActivity(ControllerInfo& cache, const RAWHID& hid)
+{
+	bool activity = false;
+	if (hid.dwSizeHid == 0 || hid.dwCount == 0)
+		return false;
+	for (DWORD n = 0; n < hid.dwCount; ++n)
+	{
+		const BYTE* report = hid.bRawData + n * hid.dwSizeHid;
+		const BYTE reportId = report[0];
+		if (reportId != HID_VALVE_TRITON_STATE && reportId != HID_VALVE_TRITON_STATE_BLE
+			&& reportId != HID_VALVE_TRITON_STATE_TIMESTAMP)
+			continue; // battery level, wireless status etc - not user input
+		const bool padsShifted = (reportId == HID_VALVE_TRITON_STATE_TIMESTAMP);
+		const DWORD relevantSize = 1 + (padsShifted ? 31 : 29); // report id + payload up to and including the trackpads
+		if (hid.dwSizeHid < relevantSize)
+			continue;
+		std::vector<BYTE> snapshot(report, report + relevantSize);
+		if (cache.last_hid_report.size() == relevantSize && cache.last_hid_report[0] == reportId
+			&& RawInput_TritonStateChanged(cache.last_hid_report.data(), snapshot.data(), padsShifted))
+			activity = true;
+		cache.last_hid_report = std::move(snapshot);
+	}
+	return activity;
 }
 
 bool RawInput_AddToCache(const std::wstring& devicePath, HANDLE rawInputDevice) {
