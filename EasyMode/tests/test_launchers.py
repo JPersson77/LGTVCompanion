@@ -19,7 +19,9 @@ REPO_ROOT = os.path.abspath(
 APP_DIR_NAME = "EasyMode"
 
 WIN_BAT = os.path.join(REPO_ROOT, "LGTV-Easy-Mode-WINDOWS.bat")
-WIN_PS1 = os.path.join(REPO_ROOT, "LGTV-Easy-Mode-WINDOWS.ps1")
+# The PowerShell engine lives inside the app folder; the .bat at the root is the
+# only Windows file a user touches.
+WIN_PS1 = os.path.join(REPO_ROOT, APP_DIR_NAME, "LGTV-Easy-Mode-WINDOWS.ps1")
 LINUX_SH = os.path.join(REPO_ROOT, "LGTV-Easy-Mode-UBUNTU.sh")
 
 
@@ -57,6 +59,20 @@ def test_bat_invokes_the_ps1():
     bat = _read(WIN_BAT)
     assert "LGTV-Easy-Mode-WINDOWS.ps1" in bat
     assert "powershell" in bat.lower()
+
+
+def test_bat_points_into_the_app_folder():
+    # The .ps1 engine moved into the app folder, so the root .bat must reference
+    # it via that subdirectory (both the cloned copy and the local fallback).
+    bat = _read(WIN_BAT)
+    assert f"{APP_DIR_NAME}\\LGTV-Easy-Mode-WINDOWS.ps1" in bat
+
+
+def test_ps1_lives_in_the_app_folder():
+    assert os.path.exists(WIN_PS1), "the PowerShell engine should live in EasyMode/"
+    assert not os.path.exists(
+        os.path.join(REPO_ROOT, "LGTV-Easy-Mode-WINDOWS.ps1")
+    ), "the .ps1 should no longer sit at the repo root"
 
 
 def test_launchers_self_update_from_a_repo():

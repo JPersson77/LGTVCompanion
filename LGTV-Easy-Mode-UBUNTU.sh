@@ -205,8 +205,8 @@ stop_background() {
     log "Stopping background supervisor (pid $sp)."
     kill "$sp" 2>/dev/null
     # Give it up to ~10s to run its trap (stop the daemon) and exit.
-    local i
-    for i in $(seq 1 20); do kill -0 "$sp" 2>/dev/null || break; sleep 0.5; done
+    local _i
+    for _i in $(seq 1 20); do kill -0 "$sp" 2>/dev/null || break; sleep 0.5; done
     stopped=1
   fi
   # Also stop the idle daemon directly, in case it outlived its supervisor (or
