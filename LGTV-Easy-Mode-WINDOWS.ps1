@@ -6,7 +6,7 @@
        official Python installer).
     2. Clones or updates the app from GitHub - INCLUDING updates to this very
        launcher (it re-runs itself if the script changed).
-    3. Runs the setup wizard on first use.
+    3. Opens the graphical setup window on first use (text wizard if headless).
     4. Supervises the idle daemon in the background, restarting it if it crashes
        and periodically pulling updates. All errors go to a persistent log.
 
@@ -240,14 +240,35 @@ function Start-Supervisor {
 }
 
 function Stop-Background {
+    $stopped = $false
     if (Test-Path $PidFile) {
         $oldPid = Get-Content $PidFile
         try {
             Stop-Process -Id $oldPid -ErrorAction Stop
             Log "Stopped background supervisor (pid $oldPid)."
+            $stopped = $true
         } catch { Log "No running supervisor with pid $oldPid." }
         Remove-Item $PidFile -ErrorAction SilentlyContinue
-    } else { Log "No background supervisor found." }
+    }
+    # Hard-killing the supervisor leaves its idle-daemon child orphaned (and
+    # still holding the single-instance lock), so stop that too. The daemon
+    # records its own PID in daemon.pid. A forced stop here does NOT power the
+    # TV off (that only happens on a real console shutdown event), which is what
+    # we want when the user is simply stopping the watcher.
+    $daemonPid = Join-Path $StateDir "daemon.pid"
+    if (Test-Path $daemonPid) {
+        $dp = Get-Content $daemonPid
+        if (Get-Process -Id $dp -ErrorAction SilentlyContinue) {
+            try {
+                Stop-Process -Id $dp -Force -ErrorAction Stop
+                Log "Stopped idle daemon (pid $dp)."
+                $stopped = $true
+            } catch {}
+        }
+        Remove-Item $daemonPid -ErrorAction SilentlyContinue
+    }
+    if ($stopped) { Log "Easy Mode stopped. Your TV is left as-is." }
+    else { Log "No running background watcher found." }
 }
 
 # ---- main -------------------------------------------------------------------
@@ -287,8 +308,8 @@ if ($env:LGTV_EASY_HANDOFF -eq "1") {
 }
 
 if ($Setup) {
-    Log "Running setup wizard (forced)."
-    Run-Cli @("wizard")
+    Log "Opening the setup window (forced)."
+    Run-Cli @("gui")
     if (Needs-Setup) { Pause-BeforeExit; exit 1 }
     exit 0
 }
@@ -296,11 +317,11 @@ if ($Setup) {
 if ($Supervise) { Start-Supervisor; exit 0 }
 
 if ($Background) {
-    # A manual launch is a little control panel: open the setup/settings wizard
-    # (quick when already set up - it just asks what to change), then make sure
-    # the background watcher is running.
-    Log "Opening setup/settings wizard."
-    Run-Cli @("wizard")
+    # A manual launch is a little control panel: open the graphical window (the
+    # setup wizard on first run, the settings panel afterwards; text wizard if
+    # there's no display), then make sure the background watcher is running.
+    Log "Opening the control panel window."
+    Run-Cli @("gui")
     if (Needs-Setup) { Log "Setup not completed."; Pause-BeforeExit; exit 1 }
 
     if (Test-Path $PidFile) {
@@ -327,8 +348,8 @@ if ($Background) {
 
 # Default: foreground. Run setup first if needed, then supervise.
 if (Needs-Setup) {
-    Log "First run: launching setup wizard."
-    Run-Cli @("wizard")
+    Log "First run: opening the setup window."
+    Run-Cli @("gui")
     if (Needs-Setup) { Log "Setup not completed."; Pause-BeforeExit; exit 1 }
 }
 Start-Supervisor

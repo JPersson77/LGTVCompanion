@@ -6,7 +6,7 @@
 #   1. Installs dependencies (git, python3, tkinter for the GUI).
 #   2. Clones or updates the app from GitHub's default branch - INCLUDING
 #      updates to this very launcher (it re-executes itself if it changed).
-#   3. Runs the setup wizard on first use.
+#   3. Opens the graphical setup window on first use (text wizard if headless).
 #   4. Supervises the idle daemon in the background, restarting it if it crashes
 #      and periodically pulling updates. All errors go to a persistent log.
 #
@@ -39,7 +39,15 @@ LAUNCHER_NAME="LGTV-Easy-Mode-UBUNTU.sh"
 
 mkdir -p "$STATE_DIR"
 
-log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [launcher] $*" | tee -a "$LOG_FILE" >&2; }
+log() {
+  local line; line="$(date '+%Y-%m-%d %H:%M:%S') [launcher] $*"
+  printf '%s\n' "$line" >>"$LOG_FILE"
+  # Echo to the terminal too, but only when one is attached. In the detached
+  # background supervisor stderr is already redirected to the log file, so
+  # writing there as well would duplicate every line.
+  [ -t 2 ] && printf '%s\n' "$line" >&2
+  return 0
+}
 
 # Keep the terminal open after a failure so the user can read and report the
 # diagnostics printed above (the window otherwise closes the instant we exit).
@@ -144,7 +152,12 @@ PY
 # ---- the supervisor loop ----------------------------------------------------
 supervise() {
   echo $$ > "$PID_FILE"
-  trap 'log "Supervisor stopping."; rm -f "$PID_FILE"; exit 0' INT TERM
+  local daemon_pid=""
+  # Stop cleanly when asked. Tell the daemon child to quit with SIGUSR1, which
+  # means "stop WITHOUT powering off the TV" - SIGTERM means a real shutdown
+  # (turn the TV off), which is NOT what the user wants when just stopping the
+  # watcher. Without this the supervisor died but left the daemon orphaned.
+  trap 'log "Supervisor stopping."; [ -n "$daemon_pid" ] && kill -USR1 "$daemon_pid" 2>/dev/null; rm -f "$PID_FILE"; exit 0' INT TERM
   log "Supervisor started (pid $$). Daemon errors are logged here."
   # If another watcher (e.g. the login auto-start) already holds the lock, our
   # daemon child should wait for it rather than spin-restart.
@@ -155,11 +168,14 @@ supervise() {
     log "Starting idle daemon."
     # Run the daemon; capture its stderr/stdout into the persistent log.
     ( cd "$(APP_DIR)" && exec python3 -m lgtv_easy run ) >>"$LOG_FILE" 2>&1 &
-    local daemon_pid=$!
+    daemon_pid=$!
 
     # Watch the daemon while periodically checking for updates.
     while kill -0 "$daemon_pid" 2>/dev/null; do
-      sleep 15
+      # Interruptible sleep: backgrounding sleep and waiting on it lets a stop
+      # signal take effect immediately, instead of after the full poll interval
+      # (bash defers traps until the current foreground command returns).
+      sleep 15 & wait $! 2>/dev/null
       local now; now=$(date +%s)
       if [ "$NO_UPDATE" != "1" ] && [ $(( now - last_update )) -ge "$UPDATE_EVERY_SECONDS" ]; then
         last_update=$now
@@ -178,17 +194,39 @@ supervise() {
     wait "$daemon_pid" 2>/dev/null
     local rc=$?
     log "Daemon exited (code $rc). Restarting in 5s."
-    sleep 5
+    sleep 5 & wait $! 2>/dev/null
   done
 }
 
 stop_background() {
+  local stopped=0
   if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-    log "Stopping background supervisor (pid $(cat "$PID_FILE"))."
-    kill "$(cat "$PID_FILE")"
-    rm -f "$PID_FILE"
+    local sp; sp="$(cat "$PID_FILE")"
+    log "Stopping background supervisor (pid $sp)."
+    kill "$sp" 2>/dev/null
+    # Give it up to ~10s to run its trap (stop the daemon) and exit.
+    local i
+    for i in $(seq 1 20); do kill -0 "$sp" 2>/dev/null || break; sleep 0.5; done
+    stopped=1
+  fi
+  # Also stop the idle daemon directly, in case it outlived its supervisor (or
+  # was started by the login auto-start, which has no supervisor). SIGUSR1 means
+  # "quit without powering off the TV"; fall back to SIGKILL, never SIGTERM
+  # (which would power the TV off).
+  local dp="$STATE_DIR/daemon.pid"
+  if [ -f "$dp" ] && kill -0 "$(cat "$dp")" 2>/dev/null; then
+    local d; d="$(cat "$dp")"
+    log "Stopping idle daemon (pid $d)."
+    kill -USR1 "$d" 2>/dev/null
+    sleep 1
+    kill -0 "$d" 2>/dev/null && kill -KILL "$d" 2>/dev/null
+    stopped=1
+  fi
+  rm -f "$PID_FILE"
+  if [ "$stopped" = "1" ]; then
+    log "Easy Mode stopped. Your TV is left as-is."
   else
-    log "No running background supervisor found."
+    log "No running background watcher found."
   fi
 }
 
@@ -214,8 +252,8 @@ main() {
 
   case "${1:-}" in
     --setup)
-      log "Running setup wizard (forced)."
-      if ! run_cli wizard; then
+      log "Opening the setup window (forced)."
+      if ! run_cli gui; then
         pause_before_exit
         exit 1
       fi
@@ -227,8 +265,8 @@ main() {
         exit 0
       fi
       if needs_setup; then
-        log "First run: launching setup wizard before backgrounding."
-        run_cli wizard
+        log "First run: opening the setup window before backgrounding."
+        run_cli gui
         if needs_setup; then
           log "Setup not completed; not backgrounding."
           pause_before_exit
@@ -243,10 +281,11 @@ main() {
       supervise "$@"
       ;;
     *)
-      # A manual run is a control panel: open the setup/settings wizard (quick
-      # when already set up), then run the watcher in the foreground.
-      log "Opening setup/settings wizard."
-      if ! run_cli wizard || needs_setup; then
+      # A manual run is a control panel: open the graphical window (setup wizard
+      # on first run, settings panel afterwards; text wizard if there's no
+      # display), then run the watcher in the foreground.
+      log "Opening the control panel window."
+      if ! run_cli gui || needs_setup; then
         log "Setup not completed."
         pause_before_exit
         exit 1

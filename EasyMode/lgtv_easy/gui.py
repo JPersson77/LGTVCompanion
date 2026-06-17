@@ -45,9 +45,10 @@ class App(tk.Tk):
 
         self.cfg = Config.load()
         self.daemon: Optional[Daemon] = None
+        self._lock = None  # singleton guard held while WE run the watcher
         # Thread -> UI message pump so worker threads never touch widgets.
         self._events: "queue.Queue" = queue.Queue()
-        self.after(100, self._pump)
+        self._pump_id = self.after(100, self._pump)
 
         self.container = ttk.Frame(self, padding=PAD)
         self.container.pack(fill="both", expand=True)
@@ -71,12 +72,19 @@ class App(tk.Tk):
         self._events.put(fn)
 
     def _pump(self):
+        # Drain queued UI callbacks. Each is isolated in try/except: one failing
+        # callback (e.g. writing to a widget the wizard just destroyed) must not
+        # stop the pump, or the whole window would freeze. We always reschedule.
         try:
             while True:
-                self._events.get_nowait()()
+                fn = self._events.get_nowait()
+                try:
+                    fn()
+                except Exception:  # noqa: BLE001 - keep the pump alive
+                    pass
         except queue.Empty:
             pass
-        self.after(100, self._pump)
+        self._pump_id = self.after(100, self._pump)
 
     def _clear(self):
         for child in self.container.winfo_children():
@@ -99,16 +107,47 @@ class App(tk.Tk):
 
     # ----- daemon lifecycle -------------------------------------------
     def start_daemon(self):
+        """Watch for idle while the window is open - but only if nobody else is.
+
+        A background supervisor (the launcher) or a login auto-start entry may
+        already be driving the TV. Exactly one watcher must own it, so we take
+        the same single-instance lock the headless ``run`` command uses. If it's
+        already held, we leave the running watcher alone and just act as a
+        settings panel; the status line says so.
+        """
         if self.daemon:
             self.daemon.config = self.cfg
             return
-        if self.cfg.device.paired:
-            self.daemon = Daemon(self.cfg)
-            self.daemon.start()
+        if not self.cfg.device.paired:
+            return
+        from .singleton import SingleInstance
+        if self._lock is None:
+            self._lock = SingleInstance("daemon")
+        if not self._lock.acquire(wait=False):
+            self._lock = None  # someone else owns the watcher; don't compete
+            return
+        self.daemon = Daemon(self.cfg)
+        self.daemon.start()
+
+    def watcher_holder(self):
+        """PID of whatever process currently owns the watcher lock (or None)."""
+        from .singleton import SingleInstance
+        return SingleInstance("daemon").holder()
 
     def on_close(self):
         if self.daemon:
             self.daemon.stop()
+            self.daemon = None
+        if self._lock:
+            self._lock.release()
+            self._lock = None
+        # Cancel the pending pump callback so it can't fire on a destroyed window.
+        if getattr(self, "_pump_id", None) is not None:
+            try:
+                self.after_cancel(self._pump_id)
+            except tk.TclError:
+                pass
+            self._pump_id = None
         self.destroy()
 
 
@@ -149,10 +188,17 @@ class SetupWizard(ttk.Frame):
         text.pack(side="left", fill="both", expand=True)
 
         def append(line):
-            text.configure(state="normal")
-            text.insert(tk.END, line + "\n")
-            text.see(tk.END)
-            text.configure(state="disabled")
+            # A worker thread can still be logging when the wizard moves to the
+            # next step and destroys this widget. Writing to a dead widget raises
+            # TclError, which - if it escaped - would kill the UI event pump and
+            # freeze the wizard. Ignore it: the diagnostics just stop scrolling.
+            try:
+                text.configure(state="normal")
+                text.insert(tk.END, line + "\n")
+                text.see(tk.END)
+                text.configure(state="disabled")
+            except tk.TclError:
+                pass
 
         # Thread-safe wrapper so worker threads can log into it.
         return lambda line: self.app.post(lambda: append(line))
@@ -421,9 +467,17 @@ class SettingsPanel(ttk.Frame):
         state = "ON" if cfg.idle_enabled else "OFF"
         deep = (f" Full power-off after {round(cfg.deep_off_minutes)} min."
                 if cfg.deep_off_enabled else "")
+        # Who is actually watching for idle right now: this window, or an
+        # already-running background watcher we deliberately didn't duplicate.
+        if self.app.daemon is not None:
+            who = " Watching now."
+        else:
+            holder = self.app.watcher_holder()
+            who = (f" Running in the background (pid {holder})."
+                   if holder else " Watcher will start when you close this window.")
         self.status.config(
             text=f"Status: idle-sleep is {state}, after {round(cfg.idle_minutes)} "
-                 f"min.{deep} Idle detection: {backend}.{warn}")
+                 f"min.{deep}{who} Idle detection: {backend}.{warn}")
 
     def _test(self):
         cfg = self.app.cfg

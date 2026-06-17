@@ -42,7 +42,9 @@ def main():
 
     # ---- 1. The user runs first-time setup ----
     banner("STEP 1: First-time setup wizard (as the user would experience it)")
-    answers = iter(["y", "1", "7"])  # scan, pick TV #1, 7-minute timeout
+    # scan, pick TV #1, 7-minute timeout, no mute, no deep-off, no auto-start
+    # (the last "n" keeps the simulation from registering a real login entry).
+    answers = iter(["y", "1", "7", "n", "n", "n"])
     cfg = Config()
     run_text_wizard(
         input_fn=lambda p: _ask(p, answers),

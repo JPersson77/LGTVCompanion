@@ -1,7 +1,19 @@
 """Auto-start at login: enable creates an entry, disable removes it."""
+import os
+
+import pytest
+
 from lgtv_easy import autostart
 
+# The two Linux tests below force os.name="posix". Because that attribute lives
+# on the shared os module, the change is process-global and makes pathlib build
+# PosixPath - which cannot instantiate on a real Windows runner. So skip the
+# Linux-only autostart tests there (Windows paths are covered separately below).
+linux_only = pytest.mark.skipif(
+    os.name == "nt", reason="Linux autostart path; PosixPath can't run on Windows")
 
+
+@linux_only
 def test_enable_disable_roundtrip_linux(tmp_path, monkeypatch):
     # Force the Linux autostart location into a temp dir so the test is hermetic.
     monkeypatch.setattr(autostart.os, "name", "posix")
@@ -20,6 +32,7 @@ def test_enable_disable_roundtrip_linux(tmp_path, monkeypatch):
     assert autostart.disable() is False
 
 
+@linux_only
 def test_set_enabled_reports_status(tmp_path, monkeypatch):
     monkeypatch.setattr(autostart.os, "name", "posix")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))

@@ -1,0 +1,66 @@
+"""Guard-rails for the two portable launchers at the repository root.
+
+These are plain-text checks (no shell/PowerShell execution needed) that catch the
+classes of mistake that would silently break the one-double-click experience:
+
+* the launcher pointing at the wrong app subdirectory,
+* the launcher opening the old text wizard instead of the graphical front door,
+* the Windows .bat losing its link to the .ps1 that does the real work.
+
+If the app folder is ever renamed, or a launcher reverts to ``wizard``, one of
+these fails loudly instead of shipping a broken installer.
+"""
+import os
+
+import pytest
+
+REPO_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", ".."))
+APP_DIR_NAME = "EasyMode"
+
+WIN_BAT = os.path.join(REPO_ROOT, "LGTV-Easy-Mode-WINDOWS.bat")
+WIN_PS1 = os.path.join(REPO_ROOT, "LGTV-Easy-Mode-WINDOWS.ps1")
+LINUX_SH = os.path.join(REPO_ROOT, "LGTV-Easy-Mode-UBUNTU.sh")
+
+
+def _read(path):
+    if not os.path.exists(path):
+        pytest.skip(f"{path} not present (running outside a full checkout)")
+    with open(path, "r", encoding="utf-8") as fh:
+        return fh.read()
+
+
+def test_app_subdir_matches_real_folder():
+    assert os.path.isdir(os.path.join(REPO_ROOT, APP_DIR_NAME))
+
+
+def test_windows_launcher_points_at_real_app_dir():
+    ps1 = _read(WIN_PS1)
+    assert f'$SubDir = "{APP_DIR_NAME}"' in ps1
+
+
+def test_linux_launcher_points_at_real_app_dir():
+    sh = _read(LINUX_SH)
+    assert f'SUBDIR="{APP_DIR_NAME}"' in sh
+
+
+def test_launchers_open_the_graphical_front_door():
+    # The whole point of this update: the launchers open the GUI ("gui"),
+    # not the old text-only wizard, as the everyday front door.
+    ps1 = _read(WIN_PS1)
+    sh = _read(LINUX_SH)
+    assert 'Run-Cli @("gui")' in ps1, "Windows launcher should open the GUI"
+    assert "run_cli gui" in sh, "Linux launcher should open the GUI"
+
+
+def test_bat_invokes_the_ps1():
+    bat = _read(WIN_BAT)
+    assert "LGTV-Easy-Mode-WINDOWS.ps1" in bat
+    assert "powershell" in bat.lower()
+
+
+def test_launchers_self_update_from_a_repo():
+    ps1 = _read(WIN_PS1)
+    sh = _read(LINUX_SH)
+    assert "LGTV_EASY_REPO" in ps1 and "git clone" in ps1
+    assert "LGTV_EASY_REPO" in sh and "git clone" in sh
