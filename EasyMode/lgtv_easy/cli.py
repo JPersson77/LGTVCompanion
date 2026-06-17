@@ -9,6 +9,7 @@ testable, and usable on headless machines. Subcommands:
     status    show current configuration and idle backend
     test      verify the saved TV by blinking the screen off then on
     run       run the idle-monitoring daemon in the foreground
+    gui       open the graphical control panel (text wizard fallback)
     wizard    run the interactive text setup wizard
 """
 from __future__ import annotations
@@ -343,6 +344,24 @@ def cmd_autostart(args) -> int:
     return 0
 
 
+def cmd_gui(args) -> int:
+    """Open the graphical control panel (the everyday front door).
+
+    Tries the tkinter window first - the setup wizard on first run, the
+    settings panel afterwards - and quietly falls back to the text wizard when
+    there is no display or tkinter isn't available (a headless server, an SSH
+    session, a stripped-down Python). This is what the launchers invoke, so the
+    friendly window is what people normally see.
+    """
+    try:
+        from .gui import main as gui_main
+        return gui_main()
+    except Exception as exc:  # noqa: BLE001 - no display / no tk / import error
+        _print(f"(Graphical window unavailable: {exc})")
+        _print("Starting the text wizard instead.\n")
+        return cmd_wizard(args)
+
+
 def cmd_wizard(args) -> int:
     from .wizard_text import run_text_wizard
     rc = run_text_wizard()
@@ -410,6 +429,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("on", help="turn the TV on (Wake-on-LAN + screen on)")
     s.set_defaults(func=cmd_on)
 
+    s = sub.add_parser("gui", help="open the graphical control panel "
+                                   "(falls back to the text wizard)")
+    s.set_defaults(func=cmd_gui)
+
     s = sub.add_parser("wizard", help="interactive text setup wizard")
     s.set_defaults(func=cmd_wizard)
 
@@ -431,14 +454,8 @@ def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
-        # No subcommand: try to launch the GUI, fall back to text wizard.
-        try:
-            from .gui import main as gui_main
-            return gui_main()
-        except Exception:  # noqa: BLE001 - no display / no tk
-            _print("(No GUI available - starting text wizard.)\n")
-            from .wizard_text import run_text_wizard
-            return run_text_wizard()
+        # No subcommand: open the graphical control panel (text wizard fallback).
+        return cmd_gui(args)
     return args.func(args)
 
 

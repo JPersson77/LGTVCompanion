@@ -6,7 +6,7 @@
 #   1. Installs dependencies (git, python3, tkinter for the GUI).
 #   2. Clones or updates the app from GitHub's default branch - INCLUDING
 #      updates to this very launcher (it re-executes itself if it changed).
-#   3. Runs the setup wizard on first use.
+#   3. Opens the graphical setup window on first use (text wizard if headless).
 #   4. Supervises the idle daemon in the background, restarting it if it crashes
 #      and periodically pulling updates. All errors go to a persistent log.
 #
@@ -214,8 +214,8 @@ main() {
 
   case "${1:-}" in
     --setup)
-      log "Running setup wizard (forced)."
-      if ! run_cli wizard; then
+      log "Opening the setup window (forced)."
+      if ! run_cli gui; then
         pause_before_exit
         exit 1
       fi
@@ -227,8 +227,8 @@ main() {
         exit 0
       fi
       if needs_setup; then
-        log "First run: launching setup wizard before backgrounding."
-        run_cli wizard
+        log "First run: opening the setup window before backgrounding."
+        run_cli gui
         if needs_setup; then
           log "Setup not completed; not backgrounding."
           pause_before_exit
@@ -243,10 +243,11 @@ main() {
       supervise "$@"
       ;;
     *)
-      # A manual run is a control panel: open the setup/settings wizard (quick
-      # when already set up), then run the watcher in the foreground.
-      log "Opening setup/settings wizard."
-      if ! run_cli wizard || needs_setup; then
+      # A manual run is a control panel: open the graphical window (setup wizard
+      # on first run, settings panel afterwards; text wizard if there's no
+      # display), then run the watcher in the foreground.
+      log "Opening the control panel window."
+      if ! run_cli gui || needs_setup; then
         log "Setup not completed."
         pause_before_exit
         exit 1

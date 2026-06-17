@@ -89,9 +89,47 @@ def main():
     assert app.cfg.idle_enabled is False
     print("[gui] Live edits persisted (minutes=15, enabled=False).")
 
+    # Because nothing else held the watcher lock, this window owns the watcher.
+    from lgtv_easy.singleton import SingleInstance
+    assert app.daemon is not None, "GUI runs the watcher when the lock is free"
+    assert SingleInstance("daemon").holder() is not None, "watcher lock held"
+    print("[gui] This window owns the watcher (lock held).")
+
     app.on_close()
+    pump(app)
+    assert SingleInstance("daemon").holder() is None, "lock released on close"
+    print("[gui] Watcher lock released on close.")
+
+    # Now pretend a *separate* background watcher already holds the lock (a real
+    # foreign PID, since the lock is re-entrant within one process). A freshly
+    # opened window must NOT start a second, competing daemon - it just acts as a
+    # panel and reports that the watcher is running in the background.
+    import subprocess
+    import time as _time
+    holder_proc = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"])
+    _time.sleep(0.2)
+    lock = SingleInstance("daemon")
+    with open(lock.path, "w", encoding="utf-8") as fh:
+        fh.write(str(holder_proc.pid))
+    assert SingleInstance("daemon").holder() == holder_proc.pid
+
+    app2 = gui.App()
+    pump(app2)
+    app2.show_settings()
+    pump(app2)
+    assert app2.daemon is None, "GUI does not duplicate an already-running watcher"
+    panel2 = app2.container.winfo_children()[0]
+    assert "background" in panel2.status.cget("text").lower()
+    print("[gui] Second window deferred to the background watcher (no duplicate).")
+    app2.on_close()
+    holder_proc.terminate()
+    holder_proc.wait(timeout=5)
+    os.remove(lock.path)
+
     tv.stop()
-    print("[gui] SUCCESS — GUI builds, wizard pairs, settings persist. ✓")
+    print("[gui] SUCCESS — GUI builds, wizard pairs, settings persist, "
+          "watcher is single-instance. ✓")
     return 0
 
 
