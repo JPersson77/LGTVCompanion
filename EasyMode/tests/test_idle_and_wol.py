@@ -2,7 +2,8 @@
 import pytest
 
 from lgtv_easy import idle as idle_mod
-from lgtv_easy.wol import magic_packet, normalize_mac
+from lgtv_easy import wol as wol_mod
+from lgtv_easy.wol import magic_packet, normalize_mac, send_wol
 
 
 def test_idle_returns_float_and_never_raises():
@@ -93,3 +94,46 @@ def test_normalize_mac_accepts_common_formats():
 def test_normalize_mac_rejects_bad():
     with pytest.raises(ValueError):
         normalize_mac("not-a-mac")
+
+
+def test_send_wol_targets_global_and_subnet_broadcasts(monkeypatch):
+    # On a mesh network the global 255.255.255.255 can be dropped, so the wake
+    # must also hit each interface's subnet-directed broadcast (e.g. the Google
+    # Wifi 192.168.86.x range), on the common WOL ports.
+    monkeypatch.setattr(wol_mod, "local_ipv4s",
+                        lambda: ["192.168.86.23", "10.0.0.5"], raising=False)
+    monkeypatch.setattr(wol_mod, "_subnet_broadcasts",
+                        lambda: ["192.168.86.255", "10.0.0.255"])
+    sent = []
+
+    class FakeSock:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def setsockopt(self, *a): pass
+        def sendto(self, _packet, addr): sent.append(addr)
+
+    monkeypatch.setattr(wol_mod.socket, "socket", lambda *a, **k: FakeSock())
+    send_wol("AA:BB:CC:DD:EE:FF", repeat=1)
+
+    dests = {addr[0] for addr in sent}
+    ports = {addr[1] for addr in sent}
+    assert "255.255.255.255" in dests
+    assert "192.168.86.255" in dests and "10.0.0.255" in dests
+    assert {9, 7}.issubset(ports)
+
+
+def test_send_wol_survives_missing_local_addresses(monkeypatch):
+    # If the local addresses can't be read, WOL must still send to the global
+    # broadcast rather than raising.
+    monkeypatch.setattr(wol_mod, "_subnet_broadcasts", lambda: [])
+    sent = []
+
+    class FakeSock:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def setsockopt(self, *a): pass
+        def sendto(self, _packet, addr): sent.append(addr)
+
+    monkeypatch.setattr(wol_mod.socket, "socket", lambda *a, **k: FakeSock())
+    send_wol("AA:BB:CC:DD:EE:FF", repeat=1)
+    assert any(addr[0] == "255.255.255.255" for addr in sent)

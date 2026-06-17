@@ -64,3 +64,20 @@ def test_launchers_self_update_from_a_repo():
     sh = _read(LINUX_SH)
     assert "LGTV_EASY_REPO" in ps1 and "git clone" in ps1
     assert "LGTV_EASY_REPO" in sh and "git clone" in sh
+
+
+def test_windows_supervisor_does_not_redirect_both_streams_to_one_file():
+    # PowerShell's Start-Process raises a terminating error when standard output
+    # and standard error are redirected to the SAME file - that would crash the
+    # background watcher on every Windows launch. Make sure the two redirects
+    # never name the same path again.
+    ps1 = _read(WIN_PS1)
+    import re
+    # The two redirect flags sit next to each other on one Start-Process call.
+    pairs = re.findall(
+        r"-RedirectStandardError\s+(\S+)\s+-RedirectStandardOutput\s+(\S+)", ps1)
+    assert pairs, "expected the supervisor to redirect the daemon's streams"
+    for err, out in pairs:
+        assert err != out, (
+            "Start-Process redirects stdout and stderr to the same file "
+            f"({err}); PowerShell forbids this and the supervisor will crash.")

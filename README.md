@@ -90,7 +90,8 @@ the `EasyMode/` folder.)
 |--|---------|-------|
 | Settings | `%APPDATA%\LGTV Companion Easy Mode\config.json` | `~/.config/lgtv-companion-easy/config.json` |
 | Launcher log | `…\launcher.log` | `…/launcher.log` |
-| Watcher log | `…\easy-mode.log` | `…/easy-mode.log` |
+| Watcher activity log | `…\easy-mode.log` | `…/easy-mode.log` |
+| Watcher raw output | `…\watcher.log` | (folded into `launcher.log`) |
 
 If something doesn’t work, the launcher keeps its window open and writes a
 persistent `launcher.log` you can read or share.

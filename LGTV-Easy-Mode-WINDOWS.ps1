@@ -42,6 +42,11 @@ $LauncherName = "LGTV-Easy-Mode-WINDOWS.ps1"
 
 $LogFile = Join-Path $StateDir "launcher.log"
 $PidFile = Join-Path $StateDir "launcher.pid"
+# The supervised daemon's redirected streams go here, kept apart from launcher.log
+# so two processes never write the same file at once (and stdout/stderr must be
+# different files - PowerShell's Start-Process forbids sharing one).
+$WatcherLog = Join-Path $StateDir "watcher.log"
+$WatcherOutLog = Join-Path $StateDir "watcher-stdout.log"
 New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
 
 # Hash of this script when we started, to detect a git update rewriting it.
@@ -208,7 +213,7 @@ function Needs-Setup {
 # ---- supervisor loop --------------------------------------------------------
 function Start-Supervisor {
     Set-Content -Path $PidFile -Value $PID
-    Log "Supervisor started (pid $PID). Daemon errors are logged here."
+    Log "Supervisor started (pid $PID). Daemon output -> $WatcherLog"
     # If another watcher (e.g. the login auto-start) already holds the lock, our
     # daemon child should wait for it rather than spin-restart.
     $env:LGTV_EASY_WAIT_LOCK = "1"
@@ -216,9 +221,14 @@ function Start-Supervisor {
     try {
         while ($true) {
             Log "Starting idle daemon."
+            # The daemon's own activity log is easy-mode.log; this captures its
+            # console/stderr stream (and any raw startup traceback) into a
+            # SEPARATE file. Start-Process refuses to point both standard streams
+            # at the same path, and writing to launcher.log here would also fight
+            # the supervisor's own Add-Content, so use a dedicated watcher log.
             $proc = Start-Process -FilePath "python" -ArgumentList @("-m","lgtv_easy","run") `
                 -WorkingDirectory (App-Dir) -NoNewWindow -PassThru `
-                -RedirectStandardError $LogFile -RedirectStandardOutput $LogFile
+                -RedirectStandardError $WatcherLog -RedirectStandardOutput $WatcherOutLog
             while (-not $proc.HasExited) {
                 Start-Sleep -Seconds 15
                 if (-not $NoUpdate -and ((Get-Date) - $lastUpdate).TotalSeconds -ge $UpdateEvery) {
