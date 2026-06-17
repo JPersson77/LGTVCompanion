@@ -240,14 +240,35 @@ function Start-Supervisor {
 }
 
 function Stop-Background {
+    $stopped = $false
     if (Test-Path $PidFile) {
         $oldPid = Get-Content $PidFile
         try {
             Stop-Process -Id $oldPid -ErrorAction Stop
             Log "Stopped background supervisor (pid $oldPid)."
+            $stopped = $true
         } catch { Log "No running supervisor with pid $oldPid." }
         Remove-Item $PidFile -ErrorAction SilentlyContinue
-    } else { Log "No background supervisor found." }
+    }
+    # Hard-killing the supervisor leaves its idle-daemon child orphaned (and
+    # still holding the single-instance lock), so stop that too. The daemon
+    # records its own PID in daemon.pid. A forced stop here does NOT power the
+    # TV off (that only happens on a real console shutdown event), which is what
+    # we want when the user is simply stopping the watcher.
+    $daemonPid = Join-Path $StateDir "daemon.pid"
+    if (Test-Path $daemonPid) {
+        $dp = Get-Content $daemonPid
+        if (Get-Process -Id $dp -ErrorAction SilentlyContinue) {
+            try {
+                Stop-Process -Id $dp -Force -ErrorAction Stop
+                Log "Stopped idle daemon (pid $dp)."
+                $stopped = $true
+            } catch {}
+        }
+        Remove-Item $daemonPid -ErrorAction SilentlyContinue
+    }
+    if ($stopped) { Log "Easy Mode stopped. Your TV is left as-is." }
+    else { Log "No running background watcher found." }
 }
 
 # ---- main -------------------------------------------------------------------
