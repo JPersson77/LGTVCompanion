@@ -36,7 +36,8 @@ $UpdateEvery = if ($env:LGTV_EASY_UPDATE_INTERVAL) { [int]$env:LGTV_EASY_UPDATE_
 # Set LGTV_EASY_NO_UPDATE=1 to freeze the code: no git fetch/clone, no
 # self-update, no periodic pulls. Run only the code already on disk.
 $NoUpdate = ($env:LGTV_EASY_NO_UPDATE -eq "1")
-# The Python app lives in EasyMode/; this launcher lives at the repo root.
+# The Python app and this launcher both live in the EasyMode/ subdirectory of
+# the cloned repo; the .bat shim at the repo root points into here.
 $SubDir = "EasyMode"
 $LauncherName = "LGTV-Easy-Mode-WINDOWS.ps1"
 
@@ -161,7 +162,7 @@ function Sync-Repo {
 }
 
 function Maybe-SelfUpdate {
-    $repoLauncher = Join-Path $AppHome $LauncherName
+    $repoLauncher = Join-Path (App-Dir) $LauncherName
     if (-not (Test-Path $repoLauncher)) { return }
     if (-not $SelfPath) { return }
     try { $selfFull = (Resolve-Path $SelfPath).Path } catch { return }
@@ -345,7 +346,7 @@ if ($Background) {
         }
     }
     Log "Detaching watcher to background. Log: $LogFile"
-    $repoSelf = Join-Path $AppHome $LauncherName
+    $repoSelf = Join-Path (App-Dir) $LauncherName
     $useSelf = if (Test-Path $repoSelf) { $repoSelf } else { $PSCommandPath }
     Start-Process -FilePath "powershell.exe" -WindowStyle Hidden `
         -ArgumentList @("-ExecutionPolicy","Bypass","-File",$useSelf,"-Supervise")

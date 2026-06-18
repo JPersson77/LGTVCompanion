@@ -6,7 +6,7 @@ when the PC is idle and wake on input.
 
 **Most people don't run anything in here directly.** Use the portable installer
 at the repository root instead — `LGTV-Easy-Mode-WINDOWS.bat` (Windows) or
-`LGTV-Easy-Mode-UBUNTU.sh` (Linux). See the top-level [README](../README.md).
+`LGTV-Easy-Mode-UBUNTU.sh` (Linux). See the top-level [`readme.txt`](../readme.txt).
 
 ## Run it directly (developers)
 
@@ -31,6 +31,7 @@ python3 -m lgtv_easy --help     # all commands (scan, pair, set, status, run, ..
 | `config.py` | the tiny JSON settings file |
 | `autostart.py` | start-at-login registration |
 | `singleton.py` | one-watcher-at-a-time lock |
+| `LGTV-Easy-Mode-WINDOWS.ps1` | the Windows launcher engine the root `.bat` runs |
 
 ## Tests
 

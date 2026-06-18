@@ -2,8 +2,8 @@
 import pytest
 
 from lgtv_easy import idle as idle_mod
-from lgtv_easy import wol as wol_mod
-from lgtv_easy.wol import magic_packet, normalize_mac, send_wol
+from lgtv_easy.wol import (broadcast_targets, magic_packet, normalize_mac,
+                           send_wol)
 
 
 def test_idle_returns_float_and_never_raises():
@@ -96,44 +96,44 @@ def test_normalize_mac_rejects_bad():
         normalize_mac("not-a-mac")
 
 
-def test_send_wol_targets_global_and_subnet_broadcasts(monkeypatch):
-    # On a mesh network the global 255.255.255.255 can be dropped, so the wake
-    # must also hit each interface's subnet-directed broadcast (e.g. the Google
-    # Wifi 192.168.86.x range), on the common WOL ports.
-    monkeypatch.setattr(wol_mod, "local_ipv4s",
-                        lambda: ["192.168.86.23", "10.0.0.5"], raising=False)
-    monkeypatch.setattr(wol_mod, "_subnet_broadcasts",
-                        lambda: ["192.168.86.255", "10.0.0.255"])
+def test_broadcast_targets_adds_directed_subnet_broadcast():
+    # The TV's /24-directed broadcast is added alongside the limited broadcast,
+    # which is what makes wake-on-LAN reliable across a Google Wifi mesh.
+    targets = broadcast_targets("192.168.86.42")
+    assert "255.255.255.255" in targets
+    assert "192.168.86.255" in targets
+    # A host:port form is tolerated (the port is stripped).
+    assert "192.168.86.255" in broadcast_targets("192.168.86.42:3001")
+    # De-duplicated, and junk is ignored without raising.
+    assert broadcast_targets("", "nonsense", "10.0.0.5", "10.0.0.9") == [
+        "255.255.255.255", "10.0.0.255"]
+
+
+def test_send_wol_hits_every_broadcast_each_round():
     sent = []
 
     class FakeSock:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def setsockopt(self, *a): pass
-        def sendto(self, _packet, addr): sent.append(addr)
+        def __enter__(self):
+            return self
 
-    monkeypatch.setattr(wol_mod.socket, "socket", lambda *a, **k: FakeSock())
-    send_wol("AA:BB:CC:DD:EE:FF", repeat=1)
+        def __exit__(self, *a):
+            return False
 
-    dests = {addr[0] for addr in sent}
-    ports = {addr[1] for addr in sent}
-    assert "255.255.255.255" in dests
-    assert "192.168.86.255" in dests and "10.0.0.255" in dests
-    assert {9, 7}.issubset(ports)
+        def setsockopt(self, *a):
+            pass
 
+        def sendto(self, _packet, dest):
+            sent.append(dest)
 
-def test_send_wol_survives_missing_local_addresses(monkeypatch):
-    # If the local addresses can't be read, WOL must still send to the global
-    # broadcast rather than raising.
-    monkeypatch.setattr(wol_mod, "_subnet_broadcasts", lambda: [])
-    sent = []
-
-    class FakeSock:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def setsockopt(self, *a): pass
-        def sendto(self, _packet, addr): sent.append(addr)
-
-    monkeypatch.setattr(wol_mod.socket, "socket", lambda *a, **k: FakeSock())
-    send_wol("AA:BB:CC:DD:EE:FF", repeat=1)
-    assert any(addr[0] == "255.255.255.255" for addr in sent)
+    import lgtv_easy.wol as wol_mod
+    orig = wol_mod.socket.socket
+    wol_mod.socket.socket = lambda *a, **k: FakeSock()
+    try:
+        send_wol("AA:BB:CC:DD:EE:FF",
+                 broadcast=["255.255.255.255", "192.168.86.255"], repeat=2)
+    finally:
+        wol_mod.socket.socket = orig
+    # 2 rounds x 2 broadcasts = 4 sends, all to port 9.
+    assert len(sent) == 4
+    assert {host for host, _port in sent} == {"255.255.255.255", "192.168.86.255"}
+    assert all(port == 9 for _host, port in sent)

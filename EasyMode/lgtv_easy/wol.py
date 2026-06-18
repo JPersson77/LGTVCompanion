@@ -23,45 +23,43 @@ def magic_packet(mac: str) -> bytes:
     return b"\xff" * 6 + target * 16
 
 
-def _subnet_broadcasts() -> "list[str]":
-    """Subnet-directed broadcast address(es) for this PC, e.g. 192.168.86.255.
+def broadcast_targets(*ips: str) -> list:
+    """Broadcast addresses to aim a magic packet at, best-first.
 
-    The global 255.255.255.255 broadcast is sometimes dropped on mesh/segmented
-    networks (Google/Nest Wifi among them), whereas the per-subnet directed
-    broadcast usually still reaches the TV. We derive one per local interface
-    (assuming the common /24) so a wake works whether the PC is on Ethernet or
-    Wi-Fi. Best-effort: returns [] if the local addresses can't be determined.
+    Always includes the limited broadcast (255.255.255.255). For each given IPv4
+    it also adds that address's /24-directed broadcast (e.g. 192.168.86.42 ->
+    192.168.86.255). On a Google/Nest Wifi mesh the limited broadcast is not
+    always forwarded between the wired and wireless segments, whereas the
+    directed subnet broadcast usually is - so hitting both makes wake-on-LAN far
+    more reliable when the PC and TV are on different parts of the same mesh.
     """
-    try:
-        from .netdiag import local_ipv4s
-        nets = []
-        for ip in local_ipv4s():
-            parts = ip.split(".")
-            if len(parts) == 4:
-                nets.append(".".join(parts[:3]) + ".255")
-        return nets
-    except Exception:  # noqa: BLE001 - never let WOL fail over address discovery
-        return []
+    targets = ["255.255.255.255"]
+    for ip in ips:
+        if not ip:
+            continue
+        host = ip.rpartition(":")[0] if ":" in ip else ip  # strip any :port
+        parts = host.split(".")
+        if len(parts) == 4 and all(p.isdigit() for p in parts):
+            directed = ".".join(parts[:3] + ["255"])
+            if directed not in targets:
+                targets.append(directed)
+    return targets
 
 
-def send_wol(mac: str, broadcast: str = "255.255.255.255",
+def send_wol(mac: str, broadcast="255.255.255.255",
              port: int = 9, repeat: int = 3) -> None:
     """Broadcast a magic packet to wake the TV. Sent a few times for reliability.
 
-    Sends to the global broadcast plus each interface's subnet-directed broadcast
-    (so a TV on a Google/Nest Wifi mesh is reached whether the PC is wired or on
-    Wi-Fi), on both common WOL ports (9 and 7).
+    ``broadcast`` may be a single address or a list/tuple of them (see
+    :func:`broadcast_targets`); the packet goes to each, every round.
     """
+    targets = [broadcast] if isinstance(broadcast, str) else list(broadcast)
     packet = magic_packet(mac)
-    # De-duplicate while keeping the explicit broadcast first.
-    targets = [broadcast] + [b for b in _subnet_broadcasts() if b != broadcast]
-    ports = {port, 9, 7}
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         for _ in range(max(1, repeat)):
-            for dest in targets:
-                for p in ports:
-                    try:
-                        sock.sendto(packet, (dest, p))
-                    except OSError:
-                        continue
+            for target in targets:
+                try:
+                    sock.sendto(packet, (target, port))
+                except OSError:
+                    continue
