@@ -219,9 +219,10 @@ def cmd_on(args) -> int:
         _print("No TV configured.")
         return 1
     if cfg.device.mac:
-        from .wol import send_wol
+        from .wol import broadcast_targets, send_wol
         try:
-            send_wol(cfg.device.mac)
+            send_wol(cfg.device.mac,
+                     broadcast=broadcast_targets(cfg.device.ip))
             _print(f"Sent Wake-on-LAN to {cfg.device.mac}.")
         except Exception as exc:  # noqa: BLE001
             _print(f"WOL failed: {exc}")

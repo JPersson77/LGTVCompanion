@@ -145,10 +145,15 @@ class Daemon:
             return False
 
     def wake_screen(self) -> bool:
-        # If the panel went into standby it may need a magic packet first.
+        # If the panel went into standby it may need a magic packet first. Aim it
+        # at both the limited broadcast and the TV's directed subnet broadcast so
+        # it wakes reliably across a Google/Nest Wifi mesh (where the limited
+        # broadcast isn't always forwarded between wired and wireless segments).
         if self.config.device.mac:
             try:
-                send_wol(self.config.device.mac)
+                from .wol import broadcast_targets
+                send_wol(self.config.device.mac,
+                         broadcast=broadcast_targets(self.config.device.ip))
             except Exception as exc:  # noqa: BLE001
                 self.logger.debug("WOL send failed (often harmless): %s", exc)
         client = self._ensure_client()

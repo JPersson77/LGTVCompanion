@@ -2,7 +2,8 @@
 import pytest
 
 from lgtv_easy import idle as idle_mod
-from lgtv_easy.wol import magic_packet, normalize_mac
+from lgtv_easy.wol import (broadcast_targets, magic_packet, normalize_mac,
+                           send_wol)
 
 
 def test_idle_returns_float_and_never_raises():
@@ -93,3 +94,46 @@ def test_normalize_mac_accepts_common_formats():
 def test_normalize_mac_rejects_bad():
     with pytest.raises(ValueError):
         normalize_mac("not-a-mac")
+
+
+def test_broadcast_targets_adds_directed_subnet_broadcast():
+    # The TV's /24-directed broadcast is added alongside the limited broadcast,
+    # which is what makes wake-on-LAN reliable across a Google Wifi mesh.
+    targets = broadcast_targets("192.168.86.42")
+    assert "255.255.255.255" in targets
+    assert "192.168.86.255" in targets
+    # A host:port form is tolerated (the port is stripped).
+    assert "192.168.86.255" in broadcast_targets("192.168.86.42:3001")
+    # De-duplicated, and junk is ignored without raising.
+    assert broadcast_targets("", "nonsense", "10.0.0.5", "10.0.0.9") == [
+        "255.255.255.255", "10.0.0.255"]
+
+
+def test_send_wol_hits_every_broadcast_each_round():
+    sent = []
+
+    class FakeSock:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def setsockopt(self, *a):
+            pass
+
+        def sendto(self, _packet, dest):
+            sent.append(dest)
+
+    import lgtv_easy.wol as wol_mod
+    orig = wol_mod.socket.socket
+    wol_mod.socket.socket = lambda *a, **k: FakeSock()
+    try:
+        send_wol("AA:BB:CC:DD:EE:FF",
+                 broadcast=["255.255.255.255", "192.168.86.255"], repeat=2)
+    finally:
+        wol_mod.socket.socket = orig
+    # 2 rounds x 2 broadcasts = 4 sends, all to port 9.
+    assert len(sent) == 4
+    assert {host for host, _port in sent} == {"255.255.255.255", "192.168.86.255"}
+    assert all(port == 9 for _host, port in sent)
