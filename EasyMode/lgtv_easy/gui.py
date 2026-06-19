@@ -183,7 +183,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("LGTV Companion Easy Mode")
-        self.geometry("540x700")
+        self.geometry("540x715")
         self.minsize(520, 640)
         _apply_theme(self)
         try:
