@@ -79,6 +79,10 @@ install_deps() {
   python3 -c "import tkinter" >/dev/null 2>&1 || need_pkgs+=("python3-tk")
   # xprintidle gives accurate idle detection on X11 (optional but recommended).
   have xprintidle || need_pkgs+=("xprintidle")
+  # gdbus (from glib) is used for Wayland/GNOME idle detection and to notice when
+  # the PC suspends so the TV can sleep with it. Optional - the app degrades if
+  # it's missing - but recommended.
+  have gdbus || need_pkgs+=("libglib2.0-bin")
 
   if [ "${#need_pkgs[@]}" -eq 0 ]; then
     log "All dependencies present."
