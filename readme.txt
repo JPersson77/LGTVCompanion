@@ -9,8 +9,14 @@ simple window, almost nothing to configure.
 
 HOW TO START
 ------------
-  Windows : double-click   LGTV-Easy-Mode-WINDOWS.bat
-  Linux   : run            ./LGTV-Easy-Mode-UBUNTU.sh
+  Windows : Double-click  "Windows Launch".
+
+  Linux   : Right-click  "Linux Launch.sh"  ->  "Run as a Program".
+            First time only: if that option isn't there, the file just needs
+            permission to run (files unzipped from a download arrive without
+            it). Right-click -> Properties -> Permissions -> tick "Allow
+            executing file as program", then try again. Prefer a terminal?
+            Open one in this folder and run:   bash "Linux Launch.sh"
 
 That is it. The first run installs what it needs (Git + Python), downloads the
 app, keeps itself up to date, then opens a 3-step setup window:
@@ -25,8 +31,8 @@ NOT stop it. (No graphical desktop? The same steps run as a text wizard.)
 
 TO STOP THE BACKGROUND WATCHER
 ------------------------------
-  Windows : run   LGTV-Easy-Mode-WINDOWS.bat -Stop
-  Linux   : run   ./LGTV-Easy-Mode-UBUNTU.sh --stop
+  Windows : open a terminal here and run   "Windows Launch.bat" -Stop
+  Linux   : open a terminal here and run   bash "Linux Launch.sh" --stop
 
 
 ON YOUR TV (one-time)
@@ -39,10 +45,10 @@ separate "guest" network. The setup window warns you if they look different.
 
 WHAT'S IN THIS FOLDER
 ---------------------
-  LGTV-Easy-Mode-WINDOWS.bat - the Windows portable installer (double-click)
-  LGTV-Easy-Mode-UBUNTU.sh   - the Linux portable installer
-  EasyMode/                  - the app itself (and its Windows engine)
-  readme.txt                 - this file
+  Windows Launch.bat - the Windows launcher (double-click)
+  Linux Launch.sh    - the Linux launcher (right-click -> Run as a Program)
+  EasyMode/          - the app itself (and its Windows engine)
+  readme.txt         - this file
 
 
 IF SOMETHING GOES WRONG

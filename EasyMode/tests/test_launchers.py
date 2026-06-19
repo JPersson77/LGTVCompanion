@@ -18,11 +18,11 @@ REPO_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", ".."))
 APP_DIR_NAME = "EasyMode"
 
-WIN_BAT = os.path.join(REPO_ROOT, "LGTV-Easy-Mode-WINDOWS.bat")
+WIN_BAT = os.path.join(REPO_ROOT, "Windows Launch.bat")
 # The PowerShell engine lives inside the app folder; the .bat at the root is the
 # only Windows file a user touches.
 WIN_PS1 = os.path.join(REPO_ROOT, APP_DIR_NAME, "LGTV-Easy-Mode-WINDOWS.ps1")
-LINUX_SH = os.path.join(REPO_ROOT, "LGTV-Easy-Mode-UBUNTU.sh")
+LINUX_SH = os.path.join(REPO_ROOT, "Linux Launch.sh")
 
 
 def _read(path):
