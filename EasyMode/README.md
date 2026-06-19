@@ -5,8 +5,8 @@ standard-library Python package (`lgtv_easy`) that makes an LG OLED TV sleep
 when the PC is idle - or when the PC itself sleeps - and wake on input.
 
 **Most people don't run anything in here directly.** Use the portable installer
-at the repository root instead — `LGTV-Easy-Mode-WINDOWS.bat` (Windows) or
-`LGTV-Easy-Mode-UBUNTU.sh` (Linux). See the top-level [`readme.txt`](../readme.txt).
+at the repository root instead — `Windows Launch.bat` (Windows) or
+`Linux Launch.sh` (Linux). See the top-level [`readme.txt`](../readme.txt).
 
 ## Run it directly (developers)
 

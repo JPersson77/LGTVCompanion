@@ -10,7 +10,7 @@
     4. Supervises the idle daemon in the background, restarting it if it crashes
        and periodically pulling updates. All errors go to a persistent log.
 
-  Usage (from PowerShell, or just double-click LGTV-Easy-Mode-WINDOWS.bat):
+  Usage (from PowerShell, or just double-click Windows Launch.bat):
     .\LGTV-Easy-Mode-WINDOWS.ps1              # set up if needed, then supervise
     .\LGTV-Easy-Mode-WINDOWS.ps1 -Background  # detach and supervise in background
     .\LGTV-Easy-Mode-WINDOWS.ps1 -Setup       # force the setup wizard, then exit

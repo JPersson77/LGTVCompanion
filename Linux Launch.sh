@@ -11,10 +11,10 @@
 #      and periodically pulling updates. All errors go to a persistent log.
 #
 # Usage:
-#   ./LGTV-Easy-Mode-UBUNTU.sh              # set up (if needed), run in foreground
-#   ./LGTV-Easy-Mode-UBUNTU.sh --background # detach and run as a background daemon
-#   ./LGTV-Easy-Mode-UBUNTU.sh --setup      # force the setup wizard, then exit
-#   ./LGTV-Easy-Mode-UBUNTU.sh --stop       # stop a running background supervisor
+#   ./"Linux Launch.sh"              # set up (if needed), run in foreground
+#   ./"Linux Launch.sh" --background # detach and run as a background daemon
+#   ./"Linux Launch.sh" --setup      # force the setup wizard, then exit
+#   ./"Linux Launch.sh" --stop       # stop a running background supervisor
 #
 # Safe to re-run any time; it is idempotent.
 # -----------------------------------------------------------------------------
@@ -35,7 +35,7 @@ NO_UPDATE="${LGTV_EASY_NO_UPDATE:-0}"
 # The Python app lives in the EasyMode/ subdirectory of the repo; this launcher
 # lives at the repo root.
 SUBDIR="EasyMode"
-LAUNCHER_NAME="LGTV-Easy-Mode-UBUNTU.sh"
+LAUNCHER_NAME="Linux Launch.sh"
 
 mkdir -p "$STATE_DIR"
 
