@@ -2,8 +2,9 @@ LGTV Companion - Easy Mode
 ==========================
 
 Make your LG OLED TV sleep like a PC monitor: the screen turns off after a few
-minutes of inactivity and wakes the moment you move the mouse or press a key.
-That is the whole app - one job, a simple window, almost nothing to configure.
+minutes of inactivity - or the moment you put the PC to sleep - and wakes again
+as soon as you move the mouse or press a key. That is the whole app - one job, a
+simple window, almost nothing to configure.
 
 
 HOW TO START
@@ -54,5 +55,6 @@ share:
 To freeze the code on disk (no auto-update), set LGTV_EASY_NO_UPDATE=1 before
 launching. Developer notes and the optional command line live in EasyMode/.
 
-A beginner-friendly front end to LGTV Companion by Jorgen Persson, reusing its
-WebOS protocol. MIT licensed - see LICENSE.
+LGTV Companion Easy Mode is an independent, MIT-licensed project (see LICENSE).
+It controls the TV directly over the LG WebOS (SSAP) network protocol, and keeps
+itself up to date from its own repository.

@@ -1,8 +1,8 @@
 """WebOS protocol client.
 
-Speaks the same SSAP protocol as the original LGTV Companion: connect over a
-WebSocket, register (which prompts the TV to pair on first use and returns a
-reusable ``client-key``), then issue requests such as turning the screen on/off.
+Speaks the LG WebOS SSAP protocol: connect over a WebSocket, register (which
+prompts the TV to pair on first use and returns a reusable ``client-key``), then
+issue requests such as turning the screen on/off.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Optional
 
 from ._ws import WebSocket, WebSocketError
 
-# SSAP URIs (mirror Common/lg_api.h in the original project).
+# SSAP URIs for the LG WebOS TV services Easy Mode uses.
 URI_SCREEN_ON = "ssap://com.webos.service.tvpower/power/turnOnScreen"
 URI_SCREEN_OFF = "ssap://com.webos.service.tvpower/power/turnOffScreen"
 URI_POWER_OFF = "ssap://system/turnOff"
@@ -31,7 +31,7 @@ def _normalize_mac(mac: str) -> str:
     except ValueError:
         return ""
 
-# Registration manifest. The permission set matches what the C++ client asks for.
+# Registration manifest: the permissions Easy Mode asks the TV to grant.
 _MANIFEST = {
     "manifestVersion": 1,
     "appVersion": "1.0",

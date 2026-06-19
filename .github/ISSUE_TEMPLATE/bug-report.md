@@ -21,8 +21,15 @@ Enter a description of what you expected to happen.
 
 ### What is your system?
 
-e.g. Win 11, build 26100.712, LG OLED C2
+e.g. Windows 11 (or Ubuntu 24.04), LG OLED C2
 
 ### Log file and screenshots
 
-Please enable "debug level logging" in global options of the app to capture the issue, upload the log to pastebin or similar and add the link here along with the time the issue occured. Add screenshots to further help explain your problem, as applicable.
+Please attach the launcher log (and the daemon log next to it), along with the
+time the issue occurred:
+
+- Windows: `%APPDATA%\LGTV Companion Easy Mode\launcher.log`
+- Linux:   `~/.config/lgtv-companion-easy/launcher.log`
+
+Uploading to a pastebin and linking it here is fine. Screenshots help too, where
+applicable.

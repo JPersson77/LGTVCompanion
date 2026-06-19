@@ -2,7 +2,7 @@
 
 The config is a single small JSON file kept in the per-user config directory so
 it survives app updates. It intentionally mirrors the handful of settings a
-monitor user actually cares about, instead of the dozens the original UI exposes.
+monitor user actually cares about, instead of the dozens a full settings UI would.
 """
 from __future__ import annotations
 
@@ -70,6 +70,10 @@ class Config:
     deep_off_minutes: float = 30.0
     # Power the TV fully off when the PC shuts down or logs off.
     tv_off_on_shutdown: bool = True
+    # Follow the PC into sleep: when the user suspends the computer, turn the TV
+    # screen off too (and bring it back when the PC resumes), the way a desk
+    # monitor goes dark with the PC. Independent of the idle timeout above.
+    screen_off_on_pc_sleep: bool = True
     # True once the setup wizard has completed successfully.
     setup_complete: bool = False
     device: Device = field(default_factory=Device)
