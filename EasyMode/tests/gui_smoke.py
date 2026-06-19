@@ -11,6 +11,8 @@ import tempfile
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 os.environ["LGTV_EASY_HOME"] = tempfile.mkdtemp(prefix="lgtv-gui-")
+# The GUI starts a real daemon thread; keep it from spawning OS power monitors.
+os.environ.setdefault("LGTV_EASY_NO_SLEEP_WATCH", "1")
 
 from lgtv_easy import gui  # noqa: E402
 from lgtv_easy.mock_tv import MockTV  # noqa: E402

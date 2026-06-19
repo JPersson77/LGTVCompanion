@@ -370,6 +370,7 @@ class SettingsPanel(ttk.Frame):
         self.enabled = tk.BooleanVar(value=cfg.idle_enabled)
         self.minutes = tk.DoubleVar(value=cfg.idle_minutes)
         self.mute = tk.BooleanVar(value=cfg.mute_on_sleep)
+        self.follow_sleep = tk.BooleanVar(value=cfg.screen_off_on_pc_sleep)
         self.deep = tk.BooleanVar(value=cfg.deep_off_enabled)
         self.deep_minutes = tk.DoubleVar(value=cfg.deep_off_minutes)
         self.autostart = tk.BooleanVar(value=autostart_mod.is_enabled())
@@ -399,6 +400,10 @@ class SettingsPanel(ttk.Frame):
 
         ttk.Checkbutton(self, text="Also mute the speakers when sleeping",
                         variable=self.mute,
+                        command=self._apply).pack(anchor="w")
+
+        ttk.Checkbutton(self, text="Sleep the TV when the PC sleeps",
+                        variable=self.follow_sleep,
                         command=self._apply).pack(anchor="w")
 
         energy = ttk.LabelFrame(self, text="Maximum energy saving", padding=PAD)
@@ -446,6 +451,7 @@ class SettingsPanel(ttk.Frame):
         cfg.idle_enabled = self.enabled.get()
         cfg.idle_minutes = round(self.minutes.get())
         cfg.mute_on_sleep = self.mute.get()
+        cfg.screen_off_on_pc_sleep = self.follow_sleep.get()
         cfg.deep_off_enabled = self.deep.get()
         try:
             cfg.deep_off_minutes = max(2.0, float(self.deep_minutes.get()))

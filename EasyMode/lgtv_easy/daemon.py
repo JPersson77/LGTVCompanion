@@ -10,11 +10,13 @@ tests without a real TV or a real wait.
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 from typing import Callable, Optional
 
 from . import idle as idle_mod
+from . import system_sleep
 from .applog import get_logger
 from .config import Config
 from .webos import WebOSClient
@@ -33,6 +35,7 @@ class Daemon:
         client_factory: Optional[Callable[[], WebOSClient]] = None,
         idle_fn: Optional[Callable[[], float]] = None,
         sleep_fn: Optional[Callable[[float], None]] = None,
+        sleep_watcher_factory: Optional[Callable[..., object]] = None,
         logger=None,
     ):
         self.config = config
@@ -40,9 +43,14 @@ class Daemon:
         self._idle_fn = idle_fn or idle_mod.get_idle_seconds
         self._sleep_fn = sleep_fn or time.sleep
         self._client_factory = client_factory or self._default_client_factory
+        self._sleep_watcher_factory = sleep_watcher_factory or system_sleep.make_watcher
+        self._sleep_watcher: Optional[object] = None
         self._client: Optional[WebOSClient] = None
         self.screen_state = STATE_ON  # assume the screen is on at startup
         self._stop = threading.Event()
+        # Serialise the TV actions: the idle loop and the suspend/resume watcher
+        # both drive the screen, from different threads.
+        self._action_lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
         # Counters make tests and the status command observable.
         self.sleeps = 0
@@ -106,72 +114,133 @@ class Daemon:
 
     # ----- actions -----------------------------------------------------
     def sleep_screen(self) -> bool:
-        client = self._ensure_client()
-        if not client:
-            return False
-        try:
-            client.screen_off()
-            if self.config.mute_on_sleep:
-                client.set_mute(True)
-            self.screen_state = STATE_OFF
-            self.sleeps += 1
-            self.logger.info("Screen off after %.0f min idle",
-                             self.config.idle_minutes)
-            return True
-        except Exception as exc:  # noqa: BLE001
-            self.last_error = f"sleep: {exc}"
-            self.logger.warning("Failed to turn screen off: %s", exc)
-            self._drop_client()
-            return False
+        with self._action_lock:
+            client = self._ensure_client()
+            if not client:
+                return False
+            try:
+                client.screen_off()
+                if self.config.mute_on_sleep:
+                    client.set_mute(True)
+                self.screen_state = STATE_OFF
+                self.sleeps += 1
+                self.logger.info("Screen off after %.0f min idle",
+                                 self.config.idle_minutes)
+                return True
+            except Exception as exc:  # noqa: BLE001
+                self.last_error = f"sleep: {exc}"
+                self.logger.warning("Failed to turn screen off: %s", exc)
+                self._drop_client()
+                return False
 
     def power_off_tv(self) -> bool:
         """Fully power the TV off (deep standby) for maximum energy saving."""
-        client = self._ensure_client()
-        if not client:
-            return False
-        try:
-            client.power_off()
-            self.screen_state = STATE_STANDBY
-            self.deep_offs += 1
-            self.logger.info("TV powered off (deep energy saving) after %.0f min idle",
-                             self.config.deep_off_minutes)
-            # The socket dies as the TV powers down; reconnect on the next wake.
-            self._drop_client()
-            return True
-        except Exception as exc:  # noqa: BLE001
-            self.last_error = f"power_off: {exc}"
-            self.logger.warning("Failed to power off TV: %s", exc)
-            self._drop_client()
-            return False
+        with self._action_lock:
+            client = self._ensure_client()
+            if not client:
+                return False
+            try:
+                client.power_off()
+                self.screen_state = STATE_STANDBY
+                self.deep_offs += 1
+                self.logger.info("TV powered off (deep energy saving) after %.0f min idle",
+                                 self.config.deep_off_minutes)
+                # The socket dies as the TV powers down; reconnect on next wake.
+                self._drop_client()
+                return True
+            except Exception as exc:  # noqa: BLE001
+                self.last_error = f"power_off: {exc}"
+                self.logger.warning("Failed to power off TV: %s", exc)
+                self._drop_client()
+                return False
 
     def wake_screen(self) -> bool:
-        # If the panel went into standby it may need a magic packet first. Aim it
-        # at both the limited broadcast and the TV's directed subnet broadcast so
-        # it wakes reliably across a Google/Nest Wifi mesh (where the limited
-        # broadcast isn't always forwarded between wired and wireless segments).
-        if self.config.device.mac:
+        with self._action_lock:
+            # If the panel went into standby it may need a magic packet first. Aim
+            # it at both the limited broadcast and the TV's directed subnet
+            # broadcast so it wakes reliably across a Google/Nest Wifi mesh (where
+            # the limited broadcast isn't always forwarded between wired and
+            # wireless segments).
+            if self.config.device.mac:
+                try:
+                    from .wol import broadcast_targets
+                    send_wol(self.config.device.mac,
+                             broadcast=broadcast_targets(self.config.device.ip))
+                except Exception as exc:  # noqa: BLE001
+                    self.logger.debug("WOL send failed (often harmless): %s", exc)
+            client = self._ensure_client()
+            if not client:
+                return False
             try:
-                from .wol import broadcast_targets
-                send_wol(self.config.device.mac,
-                         broadcast=broadcast_targets(self.config.device.ip))
+                client.screen_on()
+                if self.config.mute_on_sleep:
+                    client.set_mute(False)
+                self.screen_state = STATE_ON
+                self.wakes += 1
+                self.logger.info("Screen on (activity detected)")
+                return True
             except Exception as exc:  # noqa: BLE001
-                self.logger.debug("WOL send failed (often harmless): %s", exc)
-        client = self._ensure_client()
-        if not client:
-            return False
+                self.last_error = f"wake: {exc}"
+                self.logger.warning("Failed to turn screen on: %s", exc)
+                self._drop_client()
+                return False
+
+    # ----- following the PC into sleep ---------------------------------
+    def _on_system_sleep(self) -> None:
+        """The PC is suspending: blank the TV so it doesn't sit there lit.
+
+        Runs on the sleep-watcher thread, just before the machine goes down.
+        """
+        if not self.config.screen_off_on_pc_sleep:
+            return
+        if self.screen_state in (STATE_OFF, STATE_STANDBY):
+            return  # already dark - nothing to do
+        self.logger.info("PC is going to sleep; turning the TV screen off.")
+        self.sleep_screen()
+
+    def _on_system_resume(self) -> None:
+        """The PC woke up. Bring the screen back only if a person is actually
+        there (recent input); if it resumed on its own - a scheduled task, a
+        Wake-on-LAN, an RTC alarm - leave the TV asleep instead of lighting an
+        empty room. Genuine user wakes always involve a keypress, so the idle
+        timer is near zero."""
+        if not self.config.screen_off_on_pc_sleep:
+            return
+        if self.screen_state not in (STATE_OFF, STATE_STANDBY):
+            return
         try:
-            client.screen_on()
-            if self.config.mute_on_sleep:
-                client.set_mute(False)
-            self.screen_state = STATE_ON
-            self.wakes += 1
-            self.logger.info("Screen on (activity detected)")
-            return True
-        except Exception as exc:  # noqa: BLE001
-            self.last_error = f"wake: {exc}"
-            self.logger.warning("Failed to turn screen on: %s", exc)
-            self._drop_client()
-            return False
+            active = self._idle_fn() < self.config.idle_seconds
+        except Exception:  # noqa: BLE001
+            active = True
+        if active:
+            self.logger.info("PC resumed; turning the TV screen back on.")
+            self.wake_screen()
+
+    def _start_sleep_watcher(self) -> None:
+        # Opt-out hook for tests/CI so they never spawn real OS power monitors.
+        if os.environ.get("LGTV_EASY_NO_SLEEP_WATCH") == "1":
+            return
+        try:
+            watcher = self._sleep_watcher_factory(
+                on_sleep=self._on_system_sleep,
+                on_resume=self._on_system_resume,
+                logger=self.logger)
+            watcher.start()
+            self._sleep_watcher = watcher
+            name = getattr(watcher, "backend_name", "?")
+            if name and name != "none":
+                self.logger.info("Following PC sleep (backend: %s).", name)
+        except Exception as exc:  # noqa: BLE001 - the feature is best-effort
+            self.logger.debug("Sleep watcher unavailable: %s", exc)
+            self._sleep_watcher = None
+
+    def _stop_sleep_watcher(self) -> None:
+        watcher, self._sleep_watcher = self._sleep_watcher, None
+        if watcher is not None:
+            try:
+                watcher.stop()
+            except Exception:  # noqa: BLE001
+                pass
 
     # ----- the loop ----------------------------------------------------
     def tick(self) -> None:
@@ -231,15 +300,20 @@ class Daemon:
                 self._drop_client()
         except Exception:  # noqa: BLE001 - best effort, never block startup
             pass
-        while not self._stop.is_set():
-            try:
-                self.tick()
-            except Exception as exc:  # noqa: BLE001 - never let the loop die
-                self.last_error = f"tick: {exc}"
-                self.logger.exception("Unexpected error in daemon loop")
-            self._sleep_fn(self.config.poll_seconds)
-        self._drop_client()
-        self.logger.info("Easy Mode daemon stopped")
+        # Start watching for whole-PC suspend so the TV follows it to sleep.
+        self._start_sleep_watcher()
+        try:
+            while not self._stop.is_set():
+                try:
+                    self.tick()
+                except Exception as exc:  # noqa: BLE001 - never let the loop die
+                    self.last_error = f"tick: {exc}"
+                    self.logger.exception("Unexpected error in daemon loop")
+                self._sleep_fn(self.config.poll_seconds)
+        finally:
+            self._stop_sleep_watcher()
+            self._drop_client()
+            self.logger.info("Easy Mode daemon stopped")
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():

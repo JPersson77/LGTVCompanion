@@ -2,7 +2,7 @@
 
 This folder is the LGTV Companion **Easy Mode** application: a small, pure
 standard-library Python package (`lgtv_easy`) that makes an LG OLED TV sleep
-when the PC is idle and wake on input.
+when the PC is idle - or when the PC itself sleeps - and wake on input.
 
 **Most people don't run anything in here directly.** Use the portable installer
 at the repository root instead — `LGTV-Easy-Mode-WINDOWS.bat` (Windows) or
@@ -24,6 +24,7 @@ python3 -m lgtv_easy --help     # all commands (scan, pair, set, status, run, ..
 | `wizard_text.py` | the text-mode wizard (fallback when there's no display) |
 | `daemon.py` | the idle-watching loop that blanks/wakes the TV |
 | `idle.py` | cross-platform "seconds since last input" detection |
+| `system_sleep.py` | detect whole-PC suspend/resume so the TV follows it to sleep |
 | `webos.py` / `_ws.py` | the WebOS WebSocket protocol + pairing |
 | `discovery.py` | finding TVs on the network (SSDP) |
 | `wol.py` | Wake-on-LAN magic packets |

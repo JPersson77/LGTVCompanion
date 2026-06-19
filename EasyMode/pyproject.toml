@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lgtv-companion-easy"
 version = "1.0.0"
-description = "Easy-mode companion that sleeps your LG WebOS TV after X minutes idle"
+description = "Easy-mode companion that sleeps your LG WebOS TV after X minutes idle, or when the PC sleeps"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
