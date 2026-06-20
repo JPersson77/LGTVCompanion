@@ -27,6 +27,11 @@ STATE_ON = "on"
 STATE_OFF = "off"          # panel blanked, TV still powered and on the network
 STATE_STANDBY = "standby"  # TV fully powered off (deep energy saving)
 
+# If a single poll iteration takes far longer in wall-clock time than we asked it
+# to sleep, the process was frozen - i.e. the machine suspended and just resumed.
+# This is the OS-API-free resume backstop for when no sleep watcher caught it.
+RESUME_GAP_SECONDS = 30.0
+
 
 class Daemon:
     def __init__(
@@ -35,6 +40,7 @@ class Daemon:
         client_factory: Optional[Callable[[], WebOSClient]] = None,
         idle_fn: Optional[Callable[[], float]] = None,
         sleep_fn: Optional[Callable[[float], None]] = None,
+        clock_fn: Optional[Callable[[], float]] = None,
         sleep_watcher_factory: Optional[Callable[..., object]] = None,
         logger=None,
     ):
@@ -42,6 +48,7 @@ class Daemon:
         self.logger = logger or get_logger()
         self._idle_fn = idle_fn or idle_mod.get_idle_seconds
         self._sleep_fn = sleep_fn or time.sleep
+        self._clock = clock_fn or time.monotonic
         self._client_factory = client_factory or self._default_client_factory
         self._sleep_watcher_factory = sleep_watcher_factory or system_sleep.make_watcher
         self._sleep_watcher: Optional[object] = None
@@ -216,6 +223,28 @@ class Daemon:
             self.logger.info("PC resumed; turning the TV screen back on.")
             self.wake_screen()
 
+    def _on_resume_detected(self, gap: float) -> None:
+        """Backstop for resume when no OS sleep watcher caught it.
+
+        The loop was frozen far longer than we asked it to sleep, so the whole
+        machine suspended and just woke. If a person is actually back (idle near
+        zero) make sure the TV is on - unlike the idle tick, this also covers the
+        case where we still think the screen is ON but it went dark on its own
+        (the PC slept before the idle timeout, and the panel hit its own
+        standby), which the tick alone would never correct.
+        """
+        if not self.config.screen_off_on_pc_sleep:
+            return
+        try:
+            active = self._idle_fn() < self.config.idle_seconds
+        except Exception:  # noqa: BLE001
+            active = True
+        if not active:
+            return  # resumed on its own (RTC/WOL/task) - don't light an empty room
+        self.logger.info(
+            "Resume detected (process frozen ~%.0fs); ensuring the TV is on.", gap)
+        self.wake_screen()
+
     def _start_sleep_watcher(self) -> None:
         # Opt-out hook for tests/CI so they never spawn real OS power monitors.
         if os.environ.get("LGTV_EASY_NO_SLEEP_WATCH") == "1":
@@ -302,6 +331,7 @@ class Daemon:
             pass
         # Start watching for whole-PC suspend so the TV follows it to sleep.
         self._start_sleep_watcher()
+        last = self._clock()
         try:
             while not self._stop.is_set():
                 try:
@@ -310,6 +340,16 @@ class Daemon:
                     self.last_error = f"tick: {exc}"
                     self.logger.exception("Unexpected error in daemon loop")
                 self._sleep_fn(self.config.poll_seconds)
+                # A wall-clock gap far beyond our poll interval means the process
+                # was frozen while the machine slept and has now resumed. The OS
+                # sleep watcher usually handles this, but it isn't available
+                # everywhere; this is the universal backstop.
+                now = self._clock()
+                gap = now - last
+                last = now
+                if gap > max(RESUME_GAP_SECONDS, self.config.poll_seconds * 3):
+                    self._on_resume_detected(gap)
+                    last = self._clock()  # don't count the wake itself as a freeze
         finally:
             self._stop_sleep_watcher()
             self._drop_client()
