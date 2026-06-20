@@ -159,6 +159,67 @@ def test_deep_off_skipped_without_wol_mac():
         assert d.deep_offs == 0
 
 
+def _run_with_freeze(tv, cfg, idle_value, jump=999.0):
+    """Drive ``Daemon.run()`` through one simulated suspend/resume freeze.
+
+    The fake clock jumps far ahead on the first poll-sleep (the process was
+    frozen while the machine slept); the loop exits on the second pass.
+    """
+    def factory():
+        c = WebOSClient("127.0.0.1")
+        c._url = lambda: tv.url
+        return c
+
+    idle_box = {"v": idle_value}
+    clock = {"t": 0.0}
+    step = {"n": 0}
+    d = Daemon(cfg, client_factory=factory, idle_fn=lambda: idle_box["v"],
+               clock_fn=lambda: clock["t"], logger=_quiet_logger())
+
+    def fake_sleep(_seconds):
+        step["n"] += 1
+        if step["n"] == 1:
+            clock["t"] += jump            # huge gap => the process was frozen
+        else:
+            d._stop.set()                 # exit after the second pass
+            clock["t"] += cfg.poll_seconds
+
+    d._sleep_fn = fake_sleep
+    d.run()  # blocks until _stop is set
+    return d
+
+
+def test_resume_backstop_restores_tv_after_a_freeze():
+    # No OS sleep watcher fired (e.g. a non-systemd Linux box). The PC suspended
+    # before the idle timeout, so our state still reads ON, and the panel went
+    # dark on its own. The wall-clock backstop must notice the freeze and a
+    # present user, and re-light the TV - something the idle tick alone misses.
+    with MockTV(require_pairing=False) as tv:
+        tv.screen_on = False              # panel self-standbyed while PC slept
+        d = _run_with_freeze(tv, _cfg(minutes=99.0), idle_value=0.0)
+        assert tv.screen_on is True
+        assert d.screen_state == STATE_ON
+        assert d.wakes >= 1
+
+
+def test_resume_backstop_ignores_autonomous_wake():
+    # The machine resumed on its own (RTC alarm / scheduled task); nobody is
+    # there, so idle stays high. The backstop must not light an empty room.
+    with MockTV(require_pairing=False) as tv:
+        d = _run_with_freeze(tv, _cfg(minutes=5.0), idle_value=9999.0)
+        assert tv.screen_on is False
+        assert d.wakes == 0
+
+
+def test_resume_backstop_off_when_pc_sleep_disabled():
+    with MockTV(require_pairing=False) as tv:
+        cfg = _cfg(minutes=99.0)
+        cfg.screen_off_on_pc_sleep = False
+        tv.screen_on = False
+        d = _run_with_freeze(tv, cfg, idle_value=0.0)
+        assert d.wakes == 0  # user opted out of PC-sleep handling entirely
+
+
 def test_survives_tv_disconnect():
     tv = MockTV(require_pairing=False).start()
     d = _make(tv, _cfg(minutes=1.0))
