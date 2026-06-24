@@ -32,6 +32,12 @@ STATE_STANDBY = "standby"  # TV fully powered off (deep energy saving)
 # This is the OS-API-free resume backstop for when no sleep watcher caught it.
 RESUME_GAP_SECONDS = 30.0
 
+# When the TV can't be reached (it's off, or on a different network), don't hammer
+# a reconnect on every single poll - that just burns CPU/network and floods the log
+# with one identical warning per poll, forever. Instead back off exponentially from
+# the poll interval up to this cap, and log the failure only once until it recovers.
+RECONNECT_BACKOFF_MAX = 300.0  # seconds (5 min between attempts at most)
+
 
 class Daemon:
     def __init__(
@@ -65,14 +71,27 @@ class Daemon:
         self.deep_offs = 0
         self.last_error = ""
         self._warned_no_wol = False
+        # Reconnect backoff state, so an unreachable TV doesn't cause a per-poll
+        # connect storm (see RECONNECT_BACKOFF_MAX). All touched only from the
+        # action lock or the single daemon thread.
+        self._connect_failures = 0       # consecutive failed connection attempts
+        self._next_connect_at = 0.0      # monotonic time before which we don't retry
+        self._connect_warned = False     # have we logged the current outage yet?
 
     # ----- TV connection ----------------------------------------------
     def _default_client_factory(self) -> WebOSClient:
         return WebOSClient(self.config.device.ip, secure=self.config.device.secure)
 
-    def _ensure_client(self) -> Optional[WebOSClient]:
+    def _ensure_client(self, force: bool = False) -> Optional[WebOSClient]:
         if self._client and self._client.connected:
             return self._client
+        # An unreachable TV (off, or on another network) must not trigger a fresh
+        # connect on every poll. While inside the backoff window, skip the attempt
+        # entirely - unless this is a user-facing wake (force), which should always
+        # try so the screen comes back promptly.
+        if (not force and self._connect_failures
+                and self._clock() < self._next_connect_at):
+            return None
         try:
             client = self._client_factory()
             # Try the port the TV actually accepts (3000 vs secure 3001),
@@ -103,13 +122,39 @@ class Daemon:
                     self.config.save()
                 except Exception:  # noqa: BLE001 - persistence is best-effort
                     pass
+            if self._connect_failures:
+                self.logger.info("Reconnected to the TV after %d failed "
+                                 "attempt(s).", self._connect_failures)
+            self._connect_failures = 0
+            self._connect_warned = False
+            self._next_connect_at = 0.0
             self._client = client
             return client
         except Exception as exc:  # noqa: BLE001 - network errors are expected
             self.last_error = f"connect: {exc}"
-            self.logger.warning("Could not connect to TV: %s", exc)
+            self._note_connect_failure(exc)
             self._client = None
             return None
+
+    def _note_connect_failure(self, exc: Exception) -> None:
+        """Record a failed connection: schedule the next retry with exponential
+        backoff (capped at RECONNECT_BACKOFF_MAX) and log the outage only once,
+        so an off TV doesn't flood the log with one identical line per poll."""
+        self._connect_failures += 1
+        base = max(self.config.poll_seconds, 1.0)
+        # 1st failure -> base interval, doubling each time up to the cap.
+        delay = min(RECONNECT_BACKOFF_MAX,
+                    base * (2 ** min(self._connect_failures - 1, 16)))
+        self._next_connect_at = self._clock() + delay
+        if not self._connect_warned:
+            self._connect_warned = True
+            self.logger.warning(
+                "Could not connect to TV: %s. It may be off or on another "
+                "network - retrying quietly (next attempt in ~%.0fs).",
+                exc, delay)
+        else:
+            self.logger.debug("TV still unreachable (%s); next attempt in ~%.0fs.",
+                              exc, delay)
 
     def _drop_client(self) -> None:
         if self._client:
@@ -175,7 +220,9 @@ class Daemon:
                              broadcast=broadcast_targets(self.config.device.ip))
                 except Exception as exc:  # noqa: BLE001
                     self.logger.debug("WOL send failed (often harmless): %s", exc)
-            client = self._ensure_client()
+            # A wake is user-facing and time-sensitive: bypass the reconnect
+            # backoff so the screen returns as soon as the TV is reachable.
+            client = self._ensure_client(force=True)
             if not client:
                 return False
             try:

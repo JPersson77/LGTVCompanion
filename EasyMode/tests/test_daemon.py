@@ -220,6 +220,117 @@ def test_resume_backstop_off_when_pc_sleep_disabled():
         assert d.wakes == 0  # user opted out of PC-sleep handling entirely
 
 
+class _RecordingLogger:
+    """A logger stand-in that records messages by level, for asserting on them."""
+
+    def __init__(self):
+        self.warnings, self.infos = [], []
+
+    @staticmethod
+    def _fmt(msg, args):
+        return (msg % args) if args else msg
+
+    def warning(self, msg, *args):
+        self.warnings.append(self._fmt(msg, args))
+
+    def info(self, msg, *args):
+        self.infos.append(self._fmt(msg, args))
+
+    def debug(self, *a, **k):
+        pass
+
+    def exception(self, *a, **k):
+        pass
+
+
+def test_unreachable_tv_backs_off_and_warns_once():
+    # The TV is off, so every connect fails. The daemon must NOT retry on every
+    # poll (that floods the log and burns CPU) - it backs off exponentially and
+    # logs the outage exactly once.
+    cfg = _cfg(minutes=1.0)
+    cfg.poll_seconds = 5.0
+    attempts = {"n": 0}
+
+    def factory():
+        attempts["n"] += 1
+        raise OSError("No route to host")
+
+    clock = {"t": 0.0}
+    log = _RecordingLogger()
+    d = Daemon(cfg, client_factory=factory, idle_fn=lambda: 120.0,
+               clock_fn=lambda: clock["t"], logger=log)
+
+    for _ in range(100):              # 100 polls, 5s apart, TV unreachable throughout
+        d.tick()
+        clock["t"] += cfg.poll_seconds
+
+    assert d.screen_state == STATE_ON         # never blanked an already-off TV
+    assert len(log.warnings) == 1, "the outage must be logged once, not per poll"
+    assert attempts["n"] < 15, "exponential backoff must throttle the retries"
+
+
+def test_unreachable_tv_recovers_and_logs_reconnect():
+    # Once the TV is reachable again, the daemon reconnects, clears the backoff,
+    # and the screen-off it had been unable to do now succeeds.
+    with MockTV(require_pairing=False) as tv:
+        cfg = _cfg(minutes=1.0)
+        up = {"v": False}
+
+        def factory():
+            if not up["v"]:
+                raise OSError("No route to host")
+            c = WebOSClient("127.0.0.1")
+            c._url = lambda: tv.url
+            return c
+
+        clock = {"t": 0.0}
+        log = _RecordingLogger()
+        d = Daemon(cfg, client_factory=factory, idle_fn=lambda: 120.0,
+                   clock_fn=lambda: clock["t"], logger=log)
+
+        d.tick()                              # TV down: connect fails, backoff armed
+        assert d.screen_state == STATE_ON
+        assert d._connect_failures >= 1
+
+        up["v"] = True                        # TV comes back
+        clock["t"] += 10.0                    # advance past the backoff window
+        d.tick()
+        assert d.screen_state == STATE_OFF    # the blank finally went through
+        assert d._connect_failures == 0
+        assert any("Reconnected" in m for m in log.infos)
+
+
+def test_wake_bypasses_reconnect_backoff():
+    # A backoff from a failed sleep must not delay a user-facing wake: the wake
+    # path forces a connection attempt even inside the backoff window.
+    with MockTV(require_pairing=False) as tv:
+        cfg = _cfg(minutes=1.0)
+        up = {"v": False}
+
+        def factory():
+            if not up["v"]:
+                raise OSError("No route to host")
+            c = WebOSClient("127.0.0.1")
+            c._url = lambda: tv.url
+            return c
+
+        clock = {"t": 0.0}
+        d = Daemon(cfg, client_factory=factory, idle_fn=lambda: 120.0,
+                   clock_fn=lambda: clock["t"], logger=_quiet_logger())
+        d.screen_state = STATE_OFF            # pretend we'd blanked it earlier
+        d.tick()                              # idle high, but already OFF: no-op-ish
+        d._note_connect_failure(OSError("x"))  # arm a long backoff window
+        far = d._next_connect_at
+        up["v"] = True
+        d._idle_box = {"v": 0.0}
+        d._idle_fn = lambda: 0.0              # user is active -> should wake now
+        clock["t"] += 1.0                     # still well inside the backoff window
+        assert clock["t"] < far
+        d.tick()
+        assert d.screen_state == STATE_ON     # forced through the backoff
+        assert d.wakes == 1
+
+
 def test_survives_tv_disconnect():
     tv = MockTV(require_pairing=False).start()
     d = _make(tv, _cfg(minutes=1.0))
