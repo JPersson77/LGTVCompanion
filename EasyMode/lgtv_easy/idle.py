@@ -21,7 +21,10 @@ import subprocess
 import sys
 import time
 
+from . import _dbus
+
 _BACKEND = None  # cached ("name", callable)
+_GDBUS_PATH = None  # cached gdbus resolution (False once known-absent)
 
 
 def _windows_backend():
@@ -90,9 +93,18 @@ def _xss_backend():
     return ("libXss", _get)
 
 
+def _gdbus_path() -> "str | None":
+    """Resolve the gdbus binary once (the daemon polls forever - don't re-scan
+    PATH on every call)."""
+    global _GDBUS_PATH
+    if _GDBUS_PATH is None:
+        _GDBUS_PATH = shutil.which("gdbus") or False
+    return _GDBUS_PATH or None
+
+
 def _gdbus_call(dest: str, path: str, method: str) -> "str | None":
-    """Call a session-bus D-Bus method via gdbus; return stdout or None."""
-    gdbus = shutil.which("gdbus")
+    """Call a session-bus D-Bus method via the gdbus CLI; return stdout or None."""
+    gdbus = _gdbus_path()
     if not gdbus:
         return None
     try:
@@ -102,6 +114,18 @@ def _gdbus_call(dest: str, path: str, method: str) -> "str | None":
             stderr=subprocess.DEVNULL, timeout=2, text=True).strip()
     except Exception:
         return None
+
+
+def _session_uint(dest: str, path: str, interface: str, member: str) -> "int | None":
+    """Read a single unsigned int from a no-arg session-bus method.
+
+    Tries the in-process D-Bus client first (no subprocess), and only falls back
+    to spawning ``gdbus`` if that can't answer. Returns None if neither can.
+    """
+    value = _dbus.session_get_uint(dest, path, interface, member)
+    if value is not None:
+        return value
+    return _parse_uint(_gdbus_call(dest, path, f"{interface}.{member}"))
 
 
 def _parse_uint(text: "str | None") -> "int | None":
@@ -121,19 +145,46 @@ def _parse_uint(text: "str | None") -> "int | None":
 
 def _mutter_idle_backend():
     """GNOME's IdleMonitor - works on both Wayland and X11. Returns ms idle."""
-    method = "org.gnome.Mutter.IdleMonitor.GetIdletime"
     dest = "org.gnome.Mutter.IdleMonitor"
     path = "/org/gnome/Mutter/IdleMonitor/Core"
-    if _parse_uint(_gdbus_call(dest, path, method)) is None:
+    interface = "org.gnome.Mutter.IdleMonitor"
+    member = "GetIdletime"
+    if _session_uint(dest, path, interface, member) is None:
         return None  # not GNOME, or no session bus - don't pick it
 
     def _get() -> float:
-        ms = _parse_uint(_gdbus_call(dest, path, method))
+        ms = _session_uint(dest, path, interface, member)
         # On a transient failure report "active" (0) rather than risk a huge
         # value that would sleep the TV spuriously.
         return max(0.0, (ms or 0) / 1000.0)
 
     return ("gnome-idlemonitor", _get)
+
+
+def _freedesktop_idle_backend():
+    """KDE Plasma (and other non-GNOME freedesktop compositors) expose idle time
+    via ``org.freedesktop.ScreenSaver.GetSessionIdleTime`` (milliseconds).
+
+    This fills the gap on KDE Wayland, where GNOME's Mutter monitor isn't
+    present and the X11 tools can't see Wayland input - without it those sessions
+    fall through to the manual no-op and the TV never sleeps. GNOME does *not*
+    implement this method (it returns an error), so this backend only activates
+    where the call actually answers, leaving GNOME on its Mutter backend above.
+    """
+    dest = "org.freedesktop.ScreenSaver"
+    interface = "org.freedesktop.ScreenSaver"
+    member = "GetSessionIdleTime"
+    # KDE registers the service at both object paths; probe whichever answers.
+    for path in ("/org/freedesktop/ScreenSaver", "/ScreenSaver"):
+        if _session_uint(dest, path, interface, member) is None:
+            continue
+
+        def _get(p=path) -> float:
+            ms = _session_uint(dest, p, interface, member)
+            return max(0.0, (ms or 0) / 1000.0)
+
+        return ("freedesktop-screensaver", _get)
+    return None
 
 
 class ManualIdle:
@@ -172,11 +223,13 @@ def _select_backend():
         wayland = session == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
         if wayland:
             # On Wayland the X11 tools (xprintidle/XScreenSaver) only see XWayland
-            # input - they report bogus idle - so use the compositor's own monitor
-            # (GNOME), and otherwise be honest (manual) instead of lying.
-            factories = [_mutter_idle_backend]
+            # input - they report bogus idle - so use the compositor's own monitor:
+            # GNOME's Mutter, else the freedesktop/KDE ScreenSaver interface. Only
+            # if neither answers do we fall back to manual (honest) instead of lying.
+            factories = [_mutter_idle_backend, _freedesktop_idle_backend]
         else:
-            factories = [_xprintidle_backend, _xss_backend, _mutter_idle_backend]
+            factories = [_xprintidle_backend, _xss_backend,
+                         _mutter_idle_backend, _freedesktop_idle_backend]
         for factory in factories:
             backend = factory()
             if backend:

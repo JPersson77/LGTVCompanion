@@ -34,9 +34,12 @@ def test_parse_uint_from_gdbus_reply():
     assert idle_mod._parse_uint(None) is None
 
 
-def test_mutter_backend_absent_without_gdbus(monkeypatch):
-    monkeypatch.setattr(idle_mod.shutil, "which", lambda name: None)
+def test_mutter_backend_absent_without_dbus(monkeypatch):
+    # No D-Bus access at all (neither the in-process client nor gdbus answers):
+    # neither GNOME nor the freedesktop backend may claim the session.
+    monkeypatch.setattr(idle_mod, "_session_uint", lambda *a, **k: None)
     assert idle_mod._mutter_idle_backend() is None
+    assert idle_mod._freedesktop_idle_backend() is None
 
 
 def test_wayland_session_prefers_gnome_idlemonitor(monkeypatch):
@@ -44,11 +47,34 @@ def test_wayland_session_prefers_gnome_idlemonitor(monkeypatch):
     monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
     monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
     monkeypatch.delenv("DISPLAY", raising=False)
-    # Pretend GNOME's IdleMonitor answers with 12.3s of idle.
-    monkeypatch.setattr(idle_mod, "_gdbus_call", lambda *a, **k: "(uint64 12300,)")
+
+    # Pretend GNOME's IdleMonitor answers with 12.3s of idle (12300 ms).
+    def fake(dest, path, interface, member):
+        return 12300 if dest == "org.gnome.Mutter.IdleMonitor" else None
+
+    monkeypatch.setattr(idle_mod, "_session_uint", fake)
     name, getter = idle_mod._select_backend()
     assert name == "gnome-idlemonitor"
     assert abs(getter() - 12.3) < 0.5
+
+
+def test_non_gnome_wayland_uses_freedesktop_screensaver(monkeypatch):
+    # KDE Plasma (etc.) Wayland: GNOME's Mutter is absent, but the freedesktop
+    # ScreenSaver interface answers - we must pick it, not fall to manual.
+    monkeypatch.setattr(idle_mod.sys, "platform", "linux")
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    monkeypatch.delenv("DISPLAY", raising=False)
+
+    def fake(dest, path, interface, member):
+        if dest == "org.freedesktop.ScreenSaver" and member == "GetSessionIdleTime":
+            return 8000  # 8s idle, reported in milliseconds
+        return None
+
+    monkeypatch.setattr(idle_mod, "_session_uint", fake)
+    name, getter = idle_mod._select_backend()
+    assert name == "freedesktop-screensaver"
+    assert abs(getter() - 8.0) < 0.5
 
 
 def test_wayland_without_gnome_falls_back_to_manual_not_x11(monkeypatch):
@@ -58,7 +84,8 @@ def test_wayland_without_gnome_falls_back_to_manual_not_x11(monkeypatch):
     monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
     monkeypatch.setenv("DISPLAY", ":0")          # XWayland present
     monkeypatch.setattr(idle_mod.shutil, "which", lambda name: "/usr/bin/xprintidle")
-    monkeypatch.setattr(idle_mod, "_gdbus_call", lambda *a, **k: None)  # no Mutter
+    # No Mutter and no freedesktop ScreenSaver answering.
+    monkeypatch.setattr(idle_mod, "_session_uint", lambda *a, **k: None)
     name, _ = idle_mod._select_backend()
     assert name == "manual"
 

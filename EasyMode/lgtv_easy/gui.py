@@ -130,8 +130,12 @@ def _apply_theme(root: tk.Misc) -> dict:
                     relief="flat", padding=5)
     style.map("TSpinbox", bordercolor=[("focus", P["accent"])])
 
+    # gripcount=0 drops clam's default "barcode" dashes on the slider handle for a
+    # clean solid grip; a defined sliderlength keeps it a comfortable target.
     style.configure("Horizontal.TScale", background=P["accent"], troughcolor=P["inset"],
-                    bordercolor=P["surface"], lightcolor=P["accent"], darkcolor=P["accent"])
+                    bordercolor=P["surface"], lightcolor=P["accent"], darkcolor=P["accent"],
+                    gripcount=0, sliderlength=24)
+    style.map("Horizontal.TScale", background=[("active", P["accent_hi"])])
     style.configure("TProgressbar", background=P["accent"], troughcolor=P["inset"],
                     bordercolor=P["surface"], lightcolor=P["accent"], darkcolor=P["accent"])
     style.configure("Vertical.TScrollbar", background=P["inset"], troughcolor=P["bg"],
