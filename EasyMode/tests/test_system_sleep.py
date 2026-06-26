@@ -26,7 +26,9 @@ def _make(tv: MockTV, cfg: Config) -> Daemon:
 
     idle_box = {"v": 0.0}
     d = Daemon(cfg, client_factory=factory,
-               idle_fn=lambda: idle_box["v"], logger=_quiet_logger())
+               idle_fn=lambda: idle_box["v"],
+               locator_fn=lambda mac: None,  # keep unit tests off the network
+               logger=_quiet_logger())
     d._idle_box = idle_box
     return d
 

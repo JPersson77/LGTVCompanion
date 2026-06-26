@@ -134,6 +134,18 @@ def probe_tv(tv_ip: str, log) -> None:
 
 
 _MAC_RE = re.compile(r"([0-9a-fA-F]{2}(?:[:-][0-9a-fA-F]{2}){5})")
+_IP_RE = re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
+
+
+def canon_mac(mac: str) -> str:
+    """Normalise a MAC to upper-case colon form (e.g. 'B8:16:5F:72:64:C6').
+
+    Accepts the ':' , '-' or bare-hex spellings the OS tools and users produce so
+    a stored address always compares equal to one freshly read from the system.
+    Returns '' if the input doesn't contain a MAC.
+    """
+    m = _MAC_RE.search(mac or "")
+    return m.group(1).replace("-", ":").upper() if m else ""
 
 
 def _warm_arp(ip: str) -> None:
@@ -194,6 +206,146 @@ def arp_dump(ip: str) -> str:
             if ip in line:
                 lines.append(line.strip())
     return "\n".join(lines) if lines else "(no ARP entry found for this IP)"
+
+
+def _arp_dump_commands() -> "list":
+    """Commands that print the *whole* ARP/neighbour table (no IP filter)."""
+    if sys.platform.startswith("win"):
+        return [["arp", "-a"]]
+    return [["ip", "neigh"], ["arp", "-n"], ["arp", "-a"]]
+
+
+def arp_table(timeout: float = 4.0) -> "List[Tuple[str, str]]":
+    """Parse the OS ARP/neighbour table into ``(ip, mac)`` pairs.
+
+    The reverse of :func:`mac_for_ip`, this is what lets Easy Mode follow a TV
+    that DHCP has moved to a new address: the saved IP stops answering, but the
+    MAC is forever, so we look the MAC up here to learn its current IP. MACs come
+    back upper-cased and colon-separated. Best-effort: returns ``[]`` if no ARP
+    tool is available, and never raises.
+    """
+    pairs: List[Tuple[str, str]] = []
+    seen = set()
+    for cmd in _arp_dump_commands():
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=timeout).stdout or ""
+        except Exception:  # noqa: BLE001 - tool missing, timeout, etc.
+            continue
+        # One ARP entry per line: an IP and the MAC it resolved to belong
+        # together. Lines without both (incomplete/FAILED entries) are skipped.
+        for line in out.splitlines():
+            mac_m = _MAC_RE.search(line)
+            ip_m = _IP_RE.search(line)
+            if not mac_m or not ip_m:
+                continue
+            mac = mac_m.group(1).replace("-", ":").upper()
+            if mac == "00:00:00:00:00:00" or mac.lower() == "ff:ff:ff:ff:ff:ff":
+                continue
+            entry = (ip_m.group(1), mac)
+            if entry not in seen:
+                seen.add(entry)
+                pairs.append(entry)
+        if pairs:
+            break  # the first tool that produced entries is enough
+    return pairs
+
+
+def ip_for_mac(mac: str, timeout: float = 4.0) -> str:
+    """Return the IP currently bound to ``mac`` per the OS ARP table, or ''.
+
+    Only reads what the table already knows; call :func:`find_ip_by_mac` to also
+    sweep the subnet when the TV isn't cached yet.
+    """
+    target = canon_mac(mac)
+    if not target:
+        return ""
+    for ip, found in arp_table(timeout):
+        if found == target:
+            return ip
+    return ""
+
+
+def sweep_arp(settle: float = 1.5) -> None:
+    """Provoke ARP entries for every host on this PC's /24(s).
+
+    When the TV moves to a new DHCP address nothing in the ARP table points at it
+    until a packet is sent there. A tiny UDP datagram to each host on the subnet
+    forces the kernel to resolve - and cache - the MAC of whoever is online, so a
+    follow-up :func:`ip_for_mac` can find the TV at its new address. Hosts that
+    are off simply never answer. Best-effort and silent; never raises.
+    """
+    prefixes = set()
+    for ip in local_ipv4s():
+        parts = ip.split(".")
+        if len(parts) == 4 and all(p.isdigit() for p in parts):
+            prefixes.add(".".join(parts[:3]))
+    if not prefixes:
+        return
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    except OSError:
+        return
+    try:
+        for prefix in prefixes:
+            for host in range(1, 255):
+                try:
+                    sock.sendto(b"", (f"{prefix}.{host}", 9))
+                except OSError:
+                    continue
+    finally:
+        sock.close()
+    # Give the kernel a moment to receive the ARP replies before we read them.
+    time.sleep(max(0.0, settle))
+
+
+def find_ip_by_mac(mac: str, settle: float = 1.5) -> str:
+    """Best-effort current IP for ``mac`` on the LAN, '' if it can't be found.
+
+    Checks the ARP table first (instant); if the MAC isn't cached - e.g. the TV
+    just took a new DHCP lease - it sweeps the local subnet to repopulate the
+    table and looks again. Never raises.
+    """
+    target = canon_mac(mac)
+    if not target:
+        return ""
+    found = ip_for_mac(target)
+    if found:
+        return found
+    try:
+        sweep_arp(settle=settle)
+    except Exception:  # noqa: BLE001 - best effort
+        pass
+    return ip_for_mac(target)
+
+
+def webos_hosts(probe_timeout: float = 0.6) -> "List[str]":
+    """Live hosts on the LAN that answer on a WebOS control port.
+
+    A MAC-free way to locate the TV when SSDP discovery is blocked - which is the
+    norm on Google/Nest Wifi and other mesh routers that don't forward multicast.
+    Sweeps the subnet to learn which hosts are up, then probes the WebOS ports on
+    each. Returns the matching IP(s) (usually just the TV). Best-effort: returns
+    ``[]`` on any error and never raises.
+    """
+    try:
+        sweep_arp()
+    except Exception:  # noqa: BLE001 - best effort
+        pass
+    live: List[str] = []
+    seen = set()
+    for ip, _mac in arp_table():
+        if ip not in seen:
+            seen.add(ip)
+            live.append(ip)
+    found: List[str] = []
+    for ip in live:
+        for port in WEBOS_PORTS:
+            ok, _ = tcp_probe(ip, port, timeout=probe_timeout)
+            if ok:
+                found.append(ip)
+                break
+    return found
 
 
 def env_summary() -> List[str]:

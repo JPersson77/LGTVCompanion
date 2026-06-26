@@ -712,11 +712,12 @@ class SettingsPanel(ttk.Frame):
         self.status.config(text="Testing: turning your screen off, then on…")
 
         def worker():
+            from .recovery import connect_tv
             ok, err = True, ""
-            client = WebOSClient(cfg.device.ip, secure=cfg.device.secure)
+            client = None
             try:
-                pair_with_fallback(client, client_key=cfg.device.key,
-                                   prefer_secure=cfg.device.secure)
+                # connect_tv heals a stale IP (DHCP moved the TV) before testing.
+                client = connect_tv(cfg, log=lambda _m: None)
                 client.screen_off()
                 import time
                 time.sleep(2)
@@ -724,14 +725,18 @@ class SettingsPanel(ttk.Frame):
             except Exception as exc:  # noqa: BLE001
                 ok, err = False, str(exc)
             finally:
-                client.close()
+                if client is not None:
+                    client.close()
             self.app.post(lambda: self._test_done(ok, err))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _test_done(self, ok, err):
         if ok:
-            self.status.config(text="Test OK — your TV responded. ✓")
+            # cfg.device.ip may have just been corrected by the recovery step.
+            self.status.config(
+                text=f"Test OK — your TV responded at {self.app.cfg.device.ip}. ✓")
+            self._refresh_status()
         else:
             self.status.config(text=f"Test failed: {err}")
 

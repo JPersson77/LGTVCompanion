@@ -21,7 +21,9 @@ def _make(tv: MockTV, cfg: Config) -> Daemon:
 
     idle_box = {"v": 0.0}
     d = Daemon(cfg, client_factory=factory,
-               idle_fn=lambda: idle_box["v"], logger=_quiet_logger())
+               idle_fn=lambda: idle_box["v"],
+               locator_fn=lambda mac: None,  # never hit the real network in unit tests
+               logger=_quiet_logger())
     d._idle_box = idle_box  # for the test to drive idle time
     return d
 
@@ -258,7 +260,7 @@ def test_unreachable_tv_backs_off_and_warns_once():
     clock = {"t": 0.0}
     log = _RecordingLogger()
     d = Daemon(cfg, client_factory=factory, idle_fn=lambda: 120.0,
-               clock_fn=lambda: clock["t"], logger=log)
+               clock_fn=lambda: clock["t"], locator_fn=lambda mac: None, logger=log)
 
     for _ in range(100):              # 100 polls, 5s apart, TV unreachable throughout
         d.tick()
@@ -286,7 +288,8 @@ def test_unreachable_tv_recovers_and_logs_reconnect():
         clock = {"t": 0.0}
         log = _RecordingLogger()
         d = Daemon(cfg, client_factory=factory, idle_fn=lambda: 120.0,
-                   clock_fn=lambda: clock["t"], logger=log)
+                   clock_fn=lambda: clock["t"], locator_fn=lambda mac: None,
+                   logger=log)
 
         d.tick()                              # TV down: connect fails, backoff armed
         assert d.screen_state == STATE_ON
@@ -316,7 +319,8 @@ def test_wake_bypasses_reconnect_backoff():
 
         clock = {"t": 0.0}
         d = Daemon(cfg, client_factory=factory, idle_fn=lambda: 120.0,
-                   clock_fn=lambda: clock["t"], logger=_quiet_logger())
+                   clock_fn=lambda: clock["t"], locator_fn=lambda mac: None,
+                   logger=_quiet_logger())
         d.screen_state = STATE_OFF            # pretend we'd blanked it earlier
         d.tick()                              # idle high, but already OFF: no-op-ish
         d._note_connect_failure(OSError("x"))  # arm a long backoff window
