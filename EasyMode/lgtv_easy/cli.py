@@ -137,7 +137,21 @@ def cmd_set(args) -> int:
         changed.append(f"mac={args.mac}")
     cfg.save()
     _print("Updated: " + (", ".join(changed) if changed else "(nothing)"))
+    if changed and _signal_running_daemon():
+        _print("Applied live to the running daemon (no restart needed).")
     return 0
+
+
+def _signal_running_daemon() -> bool:
+    """Nudge a background daemon, if one is running, to re-read the config we
+    just wrote so the change takes effect without a restart. POSIX only; a
+    harmless no-op on Windows or when no daemon is running."""
+    import signal
+    sig = getattr(signal, "SIGHUP", None)
+    if sig is None:
+        return False
+    from .singleton import SingleInstance
+    return SingleInstance("daemon").signal(sig)
 
 
 def cmd_status(args) -> int:
@@ -349,6 +363,11 @@ def _install_shutdown_hooks(cfg, daemon, logger) -> None:
         daemon.stop()  # supervisor is restarting us; don't touch the TV
         raise SystemExit(0)
 
+    def on_reload(_signum=None, _frame=None):
+        # The GUI/CLI saved a setting and is asking us to apply it live, without
+        # a restart and without touching the TV. Just flag the loop to re-read.
+        daemon.request_reload()
+
     try:
         signal.signal(signal.SIGTERM, on_term)
     except (ValueError, OSError, AttributeError):
@@ -356,6 +375,11 @@ def _install_shutdown_hooks(cfg, daemon, logger) -> None:
     if hasattr(signal, "SIGUSR1"):
         try:
             signal.signal(signal.SIGUSR1, on_restart)
+        except (ValueError, OSError):
+            pass
+    if hasattr(signal, "SIGHUP"):
+        try:
+            signal.signal(signal.SIGHUP, on_reload)
         except (ValueError, OSError):
             pass
 

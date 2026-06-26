@@ -54,7 +54,10 @@ class Daemon:
         self.config = config
         self.logger = logger or get_logger()
         self._idle_fn = idle_fn or idle_mod.get_idle_seconds
-        self._sleep_fn = sleep_fn or time.sleep
+        # The default poll-sleep waits on an event so a settings change can cut
+        # it short and apply at once (see _interruptible_sleep). Tests inject a
+        # deterministic sleep_fn and bypass this.
+        self._sleep_fn = sleep_fn or self._interruptible_sleep
         self._clock = clock_fn or time.monotonic
         self._client_factory = client_factory or self._default_client_factory
         self._sleep_watcher_factory = sleep_watcher_factory or system_sleep.make_watcher
@@ -65,6 +68,10 @@ class Daemon:
         self._client: Optional[WebOSClient] = None
         self.screen_state = STATE_ON  # assume the screen is on at startup
         self._stop = threading.Event()
+        # Set to wake the poll-sleep early (a settings change came in, or we're
+        # stopping). _reload_pending asks the loop to re-read config from disk.
+        self._wake = threading.Event()
+        self._reload_pending = False
         # Serialise the TV actions: the idle loop and the suspend/resume watcher
         # both drive the screen, from different threads.
         self._action_lock = threading.Lock()
@@ -456,6 +463,9 @@ class Daemon:
         last = self._clock()
         try:
             while not self._stop.is_set():
+                if self._reload_pending:
+                    self._reload_pending = False
+                    self.reload_config()
                 try:
                     self.tick()
                 except Exception as exc:  # noqa: BLE001 - never let the loop die
@@ -487,5 +497,75 @@ class Daemon:
 
     def stop(self, join_timeout: float = 5.0) -> None:
         self._stop.set()
+        self._wake.set()  # cut any current poll-sleep short so we exit promptly
         if self._thread:
             self._thread.join(timeout=join_timeout)
+
+    # ----- config hot-reload -------------------------------------------
+    def _interruptible_sleep(self, seconds: float) -> None:
+        """Default poll-sleep that a settings change can cut short.
+
+        Waiting on an event instead of a bare ``time.sleep`` lets ``nudge`` and
+        ``request_reload`` wake the loop the instant the user changes a setting,
+        so a new timeout applies immediately rather than after the current poll
+        interval - and it makes ``stop`` return promptly too.
+        """
+        if self._wake.wait(timeout=seconds):
+            self._wake.clear()
+
+    def nudge(self) -> None:
+        """Cut the current poll-sleep short so the loop re-evaluates now.
+
+        Used when the config object is shared by reference (the GUI drives the
+        daemon in-process): the values are already updated, we just want the
+        effect without waiting out the poll interval. Safe from any thread.
+        """
+        self._wake.set()
+
+    def request_reload(self) -> None:
+        """Ask the loop to re-read settings from disk at the next opportunity.
+
+        Triggered by SIGHUP, which the GUI/CLI send after saving when a separate
+        daemon process owns the watcher. Safe to call from a signal handler: it
+        only sets flags. The bool is set first so even a missed event wakeup is
+        still picked up on the next natural poll.
+        """
+        self._reload_pending = True
+        self._wake.set()
+
+    def reload_config(self) -> None:
+        """Re-read the config file and apply it to the running loop live.
+
+        Policy settings (timeouts, the on/off switch, mute, deep-off, sleep
+        following) are taken from the file. The TV's identity - ip/mac/key/port,
+        which the daemon discovers and persists itself - is preserved when the
+        file carries no (newer) value, so saving a settings change can never wipe
+        a freshly-learned Wake-on-LAN MAC out from under the daemon.
+        """
+        try:
+            fresh = Config.load()
+        except Exception as exc:  # noqa: BLE001 - best effort, never crash the loop
+            self.logger.debug("Config reload failed: %s", exc)
+            return
+        live, dev = self.config.device, fresh.device
+        # Don't let an empty field on disk clobber something the daemon learned
+        # at runtime; a genuinely changed (non-empty) value still wins.
+        dev.ip = dev.ip or live.ip
+        dev.mac = dev.mac or live.mac
+        dev.key = dev.key or live.key
+        dev.name = dev.name or live.name
+        dev.secure = dev.secure or live.secure
+        with self._action_lock:
+            old, self.config = self.config, fresh
+        if (fresh.idle_enabled, fresh.idle_minutes, fresh.deep_off_enabled,
+                fresh.deep_off_minutes) != (
+                old.idle_enabled, old.idle_minutes, old.deep_off_enabled,
+                old.deep_off_minutes):
+            self.logger.info(
+                "Settings reloaded: idle-sleep %s after %s%s.",
+                "ON" if fresh.idle_enabled else "OFF",
+                fmt_timeout(fresh.idle_seconds),
+                (f"; full power-off after {fmt_timeout(fresh.deep_off_seconds)}"
+                 if fresh.deep_off_enabled else ""))
+        else:
+            self.logger.debug("Settings reloaded (no idle/deep-off change).")

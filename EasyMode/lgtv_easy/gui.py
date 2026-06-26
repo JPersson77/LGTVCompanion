@@ -296,12 +296,30 @@ class App(tk.Tk):
         self._events: "queue.Queue" = queue.Queue()
         self._pump_id = self.after(100, self._pump)
 
+        self._install_reload_signal()
         self._build_chrome()
         self.container = ttk.Frame(self, padding=(PAD + 4, 0, PAD + 4, PAD + 4))
         self.container.pack(fill="both", expand=True)
         self._show_initial()
 
     # ----- infrastructure ---------------------------------------------
+    def _install_reload_signal(self):
+        """Handle SIGHUP so a `lgtv-easy set` from a terminal applies live when
+        this window owns the watcher - and, just as importantly, so that nudge
+        never falls through to SIGHUP's default action of killing the window.
+        POSIX only; harmless when we don't own the daemon."""
+        import signal
+        if not hasattr(signal, "SIGHUP"):
+            return
+
+        def _on_hup(_signum=None, _frame=None):
+            if self.daemon is not None:
+                self.daemon.request_reload()
+
+        try:
+            signal.signal(signal.SIGHUP, _on_hup)
+        except (ValueError, OSError):
+            pass
     def _build_chrome(self):
         """A persistent brand bar + accent rule across the top of the window."""
         bar = ttk.Frame(self, padding=(PAD + 4, 16, PAD + 4, 12))
@@ -364,7 +382,10 @@ class App(tk.Tk):
         settings panel; the status line says so.
         """
         if self.daemon:
+            # We own the watcher in-process: the daemon already shares this very
+            # config object, so the edit is visible; nudge it to apply now.
             self.daemon.config = self.cfg
+            self.daemon.nudge()
             return
         if not self.cfg.device.paired:
             return
@@ -381,6 +402,21 @@ class App(tk.Tk):
         """PID of whatever process currently owns the watcher lock (or None)."""
         from .singleton import SingleInstance
         return SingleInstance("daemon").holder()
+
+    def notify_running_daemon(self):
+        """Tell a *separate* background watcher to re-read the settings we just
+        saved, so the change applies at once instead of on its next restart.
+
+        A no-op when this window owns the watcher (it already shares the config
+        object and was nudged directly) or when the OS has no SIGHUP (Windows):
+        ``signal`` never targets our own process.
+        """
+        import signal
+        sig = getattr(signal, "SIGHUP", None)
+        if sig is None:
+            return
+        from .singleton import SingleInstance
+        SingleInstance("daemon").signal(sig)
 
     def on_close(self):
         if self.daemon:
@@ -630,6 +666,7 @@ class SetupWizard(ttk.Frame):
         cfg.setup_complete = True
         cfg.save()
         self.app.show_settings()
+        self.app.notify_running_daemon()
 
 
 class SettingsPanel(ttk.Frame):
@@ -750,6 +787,7 @@ class SettingsPanel(ttk.Frame):
         cfg.deep_off_minutes = self.deep_slider.value() / 60.0
         cfg.save()
         self.app.start_daemon()
+        self.app.notify_running_daemon()
         self._refresh_status()
 
     def _apply_autostart(self):
