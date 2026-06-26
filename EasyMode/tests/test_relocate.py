@@ -238,6 +238,35 @@ def test_locate_tv_mesh_fallback_refuses_when_ambiguous(monkeypatch):
     assert discovery.locate_tv("") is None
 
 
+def test_discover_tvs_keeps_ssdp_results_without_probing(monkeypatch):
+    monkeypatch.setattr(
+        discovery, "discover",
+        lambda timeout=3.0, log=None: [Discovered(ip="192.168.1.5", name="LG", is_lg=True)])
+    monkeypatch.setattr(  # SSDP already found an LG TV -> must not port-probe
+        netdiag, "webos_hosts",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not port-probe")))
+    out = discovery.discover_tvs()
+    assert [d.ip for d in out] == ["192.168.1.5"]
+
+
+def test_discover_tvs_falls_back_to_port_probe_on_mesh(monkeypatch):
+    monkeypatch.setattr(discovery, "discover", lambda timeout=3.0, log=None: [])
+    monkeypatch.setattr(netdiag, "webos_hosts", lambda *a, **k: ["192.168.86.33"])
+    out = discovery.discover_tvs()
+    assert [d.ip for d in out] == ["192.168.86.33"]
+    assert out[0].is_lg is True
+
+
+def test_discover_tvs_merges_probe_without_duplicates(monkeypatch):
+    # SSDP saw a non-LG responder; the port-probe adds the real TV, no dupes.
+    monkeypatch.setattr(
+        discovery, "discover",
+        lambda timeout=3.0, log=None: [Discovered(ip="192.168.86.20", is_lg=False)])
+    monkeypatch.setattr(netdiag, "webos_hosts",
+                        lambda *a, **k: ["192.168.86.20", "192.168.86.33"])
+    assert [d.ip for d in discovery.discover_tvs()] == ["192.168.86.20", "192.168.86.33"]
+
+
 def test_webos_hosts_finds_open_control_ports(monkeypatch):
     monkeypatch.setattr(netdiag, "sweep_arp", lambda settle=1.5: None)
     monkeypatch.setattr(netdiag, "arp_table",

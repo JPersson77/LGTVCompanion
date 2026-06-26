@@ -30,7 +30,7 @@ def main():
     tv = MockTV(require_pairing=True).start()
 
     # Point discovery and the client at the mock TV.
-    gui.discover = lambda *a, **k: [Discovered(ip="127.0.0.1", name="LG B-series")]
+    gui.discover_tvs = lambda *a, **k: [Discovered(ip="127.0.0.1", name="LG B-series")]
 
     orig_client = gui.WebOSClient
 

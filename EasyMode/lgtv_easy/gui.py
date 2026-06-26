@@ -30,7 +30,7 @@ from . import autostart as autostart_mod
 from .config import Config, Device
 from .daemon import Daemon
 from . import idle as idle_mod
-from .discovery import discover
+from .discovery import discover_tvs
 from .netdiag import probe_tv, subnet_report
 from .webos import WebOSClient, pair_with_fallback
 
@@ -414,7 +414,7 @@ class SetupWizard(ttk.Frame):
         self.listbox.delete(0, tk.END)
 
         def worker():
-            results = discover(log=self.diag)
+            results = discover_tvs(log=self.diag)
             self.app.post(lambda: self._scan_done(results))
 
         threading.Thread(target=worker, daemon=True).start()
