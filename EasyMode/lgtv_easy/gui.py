@@ -201,10 +201,13 @@ def _build_steps(*ranges) -> "list":
     return vals
 
 
-# Sleep (screen-off): 10s->1min by 10s, 1->10min by 1min, 10->120min by 10min.
-SLEEP_STEPS_SEC = _build_steps((10, 60, 10), (60, 600, 60), (600, 7200, 600))
-# Deep power-off is "a longer idle", so it starts at 1 minute (no sub-minute).
-DEEP_STEPS_SEC = _build_steps((60, 600, 60), (600, 7200, 600))
+# Sleep (screen-off): 10s->1min by 10s, 1->10min by 1min, 10->60min by 5min,
+# 60->120min by 10min.
+SLEEP_STEPS_SEC = _build_steps((10, 60, 10), (60, 600, 60),
+                               (600, 3600, 300), (3600, 7200, 600))
+# Deep power-off is "a longer idle", so it starts at 1 minute (no sub-minute);
+# its upper range matches sleep (5-minute steps to 60, then 10-minute steps).
+DEEP_STEPS_SEC = _build_steps((60, 600, 60), (600, 3600, 300), (3600, 7200, 600))
 
 
 class SteppedSlider(ttk.Frame):
