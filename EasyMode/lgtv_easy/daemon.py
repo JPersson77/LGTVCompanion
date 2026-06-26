@@ -48,6 +48,7 @@ class Daemon:
         sleep_fn: Optional[Callable[[float], None]] = None,
         clock_fn: Optional[Callable[[], float]] = None,
         sleep_watcher_factory: Optional[Callable[..., object]] = None,
+        locator_fn: Optional[Callable[[str], Optional[str]]] = None,
         logger=None,
     ):
         self.config = config
@@ -57,6 +58,9 @@ class Daemon:
         self._clock = clock_fn or time.monotonic
         self._client_factory = client_factory or self._default_client_factory
         self._sleep_watcher_factory = sleep_watcher_factory or system_sleep.make_watcher
+        # Given the TV's MAC, return its current IP on the LAN (or None). Used to
+        # recover automatically when DHCP moves the TV to a new address.
+        self._locator_fn = locator_fn or self._default_locator
         self._sleep_watcher: Optional[object] = None
         self._client: Optional[WebOSClient] = None
         self.screen_state = STATE_ON  # assume the screen is on at startup
@@ -77,10 +81,19 @@ class Daemon:
         self._connect_failures = 0       # consecutive failed connection attempts
         self._next_connect_at = 0.0      # monotonic time before which we don't retry
         self._connect_warned = False     # have we logged the current outage yet?
+        # Auto-relocate state: the heavier "find the TV by MAC" sweep is rate
+        # limited separately so it can't run on every failed poll.
+        self._next_relocate_at = 0.0
+        self.relocations = 0             # times we adopted a new IP (observable)
 
     # ----- TV connection ----------------------------------------------
     def _default_client_factory(self) -> WebOSClient:
         return WebOSClient(self.config.device.ip, secure=self.config.device.secure)
+
+    def _default_locator(self, mac: str) -> Optional[str]:
+        from .discovery import locate_tv
+        return locate_tv(
+            mac, log=lambda m: self.logger.debug("relocate: %s", m))
 
     def _ensure_client(self, force: bool = False) -> Optional[WebOSClient]:
         if self._client and self._client.connected:
@@ -93,48 +106,110 @@ class Daemon:
                 and self._clock() < self._next_connect_at):
             return None
         try:
-            client = self._client_factory()
-            # Try the port the TV actually accepts (3000 vs secure 3001),
-            # preferring whichever worked before. Newer panels only allow 3001.
-            from .webos import pair_with_fallback
-            pair_with_fallback(client, client_key=self.config.device.key,
-                               on_prompt=None, prompt_timeout=client.timeout,
-                               prefer_secure=self.config.device.secure)
-            # Remember (and persist) what we learned about the TV: the port that
-            # worked, and its MAC (asked straight from the TV) for Wake-on-LAN.
-            changed = False
-            if client.secure != self.config.device.secure:
-                self.config.device.secure = client.secure
-                changed = True
-            if not self.config.device.mac:
-                mac = client.get_mac()
-                if not mac:
-                    from .netdiag import mac_for_ip
-                    host = (client.ip.rpartition(":")[0]
-                            if ":" in client.ip else client.ip)
-                    mac = mac_for_ip(host)
-                if mac:
-                    self.config.device.mac = mac
-                    changed = True
-                    self.logger.info("Detected TV MAC for Wake-on-LAN: %s", mac)
-            if changed:
-                try:
-                    self.config.save()
-                except Exception:  # noqa: BLE001 - persistence is best-effort
-                    pass
-            if self._connect_failures:
-                self.logger.info("Reconnected to the TV after %d failed "
-                                 "attempt(s).", self._connect_failures)
-            self._connect_failures = 0
-            self._connect_warned = False
-            self._next_connect_at = 0.0
-            self._client = client
-            return client
+            return self._connect_once()
         except Exception as exc:  # noqa: BLE001 - network errors are expected
+            # The saved IP didn't answer. DHCP routinely re-addresses the TV, so
+            # before giving up, try to find it again (by its unchanging MAC, or
+            # by discovery) and retry at the new address if it has moved.
+            if self._relocate(force):
+                try:
+                    return self._connect_once()
+                except Exception as exc2:  # noqa: BLE001
+                    exc = exc2
             self.last_error = f"connect: {exc}"
             self._note_connect_failure(exc)
             self._client = None
             return None
+
+    def _connect_once(self) -> WebOSClient:
+        """Open and register one connection to the TV at the configured IP.
+
+        Raises on any failure; on success persists anything newly learned about
+        the TV (the working port, its MAC) and clears the reconnect backoff.
+        """
+        client = self._client_factory()
+        # Try the port the TV actually accepts (3000 vs secure 3001),
+        # preferring whichever worked before. Newer panels only allow 3001.
+        from .webos import pair_with_fallback
+        pair_with_fallback(client, client_key=self.config.device.key,
+                           on_prompt=None, prompt_timeout=client.timeout,
+                           prefer_secure=self.config.device.secure)
+        # Remember (and persist) what we learned about the TV: the port that
+        # worked, and its MAC (asked straight from the TV) for Wake-on-LAN.
+        changed = False
+        if client.secure != self.config.device.secure:
+            self.config.device.secure = client.secure
+            changed = True
+        if not self.config.device.mac:
+            mac = client.get_mac()
+            if not mac:
+                from .netdiag import mac_for_ip
+                host = (client.ip.rpartition(":")[0]
+                        if ":" in client.ip else client.ip)
+                mac = mac_for_ip(host)
+            if mac:
+                self.config.device.mac = mac
+                changed = True
+                self.logger.info("Detected TV MAC for Wake-on-LAN: %s", mac)
+        if changed:
+            try:
+                self.config.save()
+            except Exception:  # noqa: BLE001 - persistence is best-effort
+                pass
+        if self._connect_failures:
+            self.logger.info("Reconnected to the TV after %d failed "
+                             "attempt(s).", self._connect_failures)
+        self._connect_failures = 0
+        self._connect_warned = False
+        self._next_connect_at = 0.0
+        self._client = client
+        return client
+
+    def _relocate(self, force: bool = False) -> bool:
+        """Find the TV again and adopt a new IP if it has moved.
+
+        This is the automatic "no TV present -> fix it" recovery. We only get
+        here after a connect to the saved IP has just failed, so it is safe to
+        run eagerly - including at startup and on the very first failure - which
+        is what makes recovery feel seamless. The only throttle is a cooldown so
+        a TV that is genuinely off (and so can't be found) doesn't trigger a LAN
+        scan on every retry. Returns True (and updates/persists ``device.ip``)
+        when the address changed, so the caller should retry the connection.
+        """
+        if not self._locator_fn:
+            return False
+        now = self._clock()
+        # A user-facing wake (force) always gets to look right away; background
+        # polls obey a cooldown so a TV that's genuinely off doesn't trigger a
+        # LAN scan on every retry. The cooldown tracks the connect backoff.
+        if not force and now < self._next_relocate_at:
+            return False
+        self._next_relocate_at = now + max(self.config.poll_seconds, 30.0)
+        mac = self.config.device.mac
+        try:
+            # An empty MAC is fine: the locator falls back to adopting the only
+            # LG TV it can discover, and we learn the MAC on the next connect.
+            new_ip = self._locator_fn(mac)
+        except Exception as exc:  # noqa: BLE001 - locating is best-effort
+            self.logger.debug("Relocate failed: %s", exc)
+            return False
+        if not new_ip:
+            return False
+        host = new_ip.rpartition(":")[0] if ":" in new_ip else new_ip
+        old = self.config.device.ip
+        if host == old:
+            return False
+        how = f"by MAC {mac}" if mac else "by discovery"
+        self.logger.info("TV not reachable at %s; found it at %s %s - "
+                         "updating the saved address.", old or "(unset)", host, how)
+        self.config.device.ip = host
+        self._drop_client()
+        try:
+            self.config.save()
+        except Exception:  # noqa: BLE001 - persistence is best-effort
+            pass
+        self.relocations += 1
+        return True
 
     def _note_connect_failure(self, exc: Exception) -> None:
         """Record a failed connection: schedule the next retry with exponential

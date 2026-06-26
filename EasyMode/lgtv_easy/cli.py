@@ -4,6 +4,7 @@ Everything the GUI can do is also available here, which makes the app scriptable
 testable, and usable on headless machines. Subcommands:
 
     scan      discover LG TVs on the network
+    find      re-locate the saved TV by MAC and fix its IP (after a DHCP change)
     pair      pair with a TV (by IP) and save it
     set       change settings, e.g. the idle timeout in minutes
     status    show current configuration and idle backend
@@ -38,6 +39,36 @@ def cmd_scan(args) -> int:
         return 1
     for i, dev in enumerate(found, 1):
         _print(f"  {i}. {dev.name}  @ {dev.ip}")
+    return 0
+
+
+def cmd_find(args) -> int:
+    """Locate the saved TV by its MAC and update the stored IP if it moved.
+
+    The everyday failure this fixes: the router hands the TV a new DHCP address,
+    the saved IP goes dead, and the daemon can no longer reach it. The MAC never
+    changes, so we search the LAN for it and rewrite the IP.
+    """
+    cfg = Config.load()
+    if not cfg.device.mac:
+        _print("No TV hardware address (MAC) is saved yet, so I can't search by it.")
+        _print("Pair the TV, or run 'lgtv-easy test' once while it's reachable, to")
+        _print("learn and store the MAC - then 'find' can track it across IP changes.")
+        return 1
+    from .discovery import locate_by_mac
+    _print(f"Looking for '{cfg.device.name}' by MAC {cfg.device.mac} ...")
+    ip = locate_by_mac(cfg.device.mac, log=_print)
+    if not ip:
+        _print("Could not find the TV. Make sure it's powered on and on this network.")
+        return 1
+    host = ip.rpartition(":")[0] if ":" in ip else ip
+    if host == cfg.device.ip:
+        _print(f"TV is still at {host} - nothing to update.")
+        return 0
+    old = cfg.device.ip or "(unset)"
+    cfg.device.ip = host
+    cfg.save()
+    _print(f"Updated the TV's address {old} -> {host}.")
     return 0
 
 
@@ -145,15 +176,21 @@ def cmd_status(args) -> int:
 
 def cmd_test(args) -> int:
     cfg = Config.load()
-    if not cfg.device.ip:
+    if not cfg.device.ip and not cfg.device.mac:
         _print("No TV configured. Run 'lgtv-easy pair <ip>' first.")
         return 1
-    from .webos import (URI_GET_NETWORK_STATUS, URI_GET_SW_INFO,
-                        pair_with_fallback)
-    client = WebOSClient(cfg.device.ip, secure=cfg.device.secure)
+    from .recovery import connect_tv
     try:
-        pair_with_fallback(client, client_key=cfg.device.key,
-                           prefer_secure=cfg.device.secure, log=_print)
+        client = connect_tv(cfg, prompt_timeout=10.0, log=_print)
+    except Exception as exc:  # noqa: BLE001
+        _print(f"Test failed: {exc}")
+        if cfg.device.ip:
+            from .netdiag import probe_tv
+            _print("--- Connection diagnostics ---")
+            probe_tv(cfg.device.ip, _print)
+        return 1
+    try:
+        _print(f"Connected to {cfg.device.name} at {cfg.device.ip}.")
         _print("Turning screen OFF for 3 seconds...")
         client.screen_off()
         time.sleep(3)
@@ -187,14 +224,21 @@ def cmd_test(args) -> int:
     return 0
 
 
-def _tv_power_off(cfg, log=lambda m: None, timeout: float = 8.0) -> bool:
-    """Connect and fully power the TV off (used by `off` and shutdown hooks)."""
-    from .webos import pair_with_fallback
-    client = WebOSClient(cfg.device.ip, secure=cfg.device.secure, timeout=timeout)
+def _tv_power_off(cfg, log=lambda m: None, timeout: float = 8.0,
+                  recover: bool = False) -> bool:
+    """Connect and fully power the TV off (used by `off` and shutdown hooks).
+
+    ``recover`` re-locates the TV by MAC if the saved IP is stale; it's left off
+    for the shutdown hook, which must stay fast while the PC is powering down.
+    """
+    from .recovery import connect_tv
     try:
-        pair_with_fallback(client, client_key=cfg.device.key,
-                           prefer_secure=cfg.device.secure, prompt_timeout=timeout,
-                           log=log)
+        client = connect_tv(cfg, prompt_timeout=timeout, timeout=timeout,
+                            recover=recover, log=log)
+    except Exception as exc:  # noqa: BLE001
+        log(f"power off failed: {exc}")
+        return False
+    try:
         client.power_off()
         return True
     except Exception as exc:  # noqa: BLE001
@@ -210,17 +254,17 @@ def cmd_off(args) -> int:
     # "power off when the PC shuts down" setting.
     if getattr(args, "only_if_configured", False) and not cfg.tv_off_on_shutdown:
         return 0
-    if not cfg.device.ip:
+    if not cfg.device.ip and not cfg.device.mac:
         _print("No TV configured.")
         return 1
-    ok = _tv_power_off(cfg, log=_print)
+    ok = _tv_power_off(cfg, log=_print, recover=True)
     _print("TV powered off." if ok else "Could not power off the TV.")
     return 0 if ok else 1
 
 
 def cmd_on(args) -> int:
     cfg = Config.load()
-    if not cfg.device.ip:
+    if not cfg.device.ip and not cfg.device.mac:
         _print("No TV configured.")
         return 1
     if cfg.device.mac:
@@ -231,16 +275,17 @@ def cmd_on(args) -> int:
             _print(f"Sent Wake-on-LAN to {cfg.device.mac}.")
         except Exception as exc:  # noqa: BLE001
             _print(f"WOL failed: {exc}")
-    # Give the panel a moment to come up, then make sure the screen is on.
-    from .webos import pair_with_fallback
-    client = WebOSClient(cfg.device.ip, secure=cfg.device.secure)
+    # Give the panel a moment to come up, then make sure the screen is on -
+    # relocating the TV by MAC if DHCP moved it while it was off.
+    from .recovery import connect_tv
     try:
-        pair_with_fallback(client, client_key=cfg.device.key,
-                           prefer_secure=cfg.device.secure)
-        client.screen_on()
-        _print("TV is on.")
+        client = connect_tv(cfg, log=_print)
     except Exception as exc:  # noqa: BLE001
         _print(f"(Could not confirm screen-on, but WOL was sent: {exc})")
+        return 0
+    try:
+        client.screen_on()
+        _print(f"TV is on at {cfg.device.ip}.")
     finally:
         client.close()
     return 0
@@ -396,6 +441,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("scan", help="find LG TVs on the network")
     s.add_argument("--timeout", type=float, default=3.0)
     s.set_defaults(func=cmd_scan)
+
+    s = sub.add_parser("find", help="re-locate the saved TV by MAC and fix its IP")
+    s.set_defaults(func=cmd_find)
 
     s = sub.add_parser("pair", help="pair with a TV by IP and save it")
     s.add_argument("ip")

@@ -38,6 +38,9 @@ class Discovered:
     ip: str
     name: str = "LG TV"
     location: str = ""
+    # True when this responder actually looked like an LG/WebOS device (the SSDP
+    # reply mentioned LG/webOS), as opposed to some other UPnP gadget on the LAN.
+    is_lg: bool = False
 
 
 def _noop(_msg: str) -> None:
@@ -163,6 +166,7 @@ def discover(timeout: float = 3.0,
             entry.location = location
         if looks_lg:
             lg_hosts += 1
+            entry.is_lg = True
         seen[ip] = entry
 
     out(f"Received {len(raw)} SSDP reply/replies from {len(seen)} host(s); "
@@ -178,3 +182,85 @@ def discover(timeout: float = 3.0,
         out("No devices answered the network search. The TV may be on a "
             "different network, asleep, or have network control disabled.")
     return results
+
+
+def locate_by_mac(mac: str, timeout: float = 3.0,
+                  log: Optional[Callable[[str], None]] = None) -> Optional[str]:
+    """Find the current IP of a known TV by its MAC address, or ``None``.
+
+    This is the recovery path when DHCP moves the TV to a new address: the saved
+    IP goes dead, but the hardware MAC never changes. It tries the cheapest
+    sources first and stops at the first hit:
+
+      1. the OS ARP cache (instant - something talked to the TV recently);
+      2. an SSDP sweep (LG TVs announce themselves by IP, which we match to the
+         MAC), reusing :func:`discover`;
+      3. an active subnet sweep that repopulates the ARP table, for the common
+         mesh case where SSDP multicast isn't forwarded.
+
+    Best-effort and never raises.
+    """
+    from . import netdiag
+    out = log or _noop
+    target = netdiag.canon_mac(mac)
+    if not target:
+        return None
+    # 1. Already cached.
+    ip = netdiag.ip_for_mac(target)
+    if ip:
+        out(f"Found {target} at {ip} in the ARP table.")
+        return ip
+    # 2. Ask LG TVs to announce themselves, then match the responder to the MAC.
+    try:
+        for dev in discover(timeout=timeout, log=out):
+            if netdiag.mac_for_ip(dev.ip) == target:
+                out(f"Discovered the TV at {dev.ip} (MAC {target}).")
+                return dev.ip
+    except Exception:  # noqa: BLE001 - discovery is best-effort
+        pass
+    # 3. Sweep the subnet and re-read the ARP table.
+    ip = netdiag.find_ip_by_mac(target)
+    if ip:
+        out(f"Located {target} at {ip} after a subnet sweep.")
+        return ip
+    out(f"Could not find {target} on the network (TV off or on another network).")
+    return None
+
+
+def locate_tv(mac: str = "", timeout: float = 3.0,
+              log: Optional[Callable[[str], None]] = None) -> Optional[str]:
+    """Find the TV's current IP, by MAC when we know it, else by discovery.
+
+    The one entry point the daemon and the app use to recover a "no TV present"
+    situation. With a stored MAC it tracks the exact TV across DHCP changes (see
+    :func:`locate_by_mac`). Without one - a fresh or incomplete setup - it falls
+    back to SSDP and adopts the TV only when exactly one LG/WebOS device answers,
+    so it can never silently hijack the wrong device. Returns the IP or ``None``;
+    never raises.
+    """
+    out = log or _noop
+    from . import netdiag
+    if netdiag.canon_mac(mac):
+        return locate_by_mac(mac, timeout=timeout, log=log)
+    # No MAC yet: only adopt an unambiguous single LG TV.
+    try:
+        lg = [d for d in discover(timeout=timeout, log=out) if d.is_lg]
+    except Exception:  # noqa: BLE001 - discovery is best-effort
+        return None
+    if len(lg) == 1:
+        out(f"No saved MAC; adopting the only LG TV found, at {lg[0].ip}.")
+        return lg[0].ip
+    if len(lg) > 1:
+        out(f"Found {len(lg)} LG TVs and no saved MAC to tell them apart - "
+            "not guessing. Pair the TV once to lock onto it.")
+        return None
+    # SSDP found nothing - common on a mesh that blocks multicast. Fall back to
+    # probing the WebOS control ports on whatever hosts are actually up.
+    hosts = netdiag.webos_hosts()
+    if len(hosts) == 1:
+        out(f"SSDP was silent; adopting the only WebOS host at {hosts[0]}.")
+        return hosts[0]
+    if len(hosts) > 1:
+        out(f"Found {len(hosts)} WebOS-like hosts and no MAC to disambiguate - "
+            "not guessing. Pair the TV once to lock onto it.")
+    return None
