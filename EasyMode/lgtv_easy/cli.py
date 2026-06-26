@@ -31,9 +31,9 @@ def _print(msg: str = "") -> None:
 
 
 def cmd_scan(args) -> int:
-    from .discovery import discover
+    from .discovery import discover_tvs
     _print("Scanning the network for LG TVs (a few seconds)...")
-    found = discover(timeout=args.timeout, log=_print)
+    found = discover_tvs(timeout=args.timeout, log=_print)
     if not found:
         _print("No TVs found. You can still add one by IP with: lgtv-easy pair <ip>")
         return 1

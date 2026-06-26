@@ -184,6 +184,31 @@ def discover(timeout: float = 3.0,
     return results
 
 
+def discover_tvs(timeout: float = 3.0,
+                 log: Optional[Callable[[str], None]] = None) -> List[Discovered]:
+    """Find TVs for setup, working even when SSDP is blocked.
+
+    Runs the normal SSDP search first. If no LG/WebOS device answers - the usual
+    outcome on Google/Nest Wifi and other meshes that don't forward multicast -
+    it falls back to probing the WebOS control ports on the hosts that are
+    actually up, so first-run setup needs no manual IP entry on those networks.
+    """
+    out = log or _noop
+    results = discover(timeout=timeout, log=out)
+    if any(d.is_lg for d in results):
+        return results
+    out("No TV answered the SSDP search; scanning the network for WebOS devices...")
+    from . import netdiag
+    known = {d.ip for d in results}
+    for ip in netdiag.webos_hosts():
+        if ip not in known:
+            results.append(Discovered(ip=ip, name="LG webOS TV", is_lg=True))
+            known.add(ip)
+    if not any(d.is_lg for d in results):
+        out("No WebOS devices found either. The TV may be off or on another network.")
+    return results
+
+
 def locate_by_mac(mac: str, timeout: float = 3.0,
                   log: Optional[Callable[[str], None]] = None) -> Optional[str]:
     """Find the current IP of a known TV by its MAC address, or ``None``.

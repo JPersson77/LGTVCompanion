@@ -17,7 +17,7 @@ from typing import Callable, List, Optional, Tuple
 
 from . import autostart as autostart_mod
 from .config import Config, Device
-from .discovery import Discovered, discover
+from .discovery import Discovered, discover_tvs
 from .netdiag import env_summary, mac_for_ip, probe_tv
 from .webos import WebOSClient, pair_with_fallback
 from .wol import normalize_mac
@@ -78,7 +78,7 @@ def _choose_tv(input_fn, out, discover_fn) -> Tuple[str, str]:
 def run_text_wizard(
     input_fn: Callable[[str], str] = input,
     output_fn: Callable[[str], None] = lambda m: print(m, flush=True),
-    discover_fn: Callable[..., List[Discovered]] = discover,
+    discover_fn: Callable[..., List[Discovered]] = discover_tvs,
     client_factory: Callable[[str], WebOSClient] = lambda ip: WebOSClient(ip),
     config: Optional[Config] = None,
 ) -> int:
