@@ -58,6 +58,23 @@ class SingleInstance:
         """PID of the live process currently holding the lock, or None."""
         return self._holder()
 
+    def signal(self, sig: int) -> bool:
+        """Send ``sig`` to a *different* live process holding the lock (POSIX).
+
+        Used to nudge a background daemon to re-read its config after the GUI or
+        CLI changes a setting, so the change applies without a restart. Returns
+        True only if another live holder was actually signalled - never signals
+        ourselves, and is a harmless no-op when nobody holds the lock.
+        """
+        pid = self._holder()
+        if not pid or pid == os.getpid():
+            return False
+        try:
+            os.kill(pid, sig)
+            return True
+        except OSError:
+            return False
+
     def _write(self) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path, "w", encoding="utf-8") as fh:
