@@ -13,6 +13,19 @@ from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 
+def fmt_timeout(seconds: float) -> str:
+    """Human-friendly duration for a timeout, e.g. '30 seconds' / '1 minute' /
+    '20 minutes'. Timeouts can now be sub-minute, so plain "%d min" would show a
+    misleading "0 min"; this keeps logs, status, and the UI readable."""
+    s = int(round(float(seconds)))
+    if s < 60:
+        return f"{s} second{'s' if s != 1 else ''}"
+    if s % 60 == 0:
+        m = s // 60
+        return f"{m} minute{'s' if m != 1 else ''}"
+    return f"{s / 60:.1f} minutes"
+
+
 def config_dir() -> str:
     """Return the per-user directory where Easy Mode keeps its files."""
     override = os.environ.get("LGTV_EASY_HOME")

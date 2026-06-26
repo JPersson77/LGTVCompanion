@@ -20,7 +20,7 @@ import sys
 import time
 
 from . import __version__
-from .config import Config, Device, config_path, log_path
+from .config import Config, Device, config_path, fmt_timeout, log_path
 from .daemon import Daemon
 from . import idle as idle_mod
 from .webos import WebOSClient
@@ -150,9 +150,9 @@ def cmd_status(args) -> int:
            f"  paired={cfg.device.paired}  "
            f"port={'3001/wss' if cfg.device.secure else '3000/ws'}")
     _print(f"  Idle sleep  : {'ON' if cfg.idle_enabled else 'OFF'} after "
-           f"{cfg.idle_minutes} min  (mute={cfg.mute_on_sleep})")
+           f"{fmt_timeout(cfg.idle_seconds)}  (mute={cfg.mute_on_sleep})")
     if cfg.deep_off_enabled:
-        _print(f"  Deep off    : ON after {cfg.deep_off_minutes} min "
+        _print(f"  Deep off    : ON after {fmt_timeout(cfg.deep_off_seconds)} "
                f"(full power-off, WOL mac={cfg.device.mac or '(none!)'})")
     else:
         _print("  Deep off    : OFF (screen blanks only; TV stays powered)")
@@ -310,7 +310,7 @@ def cmd_run(args) -> int:
     logger = get_logger(to_console=True)
     daemon = Daemon(cfg, logger=logger)
     _install_shutdown_hooks(cfg, daemon, logger)
-    _print(f"Idle daemon running. Screen sleeps after {cfg.idle_minutes} min. "
+    _print(f"Idle daemon running. Screen sleeps after {fmt_timeout(cfg.idle_seconds)}. "
            "Press Ctrl+C to stop.")
     try:
         daemon.run()  # blocks

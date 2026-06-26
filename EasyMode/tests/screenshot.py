@@ -52,8 +52,7 @@ def main():
         root.selected_name.set("LG OLED B-series")
         root.client_key = "paired"
         root._build_step3()
-        root.minutes.set(7)
-        root._update_minutes_label()
+        root.sleep_slider.set_value(7 * 60)
     grab(app, outfile)
     app.destroy()
 

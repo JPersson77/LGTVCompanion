@@ -27,7 +27,7 @@ from typing import Optional
 
 from . import __version__
 from . import autostart as autostart_mod
-from .config import Config, Device
+from .config import Config, Device, fmt_timeout
 from .daemon import Daemon
 from . import idle as idle_mod
 from .discovery import discover_tvs
@@ -183,6 +183,97 @@ class ToggleSwitch(tk.Canvas):
         self.create_oval(x, pad, x + d, pad + d, fill=knob, outline=knob)
 
 
+def _build_steps(*ranges) -> "list":
+    """Distinct values from (start, stop, step) ranges, in order.
+
+    Used to build a non-linear timeout scale: fine steps where small values
+    matter, coarse steps higher up - so the slider is precise at 10 seconds and
+    still reaches 2 hours without a thousand positions in between.
+    """
+    vals: list = []
+    for start, stop, step in ranges:
+        v = start
+        while v <= stop + 1e-9:
+            iv = int(round(v))
+            if iv not in vals:
+                vals.append(iv)
+            v += step
+    return vals
+
+
+# Sleep (screen-off): 10s->1min by 10s, 1->10min by 1min, 10->120min by 10min.
+SLEEP_STEPS_SEC = _build_steps((10, 60, 10), (60, 600, 60), (600, 7200, 600))
+# Deep power-off is "a longer idle", so it starts at 1 minute (no sub-minute).
+DEEP_STEPS_SEC = _build_steps((60, 600, 60), (600, 7200, 600))
+
+
+class SteppedSlider(ttk.Frame):
+    """A slider that snaps to a fixed list of values, with a live value label.
+
+    tkinter's Scale is linear; driving it over indices into ``values`` gives the
+    non-linear feel we want and sidesteps the flaky ttk.Spinbox (whose mouse-wheel
+    / typing handling misbehaves on Linux). ``fmt`` renders a value for the label;
+    ``command`` (optional) fires once each time the snapped value changes.
+    """
+
+    def __init__(self, parent, *, values, initial, fmt, command=None):
+        super().__init__(parent, style="Card.TFrame")
+        self.values = list(values)
+        self._fmt = fmt
+        self._command = command
+        self._idx = self._nearest(initial)
+        self._busy = False
+        self.label = ttk.Label(self, style="Value.TLabel")
+        self.label.pack(anchor="w")
+        self.scale = ttk.Scale(self, from_=0, to=len(self.values) - 1,
+                               command=self._on_move)
+        # Quantise to a step while dragging (so the value/label are always a real
+        # step), but only snap the handle itself once the drag ends - setting the
+        # scale value mid-motion can fight the drag gesture on some Tk builds.
+        self.scale.bind("<ButtonRelease-1>", self._snap)
+        self.scale.bind("<KeyRelease>", self._snap)
+        self.scale.pack(fill="x", pady=(6, 0))
+        self._busy = True            # set initial position without firing command
+        self.scale.set(self._idx)
+        self._busy = False
+        self._refresh()
+
+    def _nearest(self, value) -> int:
+        return min(range(len(self.values)),
+                   key=lambda i: abs(self.values[i] - value))
+
+    def _on_move(self, raw):
+        if self._busy:
+            return
+        idx = max(0, min(len(self.values) - 1, int(round(float(raw)))))
+        changed = idx != self._idx
+        self._idx = idx
+        self._refresh()
+        if changed and self._command:
+            self._command()
+
+    def _snap(self, _event=None):
+        """Rest the handle exactly on the selected step once the drag ends."""
+        self._busy = True
+        self.scale.set(self._idx)
+        self._busy = False
+
+    def _refresh(self):
+        self.label.config(text=self._fmt(self.value()))
+
+    def value(self):
+        """The currently selected raw value (seconds)."""
+        return self.values[self._idx]
+
+    def set_value(self, value):
+        """Set programmatically to the nearest step (no command fired)."""
+        self._idx = self._nearest(value)
+        self._busy = True
+        self.scale.set(self._idx)
+        self._busy = False
+        self._refresh()
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -315,7 +406,6 @@ class SetupWizard(ttk.Frame):
         self.found = []
         self.selected_ip = tk.StringVar(value=app.cfg.device.ip)
         self.selected_name = tk.StringVar(value=app.cfg.device.name or "My LG TV")
-        self.minutes = tk.DoubleVar(value=app.cfg.idle_minutes)
         self.client_key = app.cfg.device.key
         self.secure = app.cfg.device.secure
         self._build_step1()
@@ -516,21 +606,15 @@ class SetupWizard(ttk.Frame):
                      "turns off?")
 
         card = self._card()
-        self.minutes_label = ttk.Label(card, style="Value.TLabel")
-        self.minutes_label.pack(anchor="w")
-        scale = ttk.Scale(card, from_=0.5, to=60, variable=self.minutes,
-                          command=lambda v: self._update_minutes_label())
-        scale.pack(fill="x", pady=(8, 0))
-        self._update_minutes_label()
+        self.sleep_slider = SteppedSlider(
+            card, values=SLEEP_STEPS_SEC, initial=self.app.cfg.idle_minutes * 60,
+            fmt=lambda s: f"{fmt_timeout(s)} of inactivity")
+        self.sleep_slider.pack(fill="x")
         ttk.Label(self, text="Tip: 7 minutes is a good default for a desk "
                              "monitor.", style="Sub.TLabel").pack(anchor="w")
         ttk.Button(self, text="Finish  ✓", style="Accent.TButton",
                    command=self._finish).pack(side="bottom", anchor="e",
                                               pady=(PAD, 0))
-
-    def _update_minutes_label(self):
-        self.minutes_label.config(
-            text=f"{round(self.minutes.get())} minutes of inactivity")
 
     def _finish(self):
         cfg = self.app.cfg
@@ -538,7 +622,7 @@ class SetupWizard(ttk.Frame):
                             ip=self.selected_ip.get().strip(),
                             mac=cfg.device.mac, key=self.client_key,
                             secure=self.secure)
-        cfg.idle_minutes = round(self.minutes.get())
+        cfg.idle_minutes = self.sleep_slider.value() / 60.0
         cfg.idle_enabled = True
         cfg.setup_complete = True
         cfg.save()
@@ -553,11 +637,9 @@ class SettingsPanel(ttk.Frame):
         self.app = app
         cfg = app.cfg
         self.enabled = tk.BooleanVar(value=cfg.idle_enabled)
-        self.minutes = tk.DoubleVar(value=cfg.idle_minutes)
         self.mute = tk.BooleanVar(value=cfg.mute_on_sleep)
         self.follow_sleep = tk.BooleanVar(value=cfg.screen_off_on_pc_sleep)
         self.deep = tk.BooleanVar(value=cfg.deep_off_enabled)
-        self.deep_minutes = tk.DoubleVar(value=cfg.deep_off_minutes)
         self.autostart = tk.BooleanVar(value=autostart_mod.is_enabled())
         self._status_dot = None
         self._build()
@@ -625,11 +707,10 @@ class SettingsPanel(ttk.Frame):
 
         ttk.Label(hero, text="Sleep after", style="CardMuted.TLabel").pack(
             anchor="w", pady=(PAD - 2, 0))
-        self.minutes_label = ttk.Label(hero, style="Value.TLabel")
-        self.minutes_label.pack(anchor="w")
-        ttk.Scale(hero, from_=0.5, to=60, variable=self.minutes,
-                  command=lambda v: self._slider_moved()).pack(fill="x", pady=(6, 0))
-        self._update_minutes_label()
+        self.sleep_slider = SteppedSlider(
+            hero, values=SLEEP_STEPS_SEC, initial=cfg.idle_minutes * 60,
+            fmt=fmt_timeout, command=self._apply)
+        self.sleep_slider.pack(fill="x")
 
         # When it sleeps.
         opts = self._card("When it sleeps")
@@ -645,36 +726,25 @@ class SettingsPanel(ttk.Frame):
             self._apply, desc="Maximum energy saving; wakes over Wake-on-LAN.")
         drow = ttk.Frame(more, style="Card.TFrame")
         drow.pack(fill="x", pady=(4, 8))
-        ttk.Label(drow, text="Power off after (minutes)",
-                  style="CardMuted.TLabel").pack(side="left")
-        spin = ttk.Spinbox(drow, from_=2, to=240, width=6,
-                           textvariable=self.deep_minutes, command=self._apply)
-        spin.pack(side="right")
-        spin.bind("<Return>", lambda e: self._apply())
-        spin.bind("<FocusOut>", lambda e: self._apply())
+        ttk.Label(drow, text="Power off after",
+                  style="CardMuted.TLabel").pack(anchor="w")
+        self.deep_slider = SteppedSlider(
+            drow, values=DEEP_STEPS_SEC, initial=cfg.deep_off_minutes * 60,
+            fmt=fmt_timeout, command=self._apply)
+        self.deep_slider.pack(fill="x")
         self._switch_row(more, "Start automatically when I log in",
                          self.autostart, self._apply_autostart)
 
         self._refresh_status()
 
-    def _update_minutes_label(self):
-        self.minutes_label.config(text=f"{round(self.minutes.get())} minutes")
-
-    def _slider_moved(self):
-        self._update_minutes_label()
-        self._apply()
-
     def _apply(self):
         cfg = self.app.cfg
         cfg.idle_enabled = self.enabled.get()
-        cfg.idle_minutes = round(self.minutes.get())
+        cfg.idle_minutes = self.sleep_slider.value() / 60.0
         cfg.mute_on_sleep = self.mute.get()
         cfg.screen_off_on_pc_sleep = self.follow_sleep.get()
         cfg.deep_off_enabled = self.deep.get()
-        try:
-            cfg.deep_off_minutes = max(2.0, float(self.deep_minutes.get()))
-        except (tk.TclError, ValueError):
-            pass
+        cfg.deep_off_minutes = self.deep_slider.value() / 60.0
         cfg.save()
         self.app.start_daemon()
         self._refresh_status()
@@ -689,7 +759,7 @@ class SettingsPanel(ttk.Frame):
         warn = "" if idle_mod.is_real_backend() else \
             "  (warning: OS idle detection unavailable here)"
         state = "ON" if cfg.idle_enabled else "OFF"
-        deep = (f" Full power-off after {round(cfg.deep_off_minutes)} min."
+        deep = (f" Full power-off after {fmt_timeout(cfg.deep_off_minutes * 60)}."
                 if cfg.deep_off_enabled else "")
         # Who is actually watching for idle right now: this window, or an
         # already-running background watcher we deliberately didn't duplicate.
@@ -704,8 +774,8 @@ class SettingsPanel(ttk.Frame):
             self._status_dot.delete("all")
             self._status_dot.create_oval(1, 1, 9, 9, fill=colour, outline=colour)
         self.status.config(
-            text=f"Idle-sleep is {state}, after {round(cfg.idle_minutes)} "
-                 f"min.{deep}{who} Idle detection: {backend}.{warn}")
+            text=f"Idle-sleep is {state}, after {fmt_timeout(cfg.idle_minutes * 60)}."
+                 f"{deep}{who} Idle detection: {backend}.{warn}")
 
     def _test(self):
         cfg = self.app.cfg

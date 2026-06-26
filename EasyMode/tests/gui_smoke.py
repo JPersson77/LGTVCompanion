@@ -66,8 +66,8 @@ def main():
     assert tv.pair_prompts == 1
     print("[gui] Paired, key:", wizard.client_key)
 
-    # Step 3 should now be visible; set timeout and finish.
-    wizard.minutes.set(7)
+    # Step 3 should now be visible; set timeout (7 min = a step) and finish.
+    wizard.sleep_slider.set_value(7 * 60)
     pump(app)
     wizard._finish()
     pump(app)
@@ -80,16 +80,16 @@ def main():
     print("[gui] Settings panel rendered. Status:",
           panel.status.cget("text"))
 
-    # Toggle the timeout slider and the on/off switch; config should persist.
-    panel.minutes.set(15)
-    panel._slider_moved()
+    # Move the timeout slider and toggle the on/off switch; config should persist.
+    panel.sleep_slider.set_value(8 * 60)   # 8 min is a valid step
+    panel._apply()
     pump(app)
-    assert app.cfg.idle_minutes == 15
+    assert app.cfg.idle_minutes == 8
     panel.enabled.set(False)
     panel._apply()
     pump(app)
     assert app.cfg.idle_enabled is False
-    print("[gui] Live edits persisted (minutes=15, enabled=False).")
+    print("[gui] Live edits persisted (minutes=8, enabled=False).")
 
     # Because nothing else held the watcher lock, this window owns the watcher.
     from lgtv_easy.singleton import SingleInstance
