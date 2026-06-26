@@ -18,7 +18,7 @@ from typing import Callable, Optional
 from . import idle as idle_mod
 from . import system_sleep
 from .applog import get_logger
-from .config import Config
+from .config import Config, fmt_timeout
 from .webos import WebOSClient
 from .wol import send_wol
 
@@ -251,8 +251,8 @@ class Daemon:
                     client.set_mute(True)
                 self.screen_state = STATE_OFF
                 self.sleeps += 1
-                self.logger.info("Screen off after %.0f min idle",
-                                 self.config.idle_minutes)
+                self.logger.info("Screen off after %s idle",
+                                 fmt_timeout(self.config.idle_seconds))
                 return True
             except Exception as exc:  # noqa: BLE001
                 self.last_error = f"sleep: {exc}"
@@ -270,8 +270,8 @@ class Daemon:
                 client.power_off()
                 self.screen_state = STATE_STANDBY
                 self.deep_offs += 1
-                self.logger.info("TV powered off (deep energy saving) after %.0f min idle",
-                                 self.config.deep_off_minutes)
+                self.logger.info("TV powered off (deep energy saving) after %s idle",
+                                 fmt_timeout(self.config.deep_off_seconds))
                 # The socket dies as the TV powers down; reconnect on next wake.
                 self._drop_client()
                 return True
@@ -434,9 +434,9 @@ class Daemon:
 
     def run(self) -> None:
         self.logger.info(
-            "Easy Mode daemon started (idle backend: %s, threshold: %.1f min, "
+            "Easy Mode daemon started (idle backend: %s, threshold: %s, "
             "enabled: %s)",
-            idle_mod.idle_backend_name(), self.config.idle_minutes,
+            idle_mod.idle_backend_name(), fmt_timeout(self.config.idle_seconds),
             self.config.idle_enabled,
         )
         if not idle_mod.is_real_backend():
