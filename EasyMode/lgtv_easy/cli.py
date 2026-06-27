@@ -9,6 +9,7 @@ testable, and usable on headless machines. Subcommands:
     set       change settings, e.g. the idle timeout in minutes
     status    show current configuration and idle backend
     test      verify the saved TV by blinking the screen off then on
+    repair    self-test the connection and auto-fix it (doctor)
     run       run the idle-monitoring daemon in the foreground
     gui       open the graphical control panel (text wizard fallback)
     wizard    run the interactive text setup wizard
@@ -197,12 +198,21 @@ def cmd_test(args) -> int:
     try:
         client = connect_tv(cfg, prompt_timeout=10.0, log=_print)
     except Exception as exc:  # noqa: BLE001
-        _print(f"Test failed: {exc}")
-        if cfg.device.ip:
-            from .netdiag import probe_tv
-            _print("--- Connection diagnostics ---")
-            probe_tv(cfg.device.ip, _print)
-        return 1
+        # The quick path failed; escalate to the full self-test and repair, which
+        # probes the network, relocates the TV, reconnects and (on success) blinks
+        # the screen itself - so a moved/renamed TV heals without user action.
+        _print(f"Could not reach the TV at the saved address: {exc}")
+        _print("--- Running self-test and repair ---")
+        from . import selfheal
+        res = selfheal.repair(cfg, log=_print, connect=True, blink=True,
+                              prompt_timeout=10.0)
+        if res.client is not None:
+            res.client.close()
+        _print("")
+        _print(res.summary)
+        if not res.ok:
+            _print_bug_footer()
+        return 0 if res.ok else 1
     try:
         _print(f"Connected to {cfg.device.name} at {cfg.device.ip}.")
         _print("Turning screen OFF for 3 seconds...")
@@ -236,6 +246,42 @@ def cmd_test(args) -> int:
         client.close()
     _print("Test OK - your TV responds to Easy Mode.")
     return 0
+
+
+def _print_bug_footer() -> None:
+    """Print an environment fingerprint + log path for a bug report."""
+    from .netdiag import env_summary
+    _print("")
+    _print("If it still won't connect, copy these details into a bug report:")
+    for line in env_summary():
+        _print("  " + line)
+    _print(f"  Log file    : {log_path()}")
+
+
+def cmd_repair(args) -> int:
+    """Self-test the TV connection and automatically repair it.
+
+    The `test` command verifies a working TV; this one is aimed at a broken one:
+    it narrates the full diagnosis (which network the PC is on, whether the TV's
+    ports answer), relocates the TV by MAC or discovery, reconnects, and persists
+    the corrected address - then says, in plain language, what it found and fixed.
+    """
+    cfg = Config.load()
+    if not cfg.device.ip and not cfg.device.mac:
+        _print("No TV configured yet. Run the wizard or 'lgtv-easy pair <ip>'.")
+        return 1
+    from . import selfheal
+    _print("Running a connection self-test and repair...")
+    _print("")
+    res = selfheal.repair(cfg, log=_print, connect=False, blink=True,
+                          prompt_timeout=10.0)
+    _print("")
+    _print(res.summary)
+    if res.repaired and _signal_running_daemon():
+        _print("Applied the corrected address to the running daemon (no restart).")
+    if not res.ok:
+        _print_bug_footer()
+    return 0 if res.ok else 1
 
 
 def _tv_power_off(cfg, log=lambda m: None, timeout: float = 8.0,
@@ -497,6 +543,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("test", help="blink the screen to verify the TV")
     s.set_defaults(func=cmd_test)
+
+    s = sub.add_parser("repair", aliases=["doctor"],
+                       help="self-test the connection and auto-fix it")
+    s.set_defaults(func=cmd_repair)
 
     s = sub.add_parser("run", help="run the idle-monitoring daemon")
     s.set_defaults(func=cmd_run)

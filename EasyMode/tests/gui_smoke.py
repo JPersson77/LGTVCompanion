@@ -13,6 +13,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 os.environ["LGTV_EASY_HOME"] = tempfile.mkdtemp(prefix="lgtv-gui-")
 # The GUI starts a real daemon thread; keep it from spawning OS power monitors.
 os.environ.setdefault("LGTV_EASY_NO_SLEEP_WATCH", "1")
+# Keep the panel's automatic startup self-test from firing real network probes;
+# the repair-dialog scenario below drives the repair flow explicitly instead.
+os.environ.setdefault("LGTV_EASY_NO_SELFTEST", "1")
 
 from lgtv_easy import gui  # noqa: E402
 from lgtv_easy.mock_tv import MockTV  # noqa: E402
@@ -90,6 +93,56 @@ def main():
     pump(app)
     assert app.cfg.idle_enabled is False
     print("[gui] Live edits persisted (minutes=8, enabled=False).")
+
+    # The "Power off after" slider is revealed with its toggle (progressive
+    # disclosure): hidden while deep power-off is off, shown when it's on, and it
+    # applies its timing live - never stranded or disappearing while enabled.
+    assert not panel.deep_slider.winfo_ismapped(), "slider hidden while deep-off is off"
+    panel.deep.set(True)
+    panel._apply_deep()
+    pump(app)
+    assert panel.deep_slider.winfo_ismapped(), "slider revealed when deep-off turns on"
+    panel.deep_slider.set_value(40 * 60)   # 40 min is a valid deep step
+    panel._apply()
+    pump(app)
+    assert app.cfg.deep_off_enabled is True and app.cfg.deep_off_minutes == 40
+    panel.deep.set(False)
+    panel._apply_deep()
+    pump(app)
+    assert not panel.deep_slider.winfo_ismapped(), "slider hidden again when deep-off turns off"
+    print("[gui] Power-off slider reveals with its toggle and applies live. ✓")
+
+    # A failed "Test my TV" must open a repair session (not dead-end on the raw
+    # error) that runs to an outcome and updates the panel. Drive selfheal.repair
+    # with a fast stub so the dialog's worker/post/teardown wiring is exercised
+    # without real network I/O.
+    import lgtv_easy.selfheal as selfheal_mod
+    import time as _t
+
+    def fake_repair(cfg, log=None, connect=False, blink=False, on_prompt=None, **kw):
+        if log:
+            log("Checking how this PC is connected to the network...")
+            log("Found the TV; connecting...")
+        return selfheal_mod.RepairResult(
+            ok=True, repaired=True, old_ip="127.0.0.1", new_ip="127.0.0.1",
+            summary="Fixed it — your TV is responding now. ✓", steps=["x"])
+
+    selfheal_mod.repair = fake_repair
+    panel._test_done(False, "[Errno 113] No route to host")
+    dlg = None
+    for _ in range(100):
+        pump(app)
+        dlgs = [w for w in app.winfo_children() if isinstance(w, gui.RepairDialog)]
+        if dlgs and "responding" in dlgs[0].status.cget("text").lower():
+            dlg = dlgs[0]
+            break
+        _t.sleep(0.05)
+    assert dlg is not None, "failed test opened a repair session that completed"
+    assert "responding" in panel.status.cget("text").lower(), "panel reflects repair"
+    print("[gui] Repair session ran and updated the panel:",
+          dlg.status.cget("text"))
+    dlg._on_close()
+    pump(app)
 
     # Because nothing else held the watcher lock, this window owns the watcher.
     from lgtv_easy.singleton import SingleInstance
