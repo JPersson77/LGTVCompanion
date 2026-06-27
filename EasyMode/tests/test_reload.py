@@ -10,6 +10,8 @@ import logging
 import signal
 import time
 
+import pytest
+
 from lgtv_easy.config import Config, Device
 from lgtv_easy.daemon import Daemon
 from lgtv_easy.singleton import SingleInstance
@@ -103,6 +105,10 @@ def test_interruptible_sleep_returns_immediately_when_nudged():
     assert not d._wake.is_set()  # the wakeup was consumed, not left latched
 
 
+@pytest.mark.skipif(not hasattr(signal, "SIGHUP"),
+                    reason="SIGHUP is POSIX-only; on Windows the reload nudge "
+                           "uses a different mechanism and cli.py skips the "
+                           "SIGHUP wiring (guarded by hasattr).")
 def test_sighup_handler_requests_reload(tmp_path, monkeypatch):
     """The production signal wiring: an actual SIGHUP to this process flips the
     daemon's reload flag - no restart, no TV action."""
@@ -129,7 +135,10 @@ def test_sighup_handler_requests_reload(tmp_path, monkeypatch):
 def test_singleinstance_signal_skips_self_and_empty(tmp_path, monkeypatch):
     monkeypatch.setenv("LGTV_EASY_HOME", str(tmp_path))
     si = SingleInstance("daemon")
-    assert si.signal(signal.SIGHUP) is False  # nobody holds it yet
-    assert si.acquire() is True               # now we hold it (our PID)
-    assert si.signal(signal.SIGHUP) is False  # never signal ourselves
+    # The self/empty-skip logic returns before ever calling os.kill, so the
+    # signal value is immaterial here - use SIGTERM (exists on every platform)
+    # rather than SIGHUP so this coverage also runs on Windows.
+    assert si.signal(signal.SIGTERM) is False  # nobody holds it yet
+    assert si.acquire() is True                # now we hold it (our PID)
+    assert si.signal(signal.SIGTERM) is False  # never signal ourselves
     si.release()
