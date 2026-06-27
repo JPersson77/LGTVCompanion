@@ -277,6 +277,40 @@ class SteppedSlider(ttk.Frame):
         self._refresh()
 
 
+def make_diag(app: "App", parent: tk.Misc, height: int = 6):
+    """A read-only, scrollable diagnostics text area + a thread-safe appender.
+
+    Shared by the setup wizard and the repair dialog. The returned callable can
+    be handed straight to worker threads (and to ``selfheal``/``discovery`` as a
+    ``log``): it marshals each line back onto the UI thread via ``app.post`` and
+    ignores writes to a widget that has since been destroyed, so a still-running
+    worker can never freeze the UI by logging into a closed screen.
+    """
+    frame = ttk.Frame(parent, style="Card.TFrame")
+    frame.pack(fill="both", expand=True, pady=(6, 0))
+    text = tk.Text(frame, height=height, wrap="word", font=(THEME["mono"], 9),
+                   state="disabled", background=THEME["inset"],
+                   foreground=THEME["muted"], relief="flat", borderwidth=0,
+                   highlightthickness=1, highlightbackground=THEME["border"],
+                   highlightcolor=THEME["border"], padx=8, pady=6,
+                   insertbackground=THEME["text"])
+    sb = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+    text.configure(yscrollcommand=sb.set)
+    sb.pack(side="right", fill="y")
+    text.pack(side="left", fill="both", expand=True)
+
+    def append(line):
+        try:
+            text.configure(state="normal")
+            text.insert(tk.END, line + "\n")
+            text.see(tk.END)
+            text.configure(state="disabled")
+        except tk.TclError:
+            pass
+
+    return lambda line: app.post(lambda: append(line))
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -469,34 +503,7 @@ class SetupWizard(ttk.Frame):
     def _make_diag(self, parent=None, height=6):
         """A read-only, scrollable text area for diagnostics, plus a thread-safe
         appender. Worker threads call the returned function via app.post()."""
-        frame = ttk.Frame(parent or self, style="Card.TFrame")
-        frame.pack(fill="both", expand=True, pady=(6, 0))
-        text = tk.Text(frame, height=height, wrap="word", font=(THEME["mono"], 9),
-                       state="disabled", background=THEME["inset"],
-                       foreground=THEME["muted"], relief="flat", borderwidth=0,
-                       highlightthickness=1, highlightbackground=THEME["border"],
-                       highlightcolor=THEME["border"], padx=8, pady=6,
-                       insertbackground=THEME["text"])
-        sb = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
-        text.configure(yscrollcommand=sb.set)
-        sb.pack(side="right", fill="y")
-        text.pack(side="left", fill="both", expand=True)
-
-        def append(line):
-            # A worker thread can still be logging when the wizard moves to the
-            # next step and destroys this widget. Writing to a dead widget raises
-            # TclError, which - if it escaped - would kill the UI event pump and
-            # freeze the wizard. Ignore it: the diagnostics just stop scrolling.
-            try:
-                text.configure(state="normal")
-                text.insert(tk.END, line + "\n")
-                text.see(tk.END)
-                text.configure(state="disabled")
-            except tk.TclError:
-                pass
-
-        # Thread-safe wrapper so worker threads can log into it.
-        return lambda line: self.app.post(lambda: append(line))
+        return make_diag(self.app, parent or self, height)
 
     # ----- step 1: find ------------------------------------------------
     def _build_step1(self):
@@ -727,10 +734,11 @@ class SettingsPanel(ttk.Frame):
                                 wraplength=420, justify="left")
         self.status.pack(side="left", fill="x", expand=True)
 
-        # Compact "connected to" line instead of a whole card.
-        ttk.Label(self,
-                  text=f"Connected to  {cfg.device.name}  ·  {cfg.device.ip}",
-                  style="Sub.TLabel").pack(anchor="w", pady=(0, PAD - 2))
+        # Compact "connected to" line instead of a whole card. Kept on the panel
+        # so the startup self-test / repair can update the address if the TV moved.
+        self._conn_label = ttk.Label(
+            self, text=self._conn_text(), style="Sub.TLabel")
+        self._conn_label.pack(anchor="w", pady=(0, PAD - 2))
 
         # Hero: the big switch + timeout slider.
         hero = self._card()
@@ -759,23 +767,43 @@ class SettingsPanel(ttk.Frame):
                          self.follow_sleep, self._apply,
                          desc="Follows the PC into and back out of suspend.")
 
-        # More options: energy saving + start at login.
+        # More options: energy saving + start at login. The "Power off after"
+        # slider only makes sense once deep power-off is on, so it's revealed with
+        # the toggle (progressive disclosure) rather than sitting there inert while
+        # the feature is off. The reveal is an in-place show/hide - no rebuild - so
+        # it's instant, and the slider applies its timing live as it's dragged.
         more = self._card("More options")
         self._switch_row(
             more, "Fully power the TV off after a longer idle", self.deep,
-            self._apply, desc="Maximum energy saving; wakes over Wake-on-LAN.")
-        drow = ttk.Frame(more, style="Card.TFrame")
-        drow.pack(fill="x", pady=(4, 8))
-        ttk.Label(drow, text="Power off after",
+            self._apply_deep, desc="Maximum energy saving; wakes over Wake-on-LAN.")
+        self._deep_row = ttk.Frame(more, style="Card.TFrame")
+        ttk.Label(self._deep_row, text="Power off after",
                   style="CardMuted.TLabel").pack(anchor="w")
         self.deep_slider = SteppedSlider(
-            drow, values=DEEP_STEPS_SEC, initial=cfg.deep_off_minutes * 60,
+            self._deep_row, values=DEEP_STEPS_SEC, initial=cfg.deep_off_minutes * 60,
             fmt=fmt_timeout, command=self._apply)
         self.deep_slider.pack(fill="x")
-        self._switch_row(more, "Start automatically when I log in",
-                         self.autostart, self._apply_autostart)
+        # Keep the login row's handle so the slider can be inserted just above it
+        # (pack with `before=`) when revealed, preserving the card's order.
+        self._autostart_row = self._switch_row(
+            more, "Start automatically when I log in",
+            self.autostart, self._apply_autostart)
+        self._sync_deep_row()
 
         self._refresh_status()
+        self._kickoff_selftest()
+
+    def _sync_deep_row(self):
+        """Show the power-off timing slider iff deep power-off is enabled."""
+        if self.deep.get():
+            self._deep_row.pack(fill="x", pady=(4, 8), before=self._autostart_row)
+        else:
+            self._deep_row.pack_forget()
+
+    def _apply_deep(self):
+        """Toggle handler for deep power-off: apply, then reveal/hide its slider."""
+        self._apply()
+        self._sync_deep_row()
 
     def _apply(self):
         cfg = self.app.cfg
@@ -845,11 +873,182 @@ class SettingsPanel(ttk.Frame):
     def _test_done(self, ok, err):
         if ok:
             # cfg.device.ip may have just been corrected by the recovery step.
+            self._refresh_conn_label()
             self.status.config(
                 text=f"Test OK — your TV responded at {self.app.cfg.device.ip}. ✓")
             self._refresh_status()
         else:
-            self.status.config(text=f"Test failed: {err}")
+            # Don't dead-end on the raw error (the reported bug): open a repair
+            # session that diagnoses and fixes it - relocating the TV, reconnecting
+            # and blinking the screen - with the full details shown live.
+            self.status.config(
+                text=f"Couldn't reach your TV ({err}). Starting repair…")
+            RepairDialog(self.app, self)
+
+    # ----- connection self-test / repair ------------------------------
+    def _conn_text(self) -> str:
+        cfg = self.app.cfg
+        return f"Connected to  {cfg.device.name}  ·  {cfg.device.ip}"
+
+    def _refresh_conn_label(self):
+        """Re-render the 'Connected to … · IP' line (the IP can change on repair)."""
+        label = getattr(self, "_conn_label", None)
+        if label is not None:
+            try:
+                label.config(text=self._conn_text())
+            except tk.TclError:
+                pass
+
+    def _kickoff_selftest(self):
+        """On startup, quietly verify the TV is reachable and self-heal if not.
+
+        A fast TCP health check decides whether anything is wrong; only if it is
+        do we run a background repair (relocate by MAC/discovery and persist the
+        corrected address - no screen blink, so it's invisible when all is well).
+        Gated by LGTV_EASY_NO_SELFTEST so tests and headless CI stay hermetic.
+        """
+        import os
+        if os.environ.get("LGTV_EASY_NO_SELFTEST") == "1":
+            return
+        if not self.app.cfg.device.paired:
+            return
+
+        def worker():
+            from . import selfheal
+            cfg = self.app.cfg
+            try:
+                if selfheal.quick_health_check(cfg):
+                    self.app.post(self._refresh_status)
+                    return
+                res = selfheal.repair(cfg, connect=False, blink=False)
+            except Exception:  # noqa: BLE001 - a self-test must never crash the app
+                return
+            self.app.post(lambda: self._selftest_done(res))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _selftest_done(self, res):
+        self._refresh_conn_label()
+        if res.repaired and res.ok:
+            self.status.config(
+                text=f"Reconnected — your TV had moved to {self.app.cfg.device.ip}. ✓")
+        elif not res.ok:
+            # Unreachable at startup: say so plainly and point at the repair button.
+            self.status.config(
+                text=f"{res.summary}  (Press “Test my TV” to run a full repair.)")
+        else:
+            self._refresh_status()
+
+
+class RepairDialog(tk.Toplevel):
+    """A live 'repair session' window opened when the TV can't be reached.
+
+    Runs :func:`selfheal.repair` in a worker thread - probing the network,
+    relocating the TV by MAC/discovery, reconnecting and blinking the screen -
+    and narrates every step into a scrollable log, ending with a clear outcome
+    and a 'Try again' button. On success it refreshes the parent panel, whose
+    saved address may have just been corrected.
+    """
+
+    def __init__(self, app: App, panel: "SettingsPanel"):
+        super().__init__(app)
+        self.app = app
+        self.panel = panel
+        self._running = False
+        self.title("Repair TV connection")
+        self.configure(bg=THEME["bg"])
+        self.geometry("520x470")
+        self.minsize(460, 400)
+        try:
+            self.transient(app)
+        except tk.TclError:
+            pass
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._build()
+        self.start()
+
+    def _build(self):
+        frame = ttk.Frame(self, padding=(PAD + 4, PAD, PAD + 4, PAD + 4))
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text="Repairing the TV connection",
+                  style="Title.TLabel").pack(anchor="w")
+        self.status = ttk.Label(frame, text="Looking for your TV…",
+                                style="Sub.TLabel", wraplength=460, justify="left")
+        self.status.pack(anchor="w", pady=(6, PAD))
+        self.progress = ttk.Progressbar(frame, mode="indeterminate")
+        self.progress.pack(fill="x")
+        ttk.Label(frame, text="Details", style="Sub.TLabel").pack(
+            anchor="w", pady=(PAD, 0))
+        self.diag = make_diag(self.app, frame, height=8)
+        nav = ttk.Frame(frame)
+        nav.pack(fill="x", pady=(PAD, 0))
+        self.close_btn = ttk.Button(nav, text="Close", style="Ghost.TButton",
+                                    command=self._on_close)
+        self.close_btn.pack(side="right")
+        self.retry_btn = ttk.Button(nav, text="Try again", style="Accent.TButton",
+                                    command=self.start)
+        self.retry_btn.pack(side="right", padx=(0, 6))
+        self.retry_btn.state(["disabled"])
+
+    def start(self):
+        if self._running:
+            return
+        self._running = True
+        try:
+            self.retry_btn.state(["disabled"])
+            self.status.config(text="Looking for your TV…")
+            self.progress.start(12)
+        except tk.TclError:
+            pass
+        diag = self.diag
+
+        def worker():
+            from . import selfheal
+            res = selfheal.repair(
+                self.app.cfg, log=diag, connect=True, blink=True,
+                on_prompt=lambda: self.app.post(self._on_prompt),
+                prompt_timeout=20.0)
+            if res.client is not None:
+                try:
+                    res.client.close()
+                except Exception:  # noqa: BLE001
+                    pass
+            self.app.post(lambda: self._done(res))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_prompt(self):
+        try:
+            self.status.config(
+                text="👉  Look at your TV and press OK / Accept on the pairing "
+                     "prompt with the remote.")
+        except tk.TclError:
+            pass
+
+    def _done(self, res):
+        self._running = False
+        try:
+            self.progress.stop()
+            self.status.config(text=res.summary)
+            self.retry_btn.state(["!disabled"])
+        except tk.TclError:
+            pass
+        # Reflect the result on the parent panel (the IP may have moved).
+        try:
+            self.panel._refresh_conn_label()
+            self.panel.status.config(text=res.summary)
+        except tk.TclError:
+            pass
+
+    def _on_close(self):
+        # The worker may still be mid-connect; its UI posts no-op against a
+        # destroyed window (every callback is TclError-guarded), so closing now
+        # is safe - the diagnostics simply stop updating.
+        try:
+            self.progress.stop()
+        except tk.TclError:
+            pass
+        self.destroy()
 
 
 def main() -> int:

@@ -13,7 +13,8 @@ at the repository root instead — `Windows Launch.bat` (Windows) or
 ```bash
 cd EasyMode
 python3 -m lgtv_easy            # open the graphical control panel
-python3 -m lgtv_easy --help     # all commands (scan, pair, set, status, run, ...)
+python3 -m lgtv_easy --help     # all commands (scan, pair, set, status, test, repair, run, ...)
+python3 -m lgtv_easy repair     # self-test the TV connection and auto-fix a moved/unreachable TV
 ```
 
 ## Layout
@@ -27,6 +28,8 @@ python3 -m lgtv_easy --help     # all commands (scan, pair, set, status, run, ..
 | `system_sleep.py` | detect whole-PC suspend/resume so the TV follows it to sleep |
 | `webos.py` / `_ws.py` | the WebOS WebSocket protocol + pairing |
 | `discovery.py` | finding TVs on the network (SSDP) |
+| `recovery.py` | quick on-demand reconnect, healing a stale IP by MAC |
+| `selfheal.py` | the escalating self-test + repair engine (startup check, "Test my TV", `repair`) |
 | `wol.py` | Wake-on-LAN magic packets |
 | `netdiag.py` | network diagnostics (incl. the Google/Nest Wifi hint) |
 | `config.py` | the tiny JSON settings file |
