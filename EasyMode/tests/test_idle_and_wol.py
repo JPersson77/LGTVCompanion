@@ -3,7 +3,7 @@ import pytest
 
 from lgtv_easy import idle as idle_mod
 from lgtv_easy.wol import (broadcast_targets, magic_packet, normalize_mac,
-                           send_wol)
+                           send_wol, wake_targets)
 
 
 def test_idle_returns_float_and_never_raises():
@@ -136,31 +136,59 @@ def test_broadcast_targets_adds_directed_subnet_broadcast():
         "255.255.255.255", "10.0.0.255"]
 
 
-def test_send_wol_hits_every_broadcast_each_round():
+class _FakeSock:
+    def __init__(self, sent):
+        self._sent = sent
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def setsockopt(self, *a):
+        pass
+
+    def sendto(self, _packet, dest):
+        self._sent.append(dest)
+
+
+def _capture_sends(**kwargs):
     sent = []
-
-    class FakeSock:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def setsockopt(self, *a):
-            pass
-
-        def sendto(self, _packet, dest):
-            sent.append(dest)
-
     import lgtv_easy.wol as wol_mod
     orig = wol_mod.socket.socket
-    wol_mod.socket.socket = lambda *a, **k: FakeSock()
+    wol_mod.socket.socket = lambda *a, **k: _FakeSock(sent)
     try:
-        send_wol("AA:BB:CC:DD:EE:FF",
-                 broadcast=["255.255.255.255", "192.168.86.255"], repeat=2)
+        send_wol("AA:BB:CC:DD:EE:FF", **kwargs)
     finally:
         wol_mod.socket.socket = orig
-    # 2 rounds x 2 broadcasts = 4 sends, all to port 9.
-    assert len(sent) == 4
+    return sent
+
+
+def test_wake_targets_adds_unicast_to_the_tv():
+    # The broadcasts plus a unicast to the TV's own IP (some Wi-Fi WoL only wakes
+    # on a directed packet). Port suffixes are stripped; no IP -> broadcasts only.
+    targets = wake_targets("192.168.86.39")
+    assert targets == ["255.255.255.255", "192.168.86.255", "192.168.86.39"]
+    assert wake_targets("192.168.86.39:3001")[-1] == "192.168.86.39"
+    assert wake_targets("") == ["255.255.255.255"]
+
+
+def test_send_wol_hits_every_broadcast_and_both_ports_each_round():
+    sent = _capture_sends(broadcast=["255.255.255.255", "192.168.86.255"],
+                          repeat=2)
+    # 2 rounds x 2 broadcasts x 2 ports (9 and 7) = 8 sends.
+    assert len(sent) == 8
     assert {host for host, _port in sent} == {"255.255.255.255", "192.168.86.255"}
-    assert all(port == 9 for _host, port in sent)
+    # Both conventional WoL ports are covered, since TVs differ on which they use.
+    assert {port for _host, port in sent} == {9, 7}
+
+
+def test_send_wol_sustained_spreads_rounds_over_time(monkeypatch):
+    # A sustained burst sleeps `interval` between rounds so the packets land in a
+    # sleeping Wi-Fi TV's forwarding windows instead of arriving as one blip.
+    naps = []
+    import lgtv_easy.wol as wol_mod
+    monkeypatch.setattr(wol_mod.time, "sleep", lambda s: naps.append(s))
+    _capture_sends(broadcast="255.255.255.255", repeat=4, interval=0.25)
+    assert naps == [0.25, 0.25, 0.25]  # between rounds only (3 gaps for 4 rounds)

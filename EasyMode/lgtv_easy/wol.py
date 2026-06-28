@@ -7,6 +7,7 @@ uses to wake the display.
 from __future__ import annotations
 
 import socket
+import time
 
 
 def normalize_mac(mac: str) -> bytes:
@@ -46,20 +47,48 @@ def broadcast_targets(*ips: str) -> list:
     return targets
 
 
+def wake_targets(ip: str) -> list:
+    """Every address to aim a wake magic packet at: the broadcasts (see
+    :func:`broadcast_targets`) plus a unicast to the TV's last-known IP, since
+    some Wi-Fi WoL implementations only wake on a directed packet, not a
+    broadcast."""
+    targets = broadcast_targets(ip)
+    if ip:
+        host = ip.rpartition(":")[0] if ":" in ip else ip
+        if host and host not in targets:
+            targets.append(host)
+    return targets
+
+
 def send_wol(mac: str, broadcast="255.255.255.255",
-             port: int = 9, repeat: int = 3) -> None:
-    """Broadcast a magic packet to wake the TV. Sent a few times for reliability.
+             port: int = 9, repeat: int = 3, interval: float = 0.0,
+             ports=None) -> None:
+    """Broadcast a magic packet to wake the TV.
+
+    Sent ``repeat`` rounds; with ``interval`` > 0 the rounds are spread over time
+    - a *sustained* burst rather than an instant blip. This matters for a TV
+    asleep on Wi-Fi behind a mesh router: a single blip is routinely dropped
+    before the TV's radio is awake to see it, whereas spreading packets across a
+    few seconds lands one in a forwarding window (verified against an LG TV on a
+    Nest mesh, which would not wake from one burst but did from a sustained one).
 
     ``broadcast`` may be a single address or a list/tuple of them (see
-    :func:`broadcast_targets`); the packet goes to each, every round.
+    :func:`broadcast_targets`). Each magic packet goes to every target on every
+    port in ``ports`` - both conventional WoL ports (9 and 7) by default, since
+    different TVs/firmwares listen on one or the other - every round.
     """
     targets = [broadcast] if isinstance(broadcast, str) else list(broadcast)
+    dst_ports = tuple(dict.fromkeys(ports if ports is not None else (port, 7)))
     packet = magic_packet(mac)
+    rounds = max(1, repeat)
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        for _ in range(max(1, repeat)):
+        for i in range(rounds):
             for target in targets:
-                try:
-                    sock.sendto(packet, (target, port))
-                except OSError:
-                    continue
+                for dport in dst_ports:
+                    try:
+                        sock.sendto(packet, (target, dport))
+                    except OSError:
+                        continue
+            if interval and i + 1 < rounds:
+                time.sleep(interval)

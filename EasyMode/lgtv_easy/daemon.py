@@ -38,6 +38,14 @@ RESUME_GAP_SECONDS = 30.0
 # the poll interval up to this cap, and log the failure only once until it recovers.
 RECONNECT_BACKOFF_MAX = 300.0  # seconds (5 min between attempts at most)
 
+# How long to keep trying to wake a fully-powered-off TV (with Wake-on-LAN) on
+# user activity before concluding WoL can't reach it on this network - e.g. a
+# Wi-Fi TV behind a mesh router that won't forward magic packets to a sleeping
+# client. A real WoL wake completes in well under this; past it we disable deep
+# power-off so the TV is never left unreachable again (screen-off, which needs
+# no WoL, stays on). Generous so a merely slow wake never trips it.
+DEEP_WAKE_GIVEUP_SECONDS = 90.0
+
 
 class Daemon:
     def __init__(
@@ -49,11 +57,16 @@ class Daemon:
         clock_fn: Optional[Callable[[], float]] = None,
         sleep_watcher_factory: Optional[Callable[..., object]] = None,
         locator_fn: Optional[Callable[[str], Optional[str]]] = None,
+        wol_fn: Optional[Callable[[bool], None]] = None,
         logger=None,
     ):
         self.config = config
         self.logger = logger or get_logger()
         self._idle_fn = idle_fn or idle_mod.get_idle_seconds
+        # Fire Wake-on-LAN to wake the TV. Injectable so tests don't broadcast
+        # real packets (or sleep through a sustained burst). Takes one arg: True
+        # when waking from full standby (sustained burst), False for screen-off.
+        self._wol_fn = wol_fn or self._default_wol
         # The default poll-sleep waits on an event so a settings change can cut
         # it short and apply at once (see _interruptible_sleep). Tests inject a
         # deterministic sleep_fn and bypass this.
@@ -92,6 +105,11 @@ class Daemon:
         # limited separately so it can't run on every failed poll.
         self._next_relocate_at = 0.0
         self.relocations = 0             # times we adopted a new IP (observable)
+        # Deep-off recovery: track how long we've been failing to wake the TV
+        # from full standby so we can give up (and disable deep-off) rather than
+        # strand it forever if WoL can't reach it. None = not currently failing.
+        self._standby_wake_since: Optional[float] = None
+        self._gave_up_deep_wake = False
 
     # ----- TV connection ----------------------------------------------
     def _default_client_factory(self) -> WebOSClient:
@@ -276,6 +294,10 @@ class Daemon:
             try:
                 client.power_off()
                 self.screen_state = STATE_STANDBY
+                # Fresh standby: reset the wake-failure window, and re-arm the
+                # give-up safety net (so re-enabling deep-off gets a clean chance).
+                self._standby_wake_since = None
+                self._gave_up_deep_wake = False
                 self.deep_offs += 1
                 self.logger.info("TV powered off (deep energy saving) after %s idle",
                                  fmt_timeout(self.config.deep_off_seconds))
@@ -288,20 +310,37 @@ class Daemon:
                 self._drop_client()
                 return False
 
+    def _default_wol(self, deep: bool) -> None:
+        """Fire Wake-on-LAN to bring the TV back.
+
+        Aim the magic packet at the limited broadcast, the TV's directed subnet
+        broadcast, and a unicast to its last-known IP, so it lands across a
+        Google/Nest Wifi mesh (where the limited broadcast isn't always forwarded
+        between wired and wireless segments, and a sleeping Wi-Fi client may only
+        wake on a directed packet). From full standby (``deep``) send a sustained
+        burst over a few seconds - a single blip is dropped before a sleeping TV's
+        radio sees it; a screen-off TV is already awake on the LAN so a light
+        nudge suffices.
+        """
+        mac = self.config.device.mac
+        if not mac:
+            return
+        from .wol import wake_targets
+        targets = wake_targets(self.config.device.ip)
+        if deep:
+            send_wol(mac, broadcast=targets, repeat=20, interval=0.25)
+        else:
+            send_wol(mac, broadcast=targets)
+
     def wake_screen(self) -> bool:
         with self._action_lock:
-            # If the panel went into standby it may need a magic packet first. Aim
-            # it at both the limited broadcast and the TV's directed subnet
-            # broadcast so it wakes reliably across a Google/Nest Wifi mesh (where
-            # the limited broadcast isn't always forwarded between wired and
-            # wireless segments).
-            if self.config.device.mac:
-                try:
-                    from .wol import broadcast_targets
-                    send_wol(self.config.device.mac,
-                             broadcast=broadcast_targets(self.config.device.ip))
-                except Exception as exc:  # noqa: BLE001
-                    self.logger.debug("WOL send failed (often harmless): %s", exc)
+            # If the panel went into full standby it needs a magic packet to come
+            # back; a sustained burst when deep so a sleeping Wi-Fi/mesh TV
+            # actually receives one.
+            try:
+                self._wol_fn(self.screen_state == STATE_STANDBY)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.debug("WOL send failed (often harmless): %s", exc)
             # A wake is user-facing and time-sensitive: bypass the reconnect
             # backoff so the screen returns as soon as the TV is reachable.
             client = self._ensure_client(force=True)
@@ -437,7 +476,39 @@ class Daemon:
             self.power_off_tv()
         elif self.screen_state in (STATE_OFF, STATE_STANDBY) and idle < threshold:
             # Any input resets the OS idle timer, so this fires on wake.
-            self.wake_screen()
+            from_standby = self.screen_state == STATE_STANDBY
+            if self.wake_screen():
+                self._standby_wake_since = None
+                self._gave_up_deep_wake = False
+            elif from_standby:
+                self._note_unwakeable_standby()
+
+    def _note_unwakeable_standby(self) -> None:
+        """A wake from full power-off failed. If they keep failing past the grace
+        window, Wake-on-LAN can't reach this TV here - so disable deep power-off
+        (once) rather than strand the TV every idle cycle. Screen-off stays on; it
+        rides the live connection and never needs WoL. The user turns the TV on
+        with the remote this once; we won't deep-off it again."""
+        if self._gave_up_deep_wake:
+            return
+        now = self._clock()
+        if self._standby_wake_since is None:
+            self._standby_wake_since = now
+            return
+        if now - self._standby_wake_since < DEEP_WAKE_GIVEUP_SECONDS:
+            return
+        self._gave_up_deep_wake = True
+        self.config.deep_off_enabled = False
+        try:
+            self.config.save()
+        except Exception:  # noqa: BLE001 - persistence is best-effort
+            pass
+        self.logger.warning(
+            "Full power-off could not be reversed by Wake-on-LAN after ~%.0fs - "
+            "this TV/network can't be woken from deep standby (common for a Wi-Fi "
+            "TV behind a mesh router). Disabling full power-off so the TV is never "
+            "left unreachable again; turn it on once with the remote. Screen-off "
+            "(which needs no Wake-on-LAN) stays on.", DEEP_WAKE_GIVEUP_SECONDS)
 
     def run(self) -> None:
         self.logger.info(

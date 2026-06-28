@@ -399,11 +399,29 @@ class App(tk.Tk):
     def show_wizard(self):
         self._clear()
         SetupWizard(self.container, self).pack(fill="both", expand=True)
+        self._fit_to_content()
 
     def show_settings(self):
         self._clear()
         SettingsPanel(self.container, self).pack(fill="both", expand=True)
         self.start_daemon()
+        self._fit_to_content()
+
+    def _fit_to_content(self):
+        """Open as tall as the active panel needs - this app never scrolls.
+
+        The footer is pinned to the bottom of each panel, so a window shorter
+        than its content silently clips the last card (e.g. the deep power-off
+        slider). Grow to the panel's requested height and pin that as the
+        minimum so it can never be shrunk back into clipping it.
+        """
+        def fit():
+            self.update_idletasks()
+            height = self.winfo_reqheight()
+            width = max(self.winfo_width(), self.winfo_reqwidth())
+            self.minsize(self.minsize()[0], height)
+            self.geometry(f"{width}x{height}")
+        self.after_idle(fit)
 
     # ----- daemon lifecycle -------------------------------------------
     def start_daemon(self):

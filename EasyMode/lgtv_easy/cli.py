@@ -328,10 +328,13 @@ def cmd_on(args) -> int:
         _print("No TV configured.")
         return 1
     if cfg.device.mac:
-        from .wol import broadcast_targets, send_wol
+        from .wol import send_wol, wake_targets
         try:
-            send_wol(cfg.device.mac,
-                     broadcast=broadcast_targets(cfg.device.ip))
+            # A sustained burst (not one blip): a TV asleep on Wi-Fi behind a mesh
+            # drops a single magic packet but wakes from packets spread over a few
+            # seconds.
+            send_wol(cfg.device.mac, broadcast=wake_targets(cfg.device.ip),
+                     repeat=20, interval=0.25)
             _print(f"Sent Wake-on-LAN to {cfg.device.mac}.")
         except Exception as exc:  # noqa: BLE001
             _print(f"WOL failed: {exc}")
