@@ -121,21 +121,27 @@ sync_repo() {
 #    the canonical repo copy.
 #  - If we ARE the repo copy and git rewrote it underneath us, re-exec the new
 #    version (detected by comparing the start-time hash to the on-disk hash).
-maybe_self_update() {
+# True if we're a bootstrap copy that should hand off to the canonical repo
+# launcher, or git rewrote this launcher underneath us (start-time hash differs
+# from the on-disk hash). Either way the running launcher should re-exec.
+launcher_changed() {
   local repo_launcher="$APP_HOME/$LAUNCHER_NAME"
-  [ -f "$repo_launcher" ] || return 0
-  local target; target="$(readlink -f "$repo_launcher")"
-  if [ "$SELF_PATH" != "$target" ]; then
+  [ -f "$repo_launcher" ] || return 1
+  [ "$SELF_PATH" != "$(readlink -f "$repo_launcher")" ] && return 0
+  local now_hash; now_hash="$( (sha1sum "$SELF_PATH" 2>/dev/null || echo none) | cut -d' ' -f1)"
+  [ "$now_hash" != "$LAUNCHER_START_HASH" ]
+}
+
+maybe_self_update() {
+  launcher_changed || return 0
+  local repo_launcher="$APP_HOME/$LAUNCHER_NAME"
+  export LGTV_EASY_HANDOFF=1
+  if [ "$SELF_PATH" != "$(readlink -f "$repo_launcher")" ]; then
     log "Handing off to the canonical repo launcher."
-    export LGTV_EASY_HANDOFF=1
     exec "$repo_launcher" "$@"
   fi
-  local now_hash; now_hash="$( (sha1sum "$SELF_PATH" 2>/dev/null || echo none) | cut -d' ' -f1)"
-  if [ "$now_hash" != "$LAUNCHER_START_HASH" ]; then
-    log "Launcher updated itself; re-executing new version."
-    export LGTV_EASY_HANDOFF=1
-    exec "$SELF_PATH" "$@"
-  fi
+  log "Launcher updated itself; re-executing new version."
+  exec "$SELF_PATH" "$@"
 }
 
 APP_DIR() { echo "$APP_HOME/$SUBDIR"; }
@@ -198,9 +204,25 @@ supervise() {
         last_update=$now
         log "Periodic update check."
         if sync_repo; then
-          maybe_self_update "$@"   # may re-exec and replace this process
-          # Restart the daemon to pick up any code changes. Use SIGUSR1 so the
-          # daemon stops WITHOUT powering off the TV (that's only for real
+          if launcher_changed; then
+            # The launcher rewrote itself. Re-exec the new version, but resume as
+            # a pure --supervise: re-execing with our original args would replay
+            # the GUI-opening default case (popping a window and stacking another
+            # supervisor). Stop our daemon child first and drop the pidfile so it
+            # isn't orphaned behind the exec; the fresh supervisor restarts it.
+            log "Launcher updated itself; re-executing as the background watcher."
+            kill -USR1 "$daemon_pid" 2>/dev/null
+            rm -f "$PID_FILE"
+            export LGTV_EASY_HANDOFF=1
+            local repo_launcher; repo_launcher="$APP_HOME/$LAUNCHER_NAME"
+            if [ -f "$repo_launcher" ] \
+               && [ "$SELF_PATH" != "$(readlink -f "$repo_launcher")" ]; then
+              exec "$repo_launcher" --supervise
+            fi
+            exec "$SELF_PATH" --supervise
+          fi
+          # Code (not the launcher) changed: just restart the daemon to pick it
+          # up. SIGUSR1 stops it WITHOUT powering off the TV (that's only for real
           # shutdowns, which arrive as SIGTERM).
           log "Restarting daemon to apply updates."
           kill -USR1 "$daemon_pid" 2>/dev/null || kill "$daemon_pid" 2>/dev/null
