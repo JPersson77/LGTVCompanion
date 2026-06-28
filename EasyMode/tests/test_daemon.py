@@ -20,11 +20,14 @@ def _make(tv: MockTV, cfg: Config) -> Daemon:
         return c
 
     idle_box = {"v": 0.0}
+    wol_calls = []  # record (deep?) per wake instead of broadcasting real packets
     d = Daemon(cfg, client_factory=factory,
                idle_fn=lambda: idle_box["v"],
                locator_fn=lambda mac: None,  # never hit the real network in unit tests
+               wol_fn=lambda deep: wol_calls.append(deep),
                logger=_quiet_logger())
     d._idle_box = idle_box  # for the test to drive idle time
+    d._wol_calls = wol_calls
     return d
 
 
@@ -131,6 +134,64 @@ def test_two_stage_screen_off_then_full_power_off_then_wake():
         d.tick()
         assert d.screen_state == STATE_ON
         assert tv.screen_on is True and d.wakes == 1
+        # Waking from full standby must use a sustained WoL burst (deep=True), so
+        # a sleeping Wi-Fi/mesh TV actually receives a magic packet.
+        assert d._wol_calls[-1] is True
+
+
+def test_unwakeable_standby_disables_deep_off():
+    # Model a TV that Wake-on-LAN can't revive (e.g. Wi-Fi behind a mesh that
+    # won't forward magic packets): after full power-off it never comes back. The
+    # daemon must give up after the grace window and disable deep-off so it stops
+    # stranding the TV - rather than power it off again every idle cycle.
+    with MockTV(require_pairing=False) as tv:
+        cfg = _cfg(minutes=5.0)
+        cfg.deep_off_enabled = True
+        cfg.deep_off_minutes = 10.0
+        cfg.device.mac = "AA:BB:CC:DD:EE:FF"
+        saves = {"n": 0}
+        cfg.save = lambda: saves.__setitem__("n", saves["n"] + 1)
+
+        reachable = {"v": True}
+        clock = {"t": 0.0}
+
+        def factory():
+            c = WebOSClient("127.0.0.1")
+            c._url = (lambda: tv.url) if reachable["v"] else (lambda: "ws://127.0.0.1:1/")
+            return c
+
+        idle_box = {"v": 0.0}
+        d = Daemon(cfg, client_factory=factory, idle_fn=lambda: idle_box["v"],
+                   locator_fn=lambda mac: None, wol_fn=lambda deep: None,
+                   clock_fn=lambda: clock["t"], logger=_quiet_logger())
+
+        idle_box["v"] = 6 * 60
+        d.tick()                                   # -> screen off
+        idle_box["v"] = 11 * 60
+        d.tick()                                   # -> full power off (standby)
+        assert d.screen_state == STATE_STANDBY
+
+        reachable["v"] = False                     # TV is now unreachable forever
+        idle_box["v"] = 0                          # user is back, wanting it on
+        d.tick()                                   # first failed wake: starts clock
+        assert cfg.deep_off_enabled is True        # not given up yet
+        assert d.screen_state == STATE_STANDBY
+
+        clock["t"] = 95.0                          # past DEEP_WAKE_GIVEUP_SECONDS
+        d.tick()                                   # gives up
+        assert cfg.deep_off_enabled is False       # deep-off auto-disabled
+        assert saves["n"] >= 1                      # and persisted
+
+        # Now the TV comes back (user used the remote); a later wake recovers and
+        # the daemon does NOT power it off again, since deep-off is now off.
+        reachable["v"] = True
+        clock["t"] = 96.0
+        d.tick()
+        assert d.screen_state == STATE_ON
+        idle_box["v"] = 20 * 60                     # long idle: only screen-off now
+        d.tick()
+        assert d.screen_state == STATE_OFF
+        assert d.deep_offs == 1                     # never deep-off a second time
 
 
 def test_deep_off_ignored_when_not_beyond_screen_off_threshold():
