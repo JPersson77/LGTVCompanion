@@ -155,6 +155,19 @@ PY
 
 # ---- the supervisor loop ----------------------------------------------------
 supervise() {
+  # Never run two supervisors at once. Re-opening the app runs the default case,
+  # which falls through to supervise(); without this guard each open would clobber
+  # PID_FILE (orphaning the previous supervisor so --stop can't find it) and spawn
+  # another daemon that just blocks forever waiting for the lock the first daemon
+  # already holds - so watchers pile up on every re-open. If a live supervisor
+  # already owns the pidfile, stand down and let it keep driving the TV.
+  if [ -f "$PID_FILE" ]; then
+    local existing; existing="$(cat "$PID_FILE" 2>/dev/null || echo)"
+    if [ -n "$existing" ] && [ "$existing" != "$$" ] && kill -0 "$existing" 2>/dev/null; then
+      log "A background watcher is already running (pid $existing); not starting another."
+      return 0
+    fi
+  fi
   echo $$ > "$PID_FILE"
   local daemon_pid=""
   # Stop cleanly when asked. Tell the daemon child to quit with SIGUSR1, which
