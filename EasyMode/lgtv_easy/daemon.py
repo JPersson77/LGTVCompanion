@@ -291,9 +291,15 @@ class Daemon:
                         f" ({reason})" if reason else "")
                 return False
             try:
-                client.screen_off()
+                # On the PC-sleep path fire the screen-off without waiting for the
+                # TV's reply: the machine is suspending and the network may vanish
+                # within tens of milliseconds, so getting the frame onto the wire
+                # at once beats blocking on a response that might never come back.
+                # The idle path keeps wait=True - the network is up and confirming
+                # the state change is worth it.
+                client.screen_off(wait=not force)
                 if self.config.mute_on_sleep:
-                    client.set_mute(True)
+                    client.set_mute(True, wait=not force)
                 self.screen_state = STATE_OFF
                 self.sleeps += 1
                 if reason:
