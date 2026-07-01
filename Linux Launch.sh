@@ -176,11 +176,29 @@ supervise() {
   fi
   echo $$ > "$PID_FILE"
   local daemon_pid=""
-  # Stop cleanly when asked. Tell the daemon child to quit with SIGUSR1, which
-  # means "stop WITHOUT powering off the TV" - SIGTERM means a real shutdown
-  # (turn the TV off), which is NOT what the user wants when just stopping the
-  # watcher. Without this the supervisor died but left the daemon orphaned.
-  trap 'log "Supervisor stopping."; [ -n "$daemon_pid" ] && kill -USR1 "$daemon_pid" 2>/dev/null; rm -f "$PID_FILE"; exit 0' INT TERM
+  # Signal handling, kept deliberately distinct because the two outcomes are
+  # opposite - and the daemon child reads them the same way:
+  #   * SIGUSR1 / SIGINT -> a plain "stop the watcher" (--stop, or Ctrl+C):
+  #     leave the TV exactly as it is. We forward SIGUSR1 to the daemon.
+  #   * SIGTERM -> a real machine shutdown or logoff: power the TV OFF. We
+  #     forward SIGTERM so the daemon's shutdown handler turns it off.
+  # Earlier this forwarded SIGUSR1 on *both* INT and TERM ("never power off"),
+  # which at real shutdown raced systemd's own SIGTERM to the daemon and usually
+  # won - so the daemon exited before powering off and the TV was left on. Now
+  # --stop targets the supervisor with SIGUSR1 (see stop_background), leaving
+  # SIGTERM to mean shutdown.
+  stop_leave_tv() {
+    log "Supervisor stopping (leaving the TV as-is)."
+    [ -n "$daemon_pid" ] && kill -USR1 "$daemon_pid" 2>/dev/null
+    rm -f "$PID_FILE"; exit 0
+  }
+  stop_power_off() {
+    log "Supervisor stopping for shutdown (powering the TV off)."
+    [ -n "$daemon_pid" ] && kill -TERM "$daemon_pid" 2>/dev/null
+    rm -f "$PID_FILE"; exit 0
+  }
+  trap stop_leave_tv INT USR1
+  trap stop_power_off TERM
   log "Supervisor started (pid $$). Daemon errors are logged here."
   # If another watcher (e.g. the login auto-start) already holds the lock, our
   # daemon child should wait for it rather than spin-restart.
@@ -242,7 +260,9 @@ stop_background() {
   if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
     local sp; sp="$(cat "$PID_FILE")"
     log "Stopping background supervisor (pid $sp)."
-    kill "$sp" 2>/dev/null
+    # SIGUSR1 = "stop the watcher, leave the TV alone". SIGTERM is reserved for a
+    # real OS shutdown (power the TV off), so --stop must NOT use it.
+    kill -USR1 "$sp" 2>/dev/null
     # Give it up to ~10s to run its trap (stop the daemon) and exit.
     local _i
     for _i in $(seq 1 20); do kill -0 "$sp" 2>/dev/null || break; sleep 0.5; done
