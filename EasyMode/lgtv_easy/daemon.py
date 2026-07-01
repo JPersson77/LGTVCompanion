@@ -110,6 +110,9 @@ class Daemon:
         # strand it forever if WoL can't reach it. None = not currently failing.
         self._standby_wake_since: Optional[float] = None
         self._gave_up_deep_wake = False
+        # Set once the OS shutdown handler has (attempted to) power the TV off, so
+        # the CLI's SIGTERM fallback doesn't fire a second, redundant power-off.
+        self._shutdown_handled = False
 
     # ----- TV connection ----------------------------------------------
     def _default_client_factory(self) -> WebOSClient:
@@ -265,10 +268,27 @@ class Daemon:
         self._client = None
 
     # ----- actions -----------------------------------------------------
-    def sleep_screen(self) -> bool:
+    def sleep_screen(self, *, force: bool = False, reason: str = "") -> bool:
+        """Blank the TV screen.
+
+        ``force`` bypasses the reconnect backoff and relocates the TV by MAC if
+        DHCP moved it - and logs when the TV can't be reached. The idle path
+        leaves it False (a quiet, backed-off retry so an off TV never causes a
+        per-poll connect storm). The PC-sleep path sets it True: blanking as the
+        machine suspends is time-sensitive and one-shot, so a dropped or drifted
+        connection must still be re-established and the screen turned off - the
+        same treatment a user-facing wake gets. Without it this used to silently
+        give up whenever the TV wasn't already connected, leaving it lit.
+        """
         with self._action_lock:
-            client = self._ensure_client()
+            client = self._ensure_client(force=force)
             if not client:
+                if force:
+                    self.last_error = "sleep: TV unreachable"
+                    self.logger.warning(
+                        "Could not turn the TV screen off%s: the TV is "
+                        "unreachable (off, or not found on the network).",
+                        f" ({reason})" if reason else "")
                 return False
             try:
                 client.screen_off()
@@ -276,8 +296,11 @@ class Daemon:
                     client.set_mute(True)
                 self.screen_state = STATE_OFF
                 self.sleeps += 1
-                self.logger.info("Screen off after %s idle",
-                                 fmt_timeout(self.config.idle_seconds))
+                if reason:
+                    self.logger.info("TV screen off (%s).", reason)
+                else:
+                    self.logger.info("Screen off after %s idle",
+                                     fmt_timeout(self.config.idle_seconds))
                 return True
             except Exception as exc:  # noqa: BLE001
                 self.last_error = f"sleep: {exc}"
@@ -285,11 +308,22 @@ class Daemon:
                 self._drop_client()
                 return False
 
-    def power_off_tv(self) -> bool:
-        """Fully power the TV off (deep standby) for maximum energy saving."""
+    def power_off_tv(self, *, force: bool = False, reason: str = "") -> bool:
+        """Fully power the TV off (deep standby) for maximum energy saving.
+
+        ``force`` bypasses the reconnect backoff and relocates the TV by MAC -
+        used by the PC-shutdown path, which gets one chance to reach the TV while
+        the network is still up. ``reason`` labels the log line.
+        """
         with self._action_lock:
-            client = self._ensure_client()
+            client = self._ensure_client(force=force)
             if not client:
+                if force:
+                    self.last_error = "power_off: TV unreachable"
+                    self.logger.warning(
+                        "Could not power the TV off%s: the TV is unreachable "
+                        "(off, or not found on the network).",
+                        f" ({reason})" if reason else "")
                 return False
             try:
                 client.power_off()
@@ -299,8 +333,11 @@ class Daemon:
                 self._standby_wake_since = None
                 self._gave_up_deep_wake = False
                 self.deep_offs += 1
-                self.logger.info("TV powered off (deep energy saving) after %s idle",
-                                 fmt_timeout(self.config.deep_off_seconds))
+                if reason:
+                    self.logger.info("TV powered off (%s).", reason)
+                else:
+                    self.logger.info("TV powered off (deep energy saving) after %s idle",
+                                     fmt_timeout(self.config.deep_off_seconds))
                 # The socket dies as the TV powers down; reconnect on next wake.
                 self._drop_client()
                 return True
@@ -371,7 +408,25 @@ class Daemon:
         if self.screen_state in (STATE_OFF, STATE_STANDBY):
             return  # already dark - nothing to do
         self.logger.info("PC is going to sleep; turning the TV screen off.")
-        self.sleep_screen()
+        self.sleep_screen(force=True, reason="PC went to sleep")
+
+    def _on_system_shutdown(self) -> None:
+        """The PC is shutting down or logging off: fully power the TV off.
+
+        Runs on the sleep-watcher thread during logind's PrepareForShutdown delay
+        window - the network is still up here, unlike the SIGTERM that arrives
+        later while systemd is tearing the session down. Forced so a TV that
+        drifted to a new DHCP address (or dropped its connection) is still found
+        and switched off. Marks the shutdown as handled so the SIGTERM fallback
+        in the CLI doesn't try to power off an already-off TV.
+        """
+        self._shutdown_handled = True
+        if not self.config.tv_off_on_shutdown:
+            return
+        if self.screen_state == STATE_STANDBY:
+            return  # already fully off
+        self.logger.info("PC is shutting down; powering the TV off.")
+        self.power_off_tv(force=True, reason="PC shut down")
 
     def _on_system_resume(self) -> None:
         """The PC woke up. Bring the screen back only if a person is actually
@@ -421,6 +476,7 @@ class Daemon:
             watcher = self._sleep_watcher_factory(
                 on_sleep=self._on_system_sleep,
                 on_resume=self._on_system_resume,
+                on_shutdown=self._on_system_shutdown,
                 logger=self.logger)
             watcher.start()
             self._sleep_watcher = watcher

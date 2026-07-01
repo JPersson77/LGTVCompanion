@@ -118,19 +118,23 @@ class _LogindWatcher:
 
     backend_name = "logind"
 
-    def __init__(self, on_sleep, on_resume, logger, gdbus, inhibit):
+    def __init__(self, on_sleep, on_resume, logger, gdbus, inhibit,
+                 on_shutdown=None):
         self._on_sleep = on_sleep
         self._on_resume = on_resume
+        self._on_shutdown = on_shutdown
         self._logger = logger
         self._gdbus = gdbus
         self._inhibit = inhibit   # path to systemd-inhibit, or None
         self._mon: Optional[subprocess.Popen] = None
         self._lock_proc: Optional[subprocess.Popen] = None
+        self._shutdown_lock: Optional[subprocess.Popen] = None
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
 
     def start(self) -> None:
         self._acquire_delay_lock()
+        self._acquire_shutdown_lock()
         try:
             self._mon = subprocess.Popen(
                 [self._gdbus, "monitor", "--system",
@@ -172,6 +176,35 @@ class _LogindWatcher:
             except Exception:  # noqa: BLE001
                 pass
 
+    def _acquire_shutdown_lock(self) -> None:
+        # A *delay* inhibitor on shutdown: logind emits PrepareForShutdown and
+        # then waits (up to InhibitDelayMaxSec) before actually tearing the system
+        # down, so the TV can be powered off while the network is still up. The
+        # later SIGTERM arrives after networking may already be going away, which
+        # is why powering off here (in the delay window) is far more reliable.
+        # Best-effort: skip if systemd-inhibit is missing or nobody wants the hook.
+        if not self._inhibit or self._on_shutdown is None:
+            return
+        if self._shutdown_lock is not None and self._shutdown_lock.poll() is None:
+            return
+        try:
+            self._shutdown_lock = subprocess.Popen(
+                [self._inhibit, "--what=shutdown", "--mode=delay",
+                 "--who=LGTV Companion Easy Mode",
+                 "--why=Power the TV off before the PC shuts down",
+                 "sleep", "infinity"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:  # noqa: BLE001
+            self._shutdown_lock = None
+
+    def _release_shutdown_lock(self) -> None:
+        proc, self._shutdown_lock = self._shutdown_lock, None
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+            except Exception:  # noqa: BLE001
+                pass
+
     def _run(self) -> None:
         stdout = self._mon.stdout if self._mon else None
         if stdout is None:
@@ -179,6 +212,19 @@ class _LogindWatcher:
         for line in stdout:
             if self._stop.is_set():
                 break
+            if "PrepareForShutdown" in line:
+                if "true" in line:
+                    # Shutting down / logging off: power the TV off now, while the
+                    # network is up, then drop the delay lock so shutdown proceeds.
+                    try:
+                        if self._on_shutdown:
+                            self._on_shutdown()
+                    finally:
+                        self._release_shutdown_lock()
+                elif "false" in line:
+                    # Shutdown was cancelled: re-arm the delay lock for next time.
+                    self._acquire_shutdown_lock()
+                continue
             if "PrepareForSleep" not in line:
                 continue
             if "true" in line:
@@ -197,6 +243,7 @@ class _LogindWatcher:
     def stop(self) -> None:
         self._stop.set()
         self._release_delay_lock()
+        self._release_shutdown_lock()
         if self._mon is not None and self._mon.poll() is None:
             try:
                 self._mon.terminate()
@@ -220,12 +267,17 @@ def _linux_logind_available(gdbus: str) -> bool:
 
 def make_watcher(on_sleep: Callable[[], None],
                  on_resume: Optional[Callable[[], None]] = None,
-                 logger=None):
+                 logger=None,
+                 on_shutdown: Optional[Callable[[], None]] = None):
     """Return a suspend/resume watcher for the current OS (never raises).
 
     The result always exposes ``start()``/``stop()`` and a ``backend_name``; on
     an unsupported system that's a harmless no-op. ``start()`` may still raise if
     the OS hook fails to register - the caller is expected to guard it.
+
+    ``on_shutdown`` fires just before the machine shuts down or logs off (Linux
+    logind only; on Windows shutdown is handled by a Scheduled Task registered at
+    install time, so the watcher ignores it there).
     """
     try:
         if sys.platform.startswith("win"):
@@ -236,7 +288,8 @@ def make_watcher(on_sleep: Callable[[], None],
             gdbus = shutil.which("gdbus")
             if gdbus and _linux_logind_available(gdbus):
                 return _LogindWatcher(on_sleep, on_resume, logger, gdbus,
-                                      shutil.which("systemd-inhibit"))
+                                      shutil.which("systemd-inhibit"),
+                                      on_shutdown=on_shutdown)
     except Exception:  # noqa: BLE001 - fall back to the no-op watcher
         pass
     return _NullWatcher()

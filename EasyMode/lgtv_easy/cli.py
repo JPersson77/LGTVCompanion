@@ -398,12 +398,22 @@ def _install_shutdown_hooks(cfg, daemon, logger) -> None:
     import os
     import signal
 
+    state = {"terminating": False}
+
     def power_off():
+        # If the logind PrepareForShutdown handler already powered the TV off
+        # (while the network was still up), don't fire a second, redundant
+        # power-off that would just time out against an off TV and stall exit.
+        if getattr(daemon, "_shutdown_handled", False):
+            return
         if cfg.tv_off_on_shutdown:
             logger.info("Shutting down: powering the TV off.")
             _tv_power_off(cfg, log=logger.info, timeout=5.0)
 
     def on_term(_signum=None, _frame=None):
+        if state["terminating"]:  # a second SIGTERM arrived mid-power-off
+            return
+        state["terminating"] = True
         power_off()
         daemon.stop()
         raise SystemExit(0)
