@@ -219,8 +219,13 @@ class WebOSClient:
             raise WebSocketError("No matching response received")
 
     # ----- high level convenience -------------------------------------
-    def screen_off(self) -> Optional[dict]:
-        return self.request(URI_SCREEN_OFF)
+    def screen_off(self, wait: bool = True) -> Optional[dict]:
+        # ``wait=False`` is fire-and-forget: hand the request to the socket and
+        # return without waiting for the TV's reply. Used when the PC is
+        # suspending and the network is about to disappear - getting the frame
+        # onto the wire immediately beats waiting for a response that may never
+        # arrive (see Daemon.sleep_screen).
+        return self.request(URI_SCREEN_OFF, wait=wait)
 
     def screen_on(self) -> Optional[dict]:
         return self.request(URI_SCREEN_ON)
@@ -228,8 +233,8 @@ class WebOSClient:
     def power_off(self) -> Optional[dict]:
         return self.request(URI_POWER_OFF)
 
-    def set_mute(self, mute: bool) -> Optional[dict]:
-        return self.request(URI_SET_MUTE, {"mute": mute})
+    def set_mute(self, mute: bool, wait: bool = True) -> Optional[dict]:
+        return self.request(URI_SET_MUTE, {"mute": mute}, wait=wait)
 
     def get_power_state(self) -> Optional[dict]:
         return self.request(URI_GET_POWER_STATE)

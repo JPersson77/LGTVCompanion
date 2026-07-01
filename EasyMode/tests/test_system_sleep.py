@@ -18,6 +18,19 @@ def _quiet_logger():
     return lg
 
 
+def _wait_until(pred, timeout=2.0):
+    """Poll ``pred`` until true or timeout. The PC-sleep screen-off is sent
+    fire-and-forget (it doesn't wait for the TV's reply), so the mock TV updates
+    its state a beat after the call returns - give it that beat."""
+    import time
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if pred():
+            return True
+        time.sleep(0.01)
+    return pred()
+
+
 def _make(tv: MockTV, cfg: Config) -> Daemon:
     def factory():
         c = WebOSClient("127.0.0.1")
@@ -47,7 +60,7 @@ def test_pc_sleep_blanks_the_tv_even_before_the_idle_timeout():
         assert tv.screen_on is True
 
         d._on_system_sleep()  # the user hits "Sleep" on the PC
-        assert tv.screen_on is False
+        assert _wait_until(lambda: tv.screen_on is False)
         assert d.screen_state == STATE_OFF
         assert d.sleeps == 1
 
@@ -56,7 +69,7 @@ def test_pc_resume_wakes_the_tv_when_the_user_is_back():
     with MockTV(require_pairing=False) as tv:
         d = _make(tv, _cfg(minutes=7.0))
         d._on_system_sleep()
-        assert tv.screen_on is False
+        assert _wait_until(lambda: tv.screen_on is False)
 
         d._idle_box["v"] = 0  # the user woke the PC with a keypress
         d._on_system_resume()
@@ -70,6 +83,7 @@ def test_pc_resume_without_a_user_leaves_the_tv_asleep():
     with MockTV(require_pairing=False) as tv:
         d = _make(tv, _cfg(minutes=7.0))
         d._on_system_sleep()
+        assert _wait_until(lambda: tv.screen_on is False)
         d._idle_box["v"] = 9999  # resumed on its own; nobody touched the input
         d._on_system_resume()
         assert tv.screen_on is False
@@ -108,7 +122,7 @@ def test_pc_sleep_blanks_even_after_a_reconnect_backoff():
         d._next_connect_at = d._clock() + 10_000
         d._idle_box["v"] = 0
         d._on_system_sleep()
-        assert tv.screen_on is False
+        assert _wait_until(lambda: tv.screen_on is False)
         assert d.screen_state == STATE_OFF
         assert d.sleeps == 1
 
@@ -154,12 +168,13 @@ def test_logind_watcher_routes_sleep_resume_and_shutdown_lines():
         logger=None, gdbus="gdbus", inhibit=None,
         on_shutdown=lambda: calls.append("shutdown"))
 
+    import io
+
     class _Mon:
-        stdout = iter([
-            "/org/freedesktop/login1: ...Manager.PrepareForSleep (true,)\n",
-            "/org/freedesktop/login1: ...Manager.PrepareForSleep (false,)\n",
-            "/org/freedesktop/login1: ...Manager.PrepareForShutdown (true,)\n",
-        ])
+        stdout = io.StringIO(
+            "/org/freedesktop/login1: ...Manager.PrepareForSleep (true,)\n"
+            "/org/freedesktop/login1: ...Manager.PrepareForSleep (false,)\n"
+            "/org/freedesktop/login1: ...Manager.PrepareForShutdown (true,)\n")
 
     w._mon = _Mon()
     w._run()

@@ -209,7 +209,15 @@ class _LogindWatcher:
         stdout = self._mon.stdout if self._mon else None
         if stdout is None:
             return
-        for line in stdout:
+        # Read line-by-line with readline() rather than ``for line in stdout``:
+        # iterating a text pipe uses a large read-ahead buffer that can hold a
+        # line back until more output arrives, adding latency. On suspend we have
+        # only tens of milliseconds before the network drops, so deliver each
+        # signal line the instant its newline lands.
+        while True:
+            line = stdout.readline()
+            if line == "":  # EOF - the monitor exited
+                break
             if self._stop.is_set():
                 break
             if "PrepareForShutdown" in line:
