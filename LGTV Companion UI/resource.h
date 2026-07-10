@@ -132,6 +132,8 @@
 #define IDC_IGNORE_DELETE               1078
 #define IDC_CHECK_IGNORED_KEYS          1079
 #define IDC_IGNORED_KEYS_LIST           1080
+#define IDC_CHECK_IGNORE_SYSWIDE        1081
+#define IDC_SYSLINK_INFO_SYSWIDE        1082
 #define ID_ADD_MANAGE                   32771
 #define ID_ADD_MANAGE32772              32772
 #define ID_ADD_REMOVE                   32773
@@ -158,7 +160,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        156
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1081
+#define _APS_NEXT_CONTROL_VALUE         1083
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif
