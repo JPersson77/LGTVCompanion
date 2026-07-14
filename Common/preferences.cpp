@@ -263,7 +263,11 @@ Preferences::Preferences(std::wstring configuration_file_name)
 					// Remote streaming: what to do with displays when the session ends
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_ENDMODE];
 					if (!j.empty() && j.is_number_integer())
-						remote_streaming_host_resume_mode_ = j.get<int>();
+					{
+						int end_mode = j.get<int>();
+						if (end_mode >= PREFS_REMOTE_RESUME_POWERON && end_mode <= PREFS_REMOTE_RESUME_RESTORE)
+							remote_streaming_host_resume_mode_ = end_mode;	// ignore out-of-range values, keep the default
+					}
 					// External API
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_EXTERNAL_API];
 					if (!j.empty() && j.is_boolean())
