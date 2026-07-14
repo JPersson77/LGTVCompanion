@@ -14,6 +14,10 @@
 #define PREFS_UPDATER_NOTIFY				1
 #define PREFS_UPDATER_SILENT				2
 
+#define PREFS_REMOTE_RESUME_POWERON			0
+#define PREFS_REMOTE_RESUME_KEEPOFF			1
+#define PREFS_REMOTE_RESUME_RESTORE			2
+
 // Preferences management
 class Preferences : public std::enable_shared_from_this<Preferences>
 {
@@ -64,6 +68,7 @@ public:
 	bool								topology_keep_on_boot_ = false;
 	bool								remote_streaming_host_support_ = false;
 	bool								remote_streaming_host_prefer_power_off_ = true;
+	int									remote_streaming_host_resume_mode_ = PREFS_REMOTE_RESUME_POWERON;
 	bool								external_api_support_ = false;
 	int									shutdown_timing_ = PREFS_SHUTDOWN_TIMING_DEFAULT;
 	std::string							data_path_;

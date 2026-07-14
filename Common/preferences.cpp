@@ -32,6 +32,7 @@ using			json = nlohmann::json;
 #define         JSON_IDLE_FS_EXCLUSIONS			"IdleFsExclusions"
 #define         JSON_REMOTESTREAM				"RemoteStream"
 #define         JSON_REMOTESTREAM_MODE			"RemoteStreamPowerOff"
+#define         JSON_REMOTESTREAM_ENDMODE		"RemoteStreamEndMode"
 #define         JSON_EXTERNAL_API				"ExternalAPI"
 #define			JSON_MUTE_SPEAKERS				"MuteSpeakers"
 #define			JSON_TIMING_PRESHUTDOWN			"TimingPreshutdown"
@@ -259,6 +260,10 @@ Preferences::Preferences(std::wstring configuration_file_name)
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_MODE];
 					if (!j.empty() && j.is_boolean())
 						remote_streaming_host_prefer_power_off_ = j.get<bool>();
+					// Remote streaming: what to do with displays when the session ends
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_ENDMODE];
+					if (!j.empty() && j.is_number_integer())
+						remote_streaming_host_resume_mode_ = j.get<int>();
 					// External API
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_EXTERNAL_API];
 					if (!j.empty() && j.is_boolean())
@@ -554,6 +559,7 @@ bool Preferences::Preferences::writeToDisk(void)
 			prefs[JSON_PREFS_NODE][JSON_IGNORED_KEYS_LIST].push_back(item);
 	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM] = (bool)remote_streaming_host_support_;
 	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_MODE] = (bool)remote_streaming_host_prefer_power_off_;
+	prefs[JSON_PREFS_NODE][JSON_REMOTESTREAM_ENDMODE] = (int)remote_streaming_host_resume_mode_;
 	prefs[JSON_PREFS_NODE][JSON_EXTERNAL_API] = (bool)external_api_support_;
 	prefs[JSON_PREFS_NODE][JSON_MUTE_SPEAKERS] = (bool)user_idle_mode_mute_speakers_;
 	prefs[JSON_PREFS_NODE][JSON_TIMING_SHUTDOWN] = (int)shutdown_timing_;
