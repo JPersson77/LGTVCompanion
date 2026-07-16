@@ -23,8 +23,12 @@ if not exist "%PS1%" (
   echo.
   echo ERROR: Could not find the PowerShell launcher:
   echo   "%PS1%"
+  REM Parentheses MUST be escaped as ^( ^) here: this echo lives inside an
+  REM if(...) block, and cmd parses the whole block before running any of it.
+  REM An unescaped ")" closes the block early and kills the ENTIRE file with
+  REM "then was unexpected at this time" - even when this branch is not taken.
   echo Make sure "Windows Launch.bat" is next to the EasyMode folder
-  echo (which contains LGTV-Easy-Mode-WINDOWS.ps1), then run this again.
+  echo ^(which contains LGTV-Easy-Mode-WINDOWS.ps1^), then run this again.
   echo.
   pause
   exit /b 1
