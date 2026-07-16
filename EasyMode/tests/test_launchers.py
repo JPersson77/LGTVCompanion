@@ -82,6 +82,48 @@ def test_launchers_self_update_from_a_repo():
     assert "LGTV_EASY_REPO" in sh and "git clone" in sh
 
 
+def test_windows_detached_launch_quotes_the_script_path():
+    """A detached watcher must survive a space in its own path.
+
+    ``Start-Process`` joins ``-ArgumentList`` with spaces and does NOT quote the
+    entries. An unquoted script path under, say, ``C:\\Users\\First Last\\`` then
+    reaches powershell.exe cut in half - it reports ``-File 'C:\\Users\\First'``
+    and exits at once. The watcher is started hidden, so that failure is silent:
+    the launcher happily reports "running in the background" while nothing runs,
+    which is exactly the bug this guards. (The bash launcher quotes correctly, so
+    Linux never saw it.)
+
+    Both halves are checked: every detached PowerShell must go through the single
+    helper, and that helper must quote the path.
+    """
+    import re
+    ps1 = _read(WIN_PS1)
+    spawns = re.findall(r'Start-Process\s+-FilePath\s+"powershell\.exe"', ps1)
+    assert len(spawns) == 1, (
+        "detached PowerShell should be spawned from exactly one helper "
+        "(Start-Detached), so the path is quoted in a single place; found "
+        f"{len(spawns)} Start-Process calls for powershell.exe")
+    assert "function Start-Detached" in ps1, "expected a Start-Detached helper"
+    # The helper has to build a genuinely quoted path out of $scriptPath...
+    m = re.search(r"\$quoted\s*=\s*(.+)", ps1)
+    assert m and '"' in m.group(1) and "$scriptPath" in m.group(1), (
+        "Start-Detached must wrap the script path in double quotes")
+    # ...and that quoted value is what -File receives.
+    assert re.search(r'"-File",\s*\$quoted', ps1), (
+        "the quoted path must be the argument that follows -File")
+
+
+def test_windows_supervisor_guards_against_a_second_watcher():
+    # Mirrors the Linux launcher: a supervisor that finds a live one already
+    # holding the pidfile stands down, instead of clobbering the pidfile and
+    # stacking another daemon that blocks forever on the single-instance lock.
+    ps1 = _read(WIN_PS1)
+    sh = _read(LINUX_SH)
+    assert "not starting another" in ps1, (
+        "the Windows supervisor should stand down when one is already running")
+    assert "not starting another" in sh
+
+
 def test_windows_supervisor_does_not_redirect_both_streams_to_one_file():
     # PowerShell's Start-Process raises a terminating error when standard output
     # and standard error are redirected to the SAME file - that would crash the

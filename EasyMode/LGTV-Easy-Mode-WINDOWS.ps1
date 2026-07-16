@@ -64,6 +64,53 @@ function Log($msg) {
 
 function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 
+# ---- process helpers --------------------------------------------------------
+# Read a pid file and return the pid ONLY if that process is really alive (and,
+# when given, has a matching name - Windows recycles pids, so a bare "does pid N
+# exist" check can match a stranger's process and make us report a watcher that
+# isn't ours, or kill something unrelated). The Linux launcher's `kill -0` guard
+# is the same idea.
+function Get-LivePid([string]$path, [string]$nameLike = "") {
+    if (-not (Test-Path $path)) { return $null }
+    $raw = ((Get-Content $path -ErrorAction SilentlyContinue) -join "").Trim()
+    if ($raw -notmatch '^\d+$') { return $null }
+    $proc = Get-Process -Id ([int]$raw) -ErrorAction SilentlyContinue
+    if (-not $proc) { return $null }
+    if ($nameLike -and $proc.Name -notlike $nameLike) { return $null }
+    return [int]$raw
+}
+
+# The one place we spawn a detached PowerShell (the background watcher, and the
+# self-update hand-off). Everything goes through here because of the quoting:
+#
+# Start-Process joins -ArgumentList with spaces and does NOT quote the entries
+# for you. An unquoted path containing a space - C:\Users\First Last\..., the
+# normal case for a Windows account with a space in its name - therefore reaches
+# powershell.exe cut in half: it reports `-File 'C:\Users\First'` and exits
+# immediately. Because the watcher is started -WindowStyle Hidden, that failure
+# was completely invisible: the launcher went on to announce "running in the
+# background" while nothing was running at all. (The bash launcher never had this
+# bug - `exec "$repo_launcher"` quotes properly - which is why only Windows broke.)
+# Quote the path exactly once, here, so no caller can get it wrong again.
+function Start-Detached([string]$scriptPath, [string[]]$extraArgs = @()) {
+    $quoted = '"' + $scriptPath + '"'
+    $argList = @("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", $quoted) + $extraArgs
+    return Start-Process -FilePath "powershell.exe" -WindowStyle Hidden -PassThru `
+        -ArgumentList $argList
+}
+
+# The idle-daemon child the supervisor is currently running (the equivalent of
+# $daemon_pid in the bash launcher), tracked at script scope so a self-update can
+# stop it before handing off instead of orphaning it.
+$script:DaemonProc = $null
+function Stop-DaemonChild {
+    $p = $script:DaemonProc
+    $script:DaemonProc = $null
+    if ($p -and -not $p.HasExited) {
+        try { $p.Kill() } catch {}
+    }
+}
+
 # Print-only banners. The actual "keep the window open" pause lives in the .bat
 # (the single, version-robust place a double-click goes through), so these just
 # explain what happened; they must NOT block, or we'd pause twice.
@@ -186,9 +233,15 @@ function Maybe-SelfUpdate {
         $env:LGTV_EASY_HANDOFF = "1"
         if ($Supervise) {
             # The hidden background supervisor restarts itself detached, so the
-            # old process doesn't linger waiting on the new one.
-            Start-Process -FilePath "powershell.exe" -WindowStyle Hidden `
-                -ArgumentList (@("-ExecutionPolicy","Bypass","-NoProfile","-File",$selfFull) + $fwd)
+            # old process doesn't linger waiting on the new one. Mirroring the
+            # Linux launcher, stop our daemon child and drop the pidfile FIRST:
+            # otherwise the old daemon outlives this process still holding the
+            # single-instance lock, the fresh supervisor's daemon blocks forever
+            # waiting for it, and -Stop can no longer find the supervisor that
+            # owns the (now overwritten) pidfile.
+            Stop-DaemonChild
+            Remove-Item $PidFile -ErrorAction SilentlyContinue
+            Start-Detached $selfFull $fwd | Out-Null
             exit 0
         }
         & powershell.exe -ExecutionPolicy Bypass -NoProfile -File $selfFull @fwd
@@ -213,6 +266,16 @@ function Needs-Setup {
 
 # ---- supervisor loop --------------------------------------------------------
 function Start-Supervisor {
+    # Never run two supervisors at once (the Linux launcher guards this the same
+    # way). Re-opening the app falls through to here; without the guard each open
+    # would clobber the pidfile - orphaning the previous supervisor so -Stop can
+    # no longer find it - and spawn another daemon that just blocks forever on the
+    # lock the first daemon already holds, so watchers pile up on every re-open.
+    $existing = Get-LivePid $PidFile "powershell*"
+    if ($existing -and $existing -ne $PID) {
+        Log "A background watcher is already running (pid $existing); not starting another."
+        return
+    }
     Set-Content -Path $PidFile -Value $PID
     Log "Supervisor started (pid $PID). Daemon output -> $WatcherLog"
     # If another watcher (e.g. the login auto-start) already holds the lock, our
@@ -230,6 +293,7 @@ function Start-Supervisor {
             $proc = Start-Process -FilePath "python" -ArgumentList @("-m","lgtv_easy","run") `
                 -WorkingDirectory (App-Dir) -NoNewWindow -PassThru `
                 -RedirectStandardError $WatcherLog -RedirectStandardOutput $WatcherOutLog
+            $script:DaemonProc = $proc
             while (-not $proc.HasExited) {
                 Start-Sleep -Seconds 15
                 if (-not $NoUpdate -and ((Get-Date) - $lastUpdate).TotalSeconds -ge $UpdateEvery) {
@@ -252,31 +316,40 @@ function Start-Supervisor {
 
 function Stop-Background {
     $stopped = $false
-    if (Test-Path $PidFile) {
-        $oldPid = Get-Content $PidFile
+    # Match on the process name as well as the pid: Windows recycles pids, and a
+    # stale pidfile whose number now belongs to some unrelated program must never
+    # get that program killed.
+    $sp = Get-LivePid $PidFile "powershell*"
+    if ($sp) {
         try {
-            Stop-Process -Id $oldPid -ErrorAction Stop
-            Log "Stopped background supervisor (pid $oldPid)."
+            Stop-Process -Id $sp -Force -ErrorAction Stop
+            Log "Stopped background supervisor (pid $sp)."
             $stopped = $true
-        } catch { Log "No running supervisor with pid $oldPid." }
-        Remove-Item $PidFile -ErrorAction SilentlyContinue
+        } catch { Log "Could not stop supervisor (pid $sp): $($_.Exception.Message)" }
     }
+    Remove-Item $PidFile -ErrorAction SilentlyContinue
     # Hard-killing the supervisor leaves its idle-daemon child orphaned (and
     # still holding the single-instance lock), so stop that too. The daemon
-    # records its own PID in daemon.pid. A forced stop here does NOT power the
-    # TV off (that only happens on a real console shutdown event), which is what
-    # we want when the user is simply stopping the watcher.
-    $daemonPid = Join-Path $StateDir "daemon.pid"
-    if (Test-Path $daemonPid) {
-        $dp = Get-Content $daemonPid
-        if (Get-Process -Id $dp -ErrorAction SilentlyContinue) {
-            try {
-                Stop-Process -Id $dp -Force -ErrorAction Stop
-                Log "Stopped idle daemon (pid $dp)."
-                $stopped = $true
-            } catch {}
-        }
-        Remove-Item $daemonPid -ErrorAction SilentlyContinue
+    # records its own PID in daemon.pid (as python, or pythonw under the login
+    # auto-start). A forced stop here does NOT power the TV off (that only
+    # happens on a real console shutdown event / the shutdown Scheduled Task),
+    # which matches the Linux launcher's --stop: leave the TV exactly as it is.
+    $daemonPidFile = Join-Path $StateDir "daemon.pid"
+    $dp = Get-LivePid $daemonPidFile "python*"
+    if ($dp) {
+        try {
+            Stop-Process -Id $dp -Force -ErrorAction Stop
+            Log "Stopped idle daemon (pid $dp)."
+            $stopped = $true
+            # Only drop the pidfile once the daemon is really gone: that file IS
+            # the single-instance lock, so removing it under a daemon we failed to
+            # kill would let a second one start alongside it.
+            Remove-Item $daemonPidFile -ErrorAction SilentlyContinue
+        } catch {}
+    } else {
+        # Nobody live holds it; clear a stale pidfile so it can't confuse a
+        # later run.
+        Remove-Item $daemonPidFile -ErrorAction SilentlyContinue
     }
     if ($stopped) { Log "Easy Mode stopped. Your TV is left as-is." }
     else { Log "No running background watcher found." }
@@ -335,22 +408,47 @@ if ($Background) {
     Run-Cli @("gui")
     if (Needs-Setup) { Log "Setup not completed."; Pause-BeforeExit; exit 1 }
 
-    if (Test-Path $PidFile) {
-        $oldPid = Get-Content $PidFile
-        if (Get-Process -Id $oldPid -ErrorAction SilentlyContinue) {
-            Log "Watcher already running (pid $oldPid)."
-            Pause-Info @("Settings saved. Easy Mode is already running in the background (pid $oldPid).",
-                         "Your LG TV will blank/sleep when the PC is idle.",
-                         "To stop it: run this launcher again with  -Stop")
-            exit 0
-        }
+    $running = Get-LivePid $PidFile "powershell*"
+    if ($running) {
+        Log "Watcher already running (pid $running)."
+        Pause-Info @("Settings saved. Easy Mode is already running in the background (pid $running).",
+                     "Your LG TV will blank/sleep when the PC is idle.",
+                     "To stop it: run this launcher again with  -Stop")
+        exit 0
     }
+
     Log "Detaching watcher to background. Log: $LogFile"
     $repoSelf = Join-Path (App-Dir) $LauncherName
     $useSelf = if (Test-Path $repoSelf) { $repoSelf } else { $PSCommandPath }
-    Start-Process -FilePath "powershell.exe" -WindowStyle Hidden `
-        -ArgumentList @("-ExecutionPolicy","Bypass","-File",$useSelf,"-Supervise")
-    Pause-Info @("Settings saved. Easy Mode is now running in the background.",
+    # Drop a stale pidfile first, so the wait below is positive proof that the NEW
+    # supervisor came up (publishing its pid is its very first action).
+    Remove-Item $PidFile -ErrorAction SilentlyContinue
+    $child = Start-Detached $useSelf @("-Supervise")
+
+    # Confirm the watcher actually started instead of assuming it did. It runs
+    # detached and hidden, so a watcher that dies on startup leaves nothing on
+    # screen - which is exactly how a broken detach could report "running in the
+    # background" while the TV was quietly never being watched. Wait for the
+    # supervisor to publish its pid, or for the child to fall over.
+    $live = $null
+    foreach ($i in 1..40) {
+        $live = Get-LivePid $PidFile "powershell*"
+        if ($live) { break }
+        if ($child -and $child.HasExited) { break }
+        Start-Sleep -Milliseconds 250
+    }
+    if (-not $live) {
+        $code = if ($child -and $child.HasExited) { "$($child.ExitCode)" } else { "did not report" }
+        Log "ERROR: the background watcher failed to start (exit code: $code)."
+        Write-Host ""
+        Write-Host "Your settings were saved, but Easy Mode could not start its"
+        Write-Host "background watcher - so the TV would NOT sleep when the PC is idle."
+        Write-Host "The log has the details: $LogFile"
+        Pause-BeforeExit
+        exit 1
+    }
+    Log "Watcher confirmed running (pid $live)."
+    Pause-Info @("Settings saved. Easy Mode is now running in the background (pid $live).",
                  "Your LG TV will blank/sleep when the PC is idle, and wake when you",
                  "move the mouse or press a key.",
                  "Closing this window does NOT stop it. To stop: run with  -Stop")
