@@ -456,9 +456,9 @@ std::string Companion::Impl::remoteEndActionDescription(void)
 	// The end-of-stream mode only applies in power-off mode; blank mode always restores.
 	if (prefs_.remote_streaming_host_prefer_power_off_)
 	{
-		if (prefs_.remote_streaming_host_resume_mode_ == PREFS_REMOTE_RESUME_KEEPOFF)
+		if (prefs_.remote_streaming_host_end_mode_ == PREFS_REMOTE_END_KEEP_OFF)
 			return "remain powered off";
-		if (prefs_.remote_streaming_host_resume_mode_ == PREFS_REMOTE_RESUME_RESTORE)
+		if (prefs_.remote_streaming_host_end_mode_ == PREFS_REMOTE_END_RESTORE)
 			return "be restored to their pre-streaming power state";
 	}
 	return "power ON";
@@ -546,9 +546,9 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 					bool restore_display = true;
 					if (prefs_.remote_streaming_host_prefer_power_off_)
 					{
-						if (prefs_.remote_streaming_host_resume_mode_ == PREFS_REMOTE_RESUME_KEEPOFF)
+						if (prefs_.remote_streaming_host_end_mode_ == PREFS_REMOTE_END_KEEP_OFF)
 							restore_display = false;
-						else if (prefs_.remote_streaming_host_resume_mode_ == PREFS_REMOTE_RESUME_RESTORE)
+						else if (prefs_.remote_streaming_host_end_mode_ == PREFS_REMOTE_END_RESTORE)
 							restore_display = (session.client_.streamStartPower() == STREAM_START_ON);	// only if the TV was on before streaming
 					}
 					if (restore_display)

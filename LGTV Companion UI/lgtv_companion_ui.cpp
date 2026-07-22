@@ -1869,7 +1869,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_REMOTE_END), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ls.c_str());
 		ls = L"Restore display";
 		SendMessage(GetDlgItem(hWnd, IDC_COMBO_REMOTE_END), (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)ls.c_str());
-		SendMessage(GetDlgItem(hWnd, IDC_COMBO_REMOTE_END), (UINT)CB_SETCURSEL, (WPARAM)Prefs.remote_streaming_host_resume_mode_, (LPARAM)0);
+		SendMessage(GetDlgItem(hWnd, IDC_COMBO_REMOTE_END), (UINT)CB_SETCURSEL, (WPARAM)Prefs.remote_streaming_host_end_mode_, (LPARAM)0);
 
 		EnableWindow(GetDlgItem(hWnd, IDC_COMBO_MODE), Prefs.remote_streaming_host_support_ ? true :  false);
 		// "Remote streaming end mode" only applies in power-off mode (index 0)
@@ -1998,7 +1998,7 @@ LRESULT CALLBACK WndOptionsProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 					int selection_end = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_REMOTE_END), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 					if (selection_end >= 0)
-						Prefs.remote_streaming_host_resume_mode_ = selection_end;
+						Prefs.remote_streaming_host_end_mode_ = selection_end;
 
 					int selection_timing = (int)(SendMessage(GetDlgItem(hWnd, IDC_COMBO_TIMING), (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0));
 					if (selection_timing == 2)
