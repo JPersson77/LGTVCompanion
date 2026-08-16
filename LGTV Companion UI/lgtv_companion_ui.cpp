@@ -2979,8 +2979,9 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			}
 			else if (wParam == IDC_SYSLINK_INFO_SYSWIDE)
 			{
-				customMsgBox(hWnd, L"Some programs can cause Windows to register input that never actually happened, which prevents idle detection from ever triggering. Enabling this ignores that system-wide signal and relies only on directly-detected keyboard, mouse, and controller input. "
-					"Note: this may also disable idle detection in situations where direct input can't be seen, such as over Remote Desktop.", L"Only count direct input", MB_OK | MB_ICONINFORMATION);
+				customMsgBox(hWnd, L"Specify if the TV's speakers should be muted when User Idle Mode is triggered.\n\n"
+					"Consider disabling the fallback input detection if you are experiencing an issue where User Idle Mode does not trigger properly. "
+					"The fallback method is however required when working with some virtual or remote desktops.", L"User Idle Mode Other", MB_OK | MB_ICONINFORMATION);
 			}
 			else if (wParam == IDC_SYSLINK_ADD)
 			{
