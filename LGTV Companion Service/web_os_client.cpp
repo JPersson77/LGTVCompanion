@@ -168,10 +168,10 @@ WebOsClient::Impl::Impl(net::io_context& ioc, ssl::context& ctx, Device& setting
 	else
 		ws_tcp_.emplace(resolver_.get_executor());
 	if (device_settings_.session_key == "") // build the WebOS handshake
-		webos_handshake_ = tools::narrow(LG_HANDSHAKE_NOTPAIRED);
+		webos_handshake_ = tools::narrow(LG_HANDSHAKE_NOTPAIRED_V3);
 	else
 	{
-		webos_handshake_ = tools::narrow(LG_HANDSHAKE_PAIRED);
+		webos_handshake_ = tools::narrow(LG_HANDSHAKE_PAIRED_V3);
 		tools::replaceAllInPlace(webos_handshake_, "#CLIENTKEY#", device_settings_.session_key);
 	}
 
@@ -601,7 +601,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 			{
 				device_settings_.session_key = payload["client-key"];
 				INFO("Pairing key received: %1%", device_settings_.session_key);
-				webos_handshake_ = tools::narrow(LG_HANDSHAKE_PAIRED);
+				webos_handshake_ = tools::narrow(LG_HANDSHAKE_PAIRED_V3);
 				tools::replaceAllInPlace(webos_handshake_, "#CLIENTKEY#", device_settings_.session_key);
 				setSessionKey(device_settings_.session_key, device_settings_.id); // Save session key to config file
 				// enable WOL after pairing has succeded
@@ -648,7 +648,7 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 			{
 				WARNING("Pairing key was invalid. Re-pairing...");
 				device_settings_.session_key = "";
-				webos_handshake_ = tools::narrow(LG_HANDSHAKE_NOTPAIRED);
+				webos_handshake_ = tools::narrow(LG_HANDSHAKE_NOTPAIRED_V3);
 				send(webos_handshake_);
 			}
 		}

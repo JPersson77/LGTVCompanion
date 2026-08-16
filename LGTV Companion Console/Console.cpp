@@ -1000,7 +1000,7 @@ nlohmann::json SendRequest(Device device, nlohmann::json request, bool isLuna)
 			std::string host = device.ip;
 
 			//build handshake
-			std::string sHandshake = tools::narrow(LG_HANDSHAKE_PAIRED);
+			std::string sHandshake = tools::narrow(LG_HANDSHAKE_PAIRED_V3);
 			tools::replaceAllInPlace(sHandshake, "#CLIENTKEY#", device.session_key);
 
 			beast::flat_buffer buffer;
@@ -1166,7 +1166,7 @@ nlohmann::json SendButtonRequest(Device device, std::string button)
 			std::string host = device.ip;
 
 			//build handshake
-			std::string sHandshake = tools::narrow(LG_HANDSHAKE_PAIRED);
+			std::string sHandshake = tools::narrow(LG_HANDSHAKE_PAIRED_V3);
 			tools::replaceAllInPlace(sHandshake, "#CLIENTKEY#", device.session_key);
 
 			beast::flat_buffer buffer;
@@ -1364,7 +1364,7 @@ nlohmann::json PowerOnDevice(Device device)
 	else
 	{
 		//build handshake
-		std::string sHandshake = tools::narrow(LG_HANDSHAKE_PAIRED);
+		std::string sHandshake = tools::narrow(LG_HANDSHAKE_PAIRED_V3);
 		tools::replaceAllInPlace(sHandshake, "#CLIENTKEY#", device.session_key);
 
 		std::string host;
