@@ -18,7 +18,7 @@
 // global definitions for the service
 #define SVCNAME											L"LGTVsvc"
 #define SVCDISPLAYNAME									L"LGTV Companion Service"
-#define SERVICE_DEPENDENCIES							L"Dhcp\0Dnscache\0LanmanServer\0\0"
+#define SERVICE_DEPENDENCIES							L"Dhcp\0\0"
 #define SERVICE_ACCOUNT									NULL		
 
 struct Context
