@@ -622,8 +622,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				fallback_count = 0;
 				last_input = time_of_last_raw_input;
 			}
-			// but also use GetLastInputInfo() to determine user input (fallback method)
-			else if(!last_input_was_ignored && (lii.dwTime > time_of_last_raw_input) && (lii.dwTime - time_of_last_raw_input > 1000 ))
+			// but also use GetLastInputInfo() as a fallback, unless the user has disabled it (some background software can cause false positives here)
+			else if(!Prefs.user_idle_mode_ignore_system_wide_fallback_ && !last_input_was_ignored && (lii.dwTime > time_of_last_raw_input) && (lii.dwTime - time_of_last_raw_input > 1000 ))
 			{
 				// discover and discard controllers that are jittery (i.e. that send constant updates)
 				if ((user_is_idle && abs((int)(lii.dwTime - time_of_last_input_info - (DWORD)TIMER_MAIN_DELAY_WHEN_IDLE)) <= 20)

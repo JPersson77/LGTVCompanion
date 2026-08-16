@@ -2625,6 +2625,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		CheckDlgButton(hWnd, IDC_CHECK_VWL_FG, Prefs.user_idle_mode_disable_while_video_wake_lock_foreground_ ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_VWL_FULLSCREEN, Prefs.user_idle_mode_disable_while_video_wake_lock_fullscreen_ ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_MUTE, Prefs.user_idle_mode_mute_speakers_ ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(hWnd, IDC_CHECK_IGNORE_SYSWIDE, Prefs.user_idle_mode_ignore_system_wide_fallback_ ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(hWnd, IDC_CHECK_IGNORED_KEYS, Prefs.user_idle_mode_ignored_keys_ ? BST_CHECKED : BST_UNCHECKED);
 
 		EnableWindow(GetDlgItem(hWnd, IDC_LIST), Prefs.user_idle_mode_process_control_);
@@ -2889,6 +2890,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				case IDC_CHECK_VWL_FG:
 				case IDC_CHECK_VWL_FULLSCREEN:
 				case IDC_CHECK_MUTE:
+				case IDC_CHECK_IGNORE_SYSWIDE:
 				{
 					EnableWindow(GetDlgItem(hWnd, IDOK), true);
 				}break;
@@ -2911,6 +2913,7 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				Prefs.user_idle_mode_disable_while_video_wake_lock_foreground_ = IsDlgButtonChecked(hWnd, IDC_CHECK_VWL_FG);
 				Prefs.user_idle_mode_disable_while_video_wake_lock_fullscreen_ = IsDlgButtonChecked(hWnd, IDC_CHECK_VWL_FULLSCREEN);
 				Prefs.user_idle_mode_mute_speakers_ = IsDlgButtonChecked(hWnd, IDC_CHECK_MUTE);
+				Prefs.user_idle_mode_ignore_system_wide_fallback_ = IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORE_SYSWIDE);
 				Prefs.user_idle_mode_ignored_keys_ = IsDlgButtonChecked(hWnd, IDC_CHECK_IGNORED_KEYS);
 				Prefs.user_idle_mode_process_control_list_ = process_list_temp;
 				Prefs.ignored_keys.clear();
@@ -2974,6 +2977,11 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				customMsgBox(hWnd, L"Specify keys that are ignored when determining idle state. This is used to keep User Idle Mode active even though the specified keys "
 					"are pressed.", L"Ignored Keys", MB_OK | MB_ICONINFORMATION);
 			}
+			else if (wParam == IDC_SYSLINK_INFO_SYSWIDE)
+			{
+				customMsgBox(hWnd, L"Some programs can cause Windows to register input that never actually happened, which prevents idle detection from ever triggering. Enabling this ignores that system-wide signal and relies only on directly-detected keyboard, mouse, and controller input. "
+					"Note: this may also disable idle detection in situations where direct input can't be seen, such as over Remote Desktop.", L"Only count direct input", MB_OK | MB_ICONINFORMATION);
+			}
 			else if (wParam == IDC_SYSLINK_ADD)
 			{
 				PostMessage(hWnd, APP_LISTBOX_ADD, 1, 0);
@@ -3004,7 +3012,8 @@ LRESULT CALLBACK WndUserIdleProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		SetTextColor(hdcStatic, COLORREF(COLOR_STATIC));
 		if ((HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_PROCESS_CONTROL)
 			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_FULLSCREEN)
-			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_VWL))
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_VWL)
+			|| (HWND)lParam == GetDlgItem(hWnd, IDC_CHECK_IGNORE_SYSWIDE))
 		{
 			SetBkMode(hdcStatic, TRANSPARENT);
 		}
