@@ -60,6 +60,7 @@ public:
 	bool								user_idle_mode_process_control_ = false;
 	std::vector<ProcessList>			user_idle_mode_process_control_list_;
 	bool								user_idle_mode_ignored_keys_ = false;
+	bool								user_idle_mode_ignore_system_wide_fallback_ = false;
 	bool								topology_support_ = false;
 	bool								topology_keep_on_boot_ = false;
 	bool								remote_streaming_host_support_ = false;
