@@ -45,6 +45,7 @@ using			json = nlohmann::json;
 #define			JSON_UIM_PROCESS_LIST			"BlankWhenIdleProcessList"
 #define			JSON_IGNORED_KEYS				"IgnoredKeys"
 #define			JSON_IGNORED_KEYS_LIST			"IgnoredKeysList"
+#define			JSON_UIM_IGNORE_SYSWIDE_FALLBACK "BlankWhenIdleIgnoreSystemWideFallback"
 #define			JSON_DEVICE_NAME				"Name"
 #define			JSON_DEVICE_IP					"IP"
 #define			JSON_DEVICE_UNIQUEKEY			"UniqueDeviceKey"
@@ -336,6 +337,11 @@ Preferences::Preferences(std::wstring configuration_file_name)
 					if (!j.empty() && j.is_boolean())
 						user_idle_mode_ignored_keys_ = j.get<bool>();
 
+					// Ignore the system-wide (GetLastInputInfo) idle-detection fallback
+					j = jsonPrefs[JSON_PREFS_NODE][JSON_UIM_IGNORE_SYSWIDE_FALLBACK];
+					if (!j.empty() && j.is_boolean())
+						user_idle_mode_ignore_system_wide_fallback_ = j.get<bool>();
+
 					// Ignored keys list
 					j = jsonPrefs[JSON_PREFS_NODE][JSON_IGNORED_KEYS_LIST];
 					if (!j.empty() && j.size() > 0)
@@ -557,6 +563,7 @@ bool Preferences::Preferences::writeToDisk(void)
 	prefs[JSON_PREFS_NODE][JSON_UIM_VIDEO_BROWSER_DISABLE3] = (bool)user_idle_mode_disable_while_video_wake_lock_fullscreen_;
 	prefs[JSON_PREFS_NODE][JSON_UIM_PROCESS_CONTROL] = (bool)user_idle_mode_process_control_;
 	prefs[JSON_PREFS_NODE][JSON_IGNORED_KEYS] = (bool)user_idle_mode_ignored_keys_;
+	prefs[JSON_PREFS_NODE][JSON_UIM_IGNORE_SYSWIDE_FALLBACK] = (bool)user_idle_mode_ignore_system_wide_fallback_;
 	prefs[JSON_PREFS_NODE][JSON_IGNORED_KEYS_LIST] = nlohmann::json::array();
 	if (ignored_keys.size() > 0)
 		for (auto& item : ignored_keys)

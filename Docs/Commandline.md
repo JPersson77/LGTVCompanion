@@ -64,7 +64,7 @@ LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 - *-autodisable* 			- temporarily disable the automatic management, i.e. to stop processing power events for device(s). This is effective until next restart of the service. 
 - *-autoenable* 			- temporarily enable the application's automatic management of a device. This is effective until next restart of the service.
 - *-streaming_connect*		- force remote client connect (when streaming support is enabled). Typically used in the connect command buffer of the streaming server.
-- *-streaming_disconnect*	- force remote client disconnect (when streaming support is enabled). Typically used in in the disconnect command buffer of the streaming server.
+- *-streaming_disconnect*	- force remote client disconnect (when streaming support is enabled). Typically used in the disconnect command buffer of the streaming server.
 - *-clearlog* 				- clear the application log. 
 - *-idle* 					- trigger User Idle Mode / screen blanking, as if the user was away from the PC until User Idle Mode triggered. 
 - *-unidle* 				- disable the screen blanking, as if the user returned to the PC.
@@ -112,7 +112,6 @@ LGTVcli.exe -ok backlight -get_system_settings picture [\"backlight\"]
 "LGTV Companion.exe" -mute Device1
 ```
 ## Button commands (LGTV Companion and LGTVcli)
-👉 Please note that the virtual button press functionality was deprecated and made obsolete by firmware changes from LG in 2026
 - *-button [button]* 	- virtual remote key press, values below are allowed
 - *-button_nocheck [button]* 	- virtual remote key press, no verification of input value
 
@@ -133,13 +132,19 @@ It is possible to display the Service Menu and/or disable TPC/GSR (the auto-brig
 - *-servicemenu_gsr_disable* 	- disable Global Stress Reduction (GSR)
   
 #### Examples: 
-*Display the service menu on device 1. Enter default code 0413 when prompted.*
+*Display the service menu on device 1. Enter default code 0413 when prompted. Both commands work equally.*
 ```
 LGTVcli.exe -button IN_START device1
 ```
-*Please note that WebOS 23 (and later) displays an updated service menu. Use the below to toggle the older version of the service menu that is more feature complete*
+```
+LGTVcli.exe -servicemenu device1
+```
+*Please note that WebOS 23 (and later) displays an updated service menu. Use the below to toggle the older version of the service menu that is more feature complete. Both commands work equally.*
 ```
 LGTVcli.exe -settings_other "{\"svcMenuFlag\": false}" device1
+```
+```
+LGTVcli.exe -servicemenu_legacy_enable device1
 ```
 ## Retrieving system settings (LGTVcli only)
 - *-get_system_settings [category] [Json-array of keys]* 	- get one or many system settings in a specified category. Supported values below:
