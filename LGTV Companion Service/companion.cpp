@@ -55,7 +55,8 @@ private:
 	Preferences											prefs_;
 	std::vector <std::shared_ptr<SessionWrapper>>		sessions_;								
 	bool												windows_power_status_on_ = false;		
-	bool												remote_client_connected_ = false;		
+	bool												remote_client_connected_ = false;
+	bool												remote_stream_powered_off_ = false;		// whether any device was actually powered off when the current remote stream started
 	bool												screensaver_active_ = false;
 	time_t												time_last_resume_or_boot_time = 0;
 	time_t												time_last_power_on = 0;
@@ -351,6 +352,9 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		DEBUG("I/O Context purged and stopped!");
 	}
 */
+	// a new remote stream starts with no device known to have been powered off by it
+	if (event.getType() == EVENT_SYSTEM_REMOTE_CONNECT && !remote_client_connected_)
+		remote_stream_powered_off_ = false;
 	// process event for ALL devices
 	if (event.getDevices().size() == 0)
 		for (auto& session : sessions_)
@@ -372,8 +376,10 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		// When the end-of-stream mode leaves all managed displays powered off, request the
 		// desktop daemon to also turn off the windows displays, so that the power state of
 		// the devices remains in sync with the windows power state (and the displays can
-		// subsequently be woken by user input as usual).
+		// subsequently be woken by user input as usual). Only when the stream actually
+		// powered off a device at connect - otherwise there is nothing to keep in sync with.
 		if (remote_client_connected_ && windows_power_status_on_
+			&& remote_stream_powered_off_
 			&& prefs_.remote_streaming_host_prefer_power_off_
 			&& prefs_.remote_streaming_host_end_mode_ != PREFS_REMOTE_END_POWER_ON)
 		{
@@ -544,12 +550,15 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 			case EVENT_SYSTEM_REMOTE_CONNECT:
 				if (remote_client_connected_)
 					break;
+				if (prefs_.remote_streaming_host_prefer_power_off_)
+					session.client_.beginStreamStartCapture();	// (re-)arm and reset the capture, so a stale state from an earlier session cannot leak into the "Restore display" end mode
 				if (windows_power_status_on_ == true)
 				{
 					if (prefs_.remote_streaming_host_prefer_power_off_)
 					{
-						session.client_.beginStreamStartCapture();	// remember if the TV was on, for the "Restore display" end mode
 						work_was_enqueued = session.client_.powerOff();
+						if (work_was_enqueued)
+							remote_stream_powered_off_ = true;
 					}
 					else
 						work_was_enqueued = session.client_.blankScreen();
@@ -568,7 +577,10 @@ void Companion::Impl::processEvent(Event& event, SessionWrapper& session)
 						if (prefs_.remote_streaming_host_end_mode_ == PREFS_REMOTE_END_KEEP_OFF)
 							restore_display = false;
 						else if (prefs_.remote_streaming_host_end_mode_ == PREFS_REMOTE_END_RESTORE)
+						{
 							restore_display = (session.client_.streamStartPower() == STREAM_START_ON);	// only if the TV was on before streaming
+							DEBUG_(session.device_.name, "Pre-stream power state was %1%. The display will %2%", session.client_.streamStartPower() == STREAM_START_ON ? "ON" : "OFF or unknown", restore_display ? "power on" : "remain off");
+						}
 					}
 					if (restore_display)
 					{
