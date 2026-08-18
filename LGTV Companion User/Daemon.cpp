@@ -1527,11 +1527,7 @@ void remoteStreamingEvent(DWORD dwType)
 		if (bCurrentlyConnected && !bConnect)
 			SetTimer(h_main_wnd, (UINT_PTR)REMOTE_DISCONNECT, 1000, (TIMERPROC)NULL);
 		else if (!bCurrentlyConnected && bConnect)
-		{
-			// a (re-)connected stream cancels any pending windows displays-off request
-			KillTimer(h_main_wnd, (UINT_PTR)TIMER_DISPLAYS_OFF);
 			SetTimer(h_main_wnd, (UINT_PTR)REMOTE_CONNECT, TIMER_REMOTE_DELAY, (TIMERPROC)NULL);
-		}
 	}
 	return;
 }
