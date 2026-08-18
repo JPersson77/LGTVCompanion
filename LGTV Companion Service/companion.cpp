@@ -369,6 +369,25 @@ void Companion::Impl::dispatchEvent(Event& event) {
 		remote_client_connected_ = true;
 		break;
 	case EVENT_SYSTEM_REMOTE_DISCONNECT:
+		// When the end-of-stream mode leaves all managed displays powered off, request the
+		// desktop daemon to also turn off the windows displays, so that the power state of
+		// the devices remains in sync with the windows power state (and the displays can
+		// subsequently be woken by user input as usual).
+		if (remote_client_connected_ && windows_power_status_on_
+			&& prefs_.remote_streaming_host_prefer_power_off_
+			&& prefs_.remote_streaming_host_end_mode_ != PREFS_REMOTE_END_POWER_ON)
+		{
+			bool any_display_restored = false;
+			if (prefs_.remote_streaming_host_end_mode_ == PREFS_REMOTE_END_RESTORE)
+				for (auto& session : sessions_)
+					if (session->device_.enabled && session->client_.streamStartPower() == STREAM_START_ON)
+						any_display_restored = true;
+			if (!any_display_restored)
+			{
+				DEBUG("Requesting the daemon to turn off windows displays (sync with remote streaming end mode)");
+				ipc_server_->send(L"DAEMON_DISPLAYS_OFF");
+			}
+		}
 		remote_client_connected_ = false;
 		break;
 	case EVENT_SYSTEM_SHUTDOWN:
