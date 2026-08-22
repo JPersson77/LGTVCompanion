@@ -64,9 +64,12 @@
 #define         TIMER_VERSIONCHECK_DELAY				30000
 #define         TIMER_CHECK_PROCESSES_DELAY				5000
 #define         TIMER_TOPOLOGY_COLLECTION_DELAY			3000
+#define         TIMER_DISPLAYS_OFF						24
+#define         TIMER_DISPLAYS_OFF_DELAY				2000
 #define			COPYDATA_MUTEX_WAIT						10
 #define         APP_DISPLAYCHANGE						WM_USER+10
 #define         APP_SET_MESSAGEFILTER					WM_USER+11
+#define         APP_DISPLAYS_OFF_REQUEST				WM_USER+12
 #define         APP_USER_IDLE_ON						1
 #define         APP_USER_IDLE_OFF						2
 #define         TOPOLOGY_OK								1
@@ -408,6 +411,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ShowWindow(h_main_wnd, daemon_is_visible ? SW_SHOWNORMAL : SW_HIDE);
 	}break;
 
+	case APP_DISPLAYS_OFF_REQUEST:
+	{
+		// The service requests that the windows displays are turned off, to remain in
+		// sync with managed devices which stay powered off when a remote streaming
+		// session ends. Only act when running in the physical console session.
+		DWORD session_id = 0;
+		if (ProcessIdToSessionId(GetCurrentProcessId(), &session_id) && session_id == WTSGetActiveConsoleSessionId())
+		{
+			log(L"Service requests windows displays OFF (remote streaming end mode).");
+			SetTimer(hWnd, TIMER_DISPLAYS_OFF, TIMER_DISPLAYS_OFF_DELAY, (TIMERPROC)NULL);
+		}
+	}break;
+
 	case WM_INPUT:
 	{
 		if (!lParam)
@@ -728,6 +744,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			KillTimer(hWnd, (UINT_PTR)REMOTE_DISCONNECT);
 			communicateWithService(L"remote_disconnect", false);
+		}break;
+		case TIMER_DISPLAYS_OFF:
+		{
+			// short delay has passed to let the streaming host restore resolution/HDR etc
+			KillTimer(hWnd, (UINT_PTR)TIMER_DISPLAYS_OFF);
+			log(L"Turning off windows displays (sync with remote streaming end mode).");
+			SendMessage(hWnd, WM_SYSCOMMAND, SC_MONITORPOWER, (LPARAM)2);
 		}break;
 		case TIMER_TOPOLOGY_COLLECTION:
 		{
@@ -1642,6 +1665,8 @@ std::string sunshine_GetConfVal(std::string buf, std::string conf_item)
 }
 void ipcCallback(std::wstring message, LPVOID pt)
 {
+	if (message.find(L"DAEMON_DISPLAYS_OFF") != std::wstring::npos)
+		PostMessage(h_main_wnd, APP_DISPLAYS_OFF_REQUEST, NULL, NULL);
 	return;
 }
 

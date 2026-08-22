@@ -6,6 +6,11 @@
 #include "../Common/device.h"
 #include "../Common/log.h"
 
+// TV power state captured at remote-stream start (returned by streamStartPower())
+#define			STREAM_START_UNKNOWN				-1
+#define			STREAM_START_OFF					0
+#define			STREAM_START_ON						1
+
 // Asynchronous websocket client to communicate and maintain the connection with a webOS device
 class WebOsClient : public std::enable_shared_from_this<WebOsClient>
 {
@@ -19,6 +24,8 @@ public:
 	bool powerOn(void);
 	bool powerOff(bool = false);
 	bool blankScreen(bool = false);
+	void beginStreamStartCapture(void);	// arm one-shot capture of the TV power state at the next power-off query
+	int streamStartPower(void);			// -1 unknown, 0 was off, 1 was on (see STREAM_START_* above)
 	bool sendRequest(std::string data, std::string log_message, int delay = 0);
 	bool sendButton(std::string button);
 	bool close(bool = false);

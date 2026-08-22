@@ -103,6 +103,7 @@
 #define IDC_SYSLINK_INFO_1              1060
 #define IDC_SYSLINK_WILDCARD            1060
 #define IDC_COMBO_MODE                  1061
+#define IDC_COMBO_REMOTE_END            1083
 #define IDC_COMBO_SSL                   1063
 #define IDC_COMBO_LOG                   1063
 #define IDC_CHECK_API                   1064
@@ -160,7 +161,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        156
 #define _APS_NEXT_COMMAND_VALUE         32788
-#define _APS_NEXT_CONTROL_VALUE         1083
+#define _APS_NEXT_CONTROL_VALUE         1084
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

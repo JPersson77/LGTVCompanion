@@ -17,6 +17,7 @@
 #include <boost/asio.hpp>
 #include <queue>
 #include <fstream>
+#include <atomic>
 #include <nlohmann/json.hpp>
 
 // timers
@@ -110,6 +111,8 @@ private:
 	std::string host_;
 	int socket_status_ = SOCKET_DISCONNECTED;
 	bool isPoweredOn_ = false;
+	std::atomic<bool> capture_stream_start_{ false };			// armed by the service at remote-stream connect
+	std::atomic<int> stream_start_power_{ STREAM_START_UNKNOWN };	// TV power state observed at that moment
 	std::list<Work> workQueue_;
 	std::shared_ptr<Logging> log_;
 	time_t timestamp_last_work_performed_ = 0;
@@ -147,6 +150,8 @@ public:
 	~Impl() {};
 	void close(void);
 	void enqueueWork(Work&);
+	void beginStreamStartCapture(void) { stream_start_power_ = STREAM_START_UNKNOWN; capture_stream_start_ = true; }
+	int streamStartPower(void) { return stream_start_power_.load(); }
 };
 WebOsClient::Impl::Impl(net::io_context& ioc, ssl::context& ctx, Device& settings, Logging& log)
 	: resolver_(net::make_strand(ioc))
@@ -725,6 +730,9 @@ void WebOsClient::Impl::onRead(beast::error_code ec, std::size_t bytes_transferr
 		{
 			if (response_id == "getPowerState" && !payload["state"].empty() && payload["state"].is_string()) // query power state
 			{
+				// one-shot capture of the TV power state at remote-stream start (for "restore previous state")
+				if (capture_stream_start_.exchange(false))
+					stream_start_power_ = (payload["state"] == "Active" || payload["state"] == "Screen Off") ? STREAM_START_ON : STREAM_START_OFF;
 
 				if (payload["state"] != "Active" && payload["state"] != "Screen Off") // Device is not ON
 				{
@@ -1319,6 +1327,12 @@ bool WebOsClient::blankScreen(bool forced) {
 	work.forced_ = forced;
 	pimpl->enqueueWork(work);
 	return true;
+}
+void WebOsClient::beginStreamStartCapture(void) {
+	pimpl->beginStreamStartCapture();
+}
+int WebOsClient::streamStartPower(void) {
+	return pimpl->streamStartPower();
 }
 bool WebOsClient::sendRequest(std::string data, std::string log_message, int delay) {
 	Work work;
