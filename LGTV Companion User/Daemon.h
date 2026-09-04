@@ -16,6 +16,8 @@ int							verifyTopology();
 DWORD						checkRemoteStreamingProcesses(void);
 void						remoteStreamingEvent(DWORD dwType);
 DWORD						sunshine_CheckLog(std::string);
+DWORD						sunshine_ConnectFlag(size_t, bool);
+std::string					sunshine_GetActiveLogFile(std::string);
 std::string					sunshine_GetConfVal(std::string, std::string);
 std::vector<std::string>	sunshine_GetLogFiles();
 void						ipcCallback(std::wstring, LPVOID);

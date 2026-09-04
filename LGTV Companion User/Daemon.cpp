@@ -89,9 +89,14 @@
 #define			REMOTE_SUNSHINE_NOT_CONNECTED			0x0080
 #define			REMOTE_APOLLO_CONNECTED					0x0100
 #define			REMOTE_APOLLO_NOT_CONNECTED				0x0200
+#define			REMOTE_VIBEPOLLO_CONNECTED				0x0400
+#define			REMOTE_VIBEPOLLO_NOT_CONNECTED			0x0800
 #define			SUNSHINE_FILE_CONF						"sunshine.conf"
 #define			SUNSHINE_FILE_LOG						"sunshine.log"
 #define			SUNSHINE_FILE_SVC						L"sunshine.exe"
+#define			SUNSHINE_DIR_LOGS						"logs"
+#define			SUNSHINE_INDEX_APOLLO					1
+#define			SUNSHINE_INDEX_VIBEPOLLO				2
 #define			HID_VENDOR_ID_VALVE						0x28DE
 // Steam Controller 2 ("Triton") vendor HID input report IDs, per SDL's steam/controller_structs.h
 #define			HID_VALVE_TRITON_STATE					0x42
@@ -113,14 +118,23 @@ struct RemoteWrapper {					// Remote streaming info
 	bool								bRemoteCurrentStatusRDP = false;
 	bool								bRemoteCurrentStatusSunshine = false;
 	bool								bRemoteCurrentStatusApollo = false;
+	bool								bRemoteCurrentStatusVibepollo = false;
 	std::wstring						sCurrentlyRunningWhitelistedProcess = L"";
 	std::wstring						sCurrentlyRunningFsExcludedProcess = L"";
-	std::vector<std::string>			Sunshine_Log_Files;
+	std::vector<std::string>			Sunshine_Log_Files;		// configured log file, per entry in sunshine_list
+	std::vector<std::string>			Sunshine_Log_Active;	// log file currently being written to
 	std::vector<uintmax_t>				Sunshine_Log_Sizes;
 
-	const std::vector<std::string>		sunshine_list{
-	"SOFTWARE\\LizardByte\\Sunshine",	//sunshine reg location
-	"SOFTWARE\\SudoMaker\\Apollo"
+	// Streaming hosts writing a sunshine style log. The install directory is read from the
+	// registry, either from the default value of the key or from a named value.
+	struct SunshineHost {
+		std::string						registry_key;
+		std::string						registry_value;	// "" = default value of the key
+	};
+	const std::vector<SunshineHost>		sunshine_list{
+	{ "SOFTWARE\\LizardByte\\Sunshine", "" },	//sunshine reg location
+	{ "SOFTWARE\\SudoMaker\\Apollo", "" },		//apollo reg location
+	{ "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vibepollo", "InstallLocation" }	//vibepollo reg location
 	};
 	const std::vector<std::wstring>		stream_proc_list{
 	L"steam_monitor.exe"				//steam server
@@ -309,19 +323,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE Instance,
 		WTSRegisterSessionNotification(h_main_wnd, NOTIFY_FOR_ALL_SESSIONS);
 
 		Remote.Sunshine_Log_Files = sunshine_GetLogFiles();
-		if (Remote.Sunshine_Log_Files.size() > 0)
+		for (auto& configured : Remote.Sunshine_Log_Files)
 		{
-			for (auto& log : Remote.Sunshine_Log_Files) 
+			std::string active = sunshine_GetActiveLogFile(configured);
+			Remote.Sunshine_Log_Active.push_back(active);
+			try
 			{
-				try
-				{
-					std::filesystem::path p(log);
-					Remote.Sunshine_Log_Sizes.push_back(std::filesystem::file_size(p));
-				}
-				catch (...)
-				{
-					Remote.Sunshine_Log_Sizes.push_back(0);
-				}
+				Remote.Sunshine_Log_Sizes.push_back(active != "" ? std::filesystem::file_size(std::filesystem::path(active)) : 0);
+			}
+			catch (...)
+			{
+				Remote.Sunshine_Log_Sizes.push_back(0);
 			}
 		}
 	}
@@ -1345,37 +1357,44 @@ DWORD checkRemoteStreamingProcesses(void)
 	// was sunshine service found currently running?
 	if (bSunshineSvcProcessFound)
 	{
-		int index = 0;
-//		std::vector<DWORD> val(Remote.Sunshine_Log_Files.size());
-		for(auto& logfile : Remote.Sunshine_Log_Files)
+		for (size_t index = 0; index < Remote.Sunshine_Log_Files.size(); index++)
 		{
-			if (logfile != "")
-			{
-				std::filesystem::path p(logfile);
-				uintmax_t Size = std::filesystem::file_size(p);
-				if (Size != Remote.Sunshine_Log_Sizes[index])
-				{
-					if (index == 0) // SUNSHINE
-					{
-						Remote.Sunshine_Log_Sizes[index] = Size;
-						ReturnValue |= sunshine_CheckLog(logfile);
-					}
-					else if (index == 1) //APOLLO
-					{
-						DWORD val = sunshine_CheckLog(logfile);
-						if (val == REMOTE_SUNSHINE_CONNECTED)
-							ReturnValue |= REMOTE_APOLLO_CONNECTED;
-						else if (val == REMOTE_SUNSHINE_NOT_CONNECTED)
-							ReturnValue |= REMOTE_APOLLO_NOT_CONNECTED;
-					}
-				}
+			if (Remote.Sunshine_Log_Files[index] == "")
+				continue;
 
+			// Vibepollo starts a new log file for every session, so re-resolve which file is
+			// currently being written to.
+			std::string logfile = sunshine_GetActiveLogFile(Remote.Sunshine_Log_Files[index]);
+			if (logfile == "")
+				continue;
+			if (logfile != Remote.Sunshine_Log_Active[index])
+			{
+				Remote.Sunshine_Log_Active[index] = logfile;
+				Remote.Sunshine_Log_Sizes[index] = 0;
 			}
-			index++;
+
+			uintmax_t Size = 0;
+			try
+			{
+				Size = std::filesystem::file_size(std::filesystem::path(logfile));
+			}
+			catch (...)
+			{
+				continue;
+			}
+			if (Size == Remote.Sunshine_Log_Sizes[index])
+				continue;
+			Remote.Sunshine_Log_Sizes[index] = Size;
+
+			DWORD val = sunshine_CheckLog(logfile);
+			if (val == REMOTE_SUNSHINE_CONNECTED)
+				ReturnValue |= sunshine_ConnectFlag(index, true);
+			else if (val == REMOTE_SUNSHINE_NOT_CONNECTED)
+				ReturnValue |= sunshine_ConnectFlag(index, false);
 		}
 	}
 	else
-		ReturnValue |= REMOTE_SUNSHINE_NOT_CONNECTED;
+		ReturnValue |= REMOTE_SUNSHINE_NOT_CONNECTED | REMOTE_APOLLO_NOT_CONNECTED | REMOTE_VIBEPOLLO_NOT_CONNECTED;
 
 	// was a remote streaming process currently running?
 	ReturnValue |= bStreamingProcessFound ? REMOTE_STEAM_CONNECTED : REMOTE_STEAM_NOT_CONNECTED;
@@ -1440,7 +1459,7 @@ void remoteStreamingEvent(DWORD dwType)
 {
 	if (Prefs.remote_streaming_host_support_)
 	{
-		bool bCurrentlyConnected = Remote.bRemoteCurrentStatusSteam || Remote.bRemoteCurrentStatusNvidia || Remote.bRemoteCurrentStatusRDP || Remote.bRemoteCurrentStatusSunshine || Remote.bRemoteCurrentStatusApollo;
+		bool bCurrentlyConnected = Remote.bRemoteCurrentStatusSteam || Remote.bRemoteCurrentStatusNvidia || Remote.bRemoteCurrentStatusRDP || Remote.bRemoteCurrentStatusSunshine || Remote.bRemoteCurrentStatusApollo || Remote.bRemoteCurrentStatusVibepollo;
 
 		if (dwType & REMOTE_STEAM_CONNECTED)
 		{
@@ -1506,6 +1525,22 @@ void remoteStreamingEvent(DWORD dwType)
 				Remote.bRemoteCurrentStatusApollo = false;
 			}
 		}
+		if (dwType & REMOTE_VIBEPOLLO_CONNECTED)
+		{
+			if (!Remote.bRemoteCurrentStatusVibepollo)
+			{
+				log(L"Vibepollo gamestream connected.");
+				Remote.bRemoteCurrentStatusVibepollo = true;
+			}
+		}
+		else if (dwType & REMOTE_VIBEPOLLO_NOT_CONNECTED)
+		{
+			if (Remote.bRemoteCurrentStatusVibepollo)
+			{
+				log(L"Vibepollo gamestream disconnected.");
+				Remote.bRemoteCurrentStatusVibepollo = false;
+			}
+		}
 		if (dwType & REMOTE_RDP_CONNECTED)
 		{
 			if (!Remote.bRemoteCurrentStatusRDP)
@@ -1522,7 +1557,7 @@ void remoteStreamingEvent(DWORD dwType)
 				Remote.bRemoteCurrentStatusRDP = false;
 			}
 		}
-		bool bConnect = Remote.bRemoteCurrentStatusSteam || Remote.bRemoteCurrentStatusNvidia || Remote.bRemoteCurrentStatusRDP || Remote.bRemoteCurrentStatusSunshine || Remote.bRemoteCurrentStatusApollo;
+		bool bConnect = Remote.bRemoteCurrentStatusSteam || Remote.bRemoteCurrentStatusNvidia || Remote.bRemoteCurrentStatusRDP || Remote.bRemoteCurrentStatusSunshine || Remote.bRemoteCurrentStatusApollo || Remote.bRemoteCurrentStatusVibepollo;
 
 		if (bCurrentlyConnected && !bConnect)
 			SetTimer(h_main_wnd, (UINT_PTR)REMOTE_DISCONNECT, 1000, (TIMERPROC)NULL);
@@ -1532,6 +1567,72 @@ void remoteStreamingEvent(DWORD dwType)
 	return;
 }
 
+// Map an index into Remote.sunshine_list onto the connect/disconnect flag of that host.
+DWORD sunshine_ConnectFlag(size_t index, bool connected)
+{
+	switch (index)
+	{
+	case SUNSHINE_INDEX_APOLLO:
+		return connected ? REMOTE_APOLLO_CONNECTED : REMOTE_APOLLO_NOT_CONNECTED;
+	case SUNSHINE_INDEX_VIBEPOLLO:
+		return connected ? REMOTE_VIBEPOLLO_CONNECTED : REMOTE_VIBEPOLLO_NOT_CONNECTED;
+	default:
+		return connected ? REMOTE_SUNSHINE_CONNECTED : REMOTE_SUNSHINE_NOT_CONNECTED;
+	}
+}
+
+// Sunshine and Apollo append to one fixed log file. Vibepollo instead writes one log file per
+// session into a "logs" subdirectory, named "<stem>-<yyyymmdd>-<hhmmss>-<ms>.log", so the file
+// to watch changes whenever the service restarts. Return the log file which is currently
+// being written to, or "" when there is none.
+std::string sunshine_GetActiveLogFile(std::string configured_log_file)
+{
+	if (configured_log_file == "")
+		return "";
+	try
+	{
+		std::filesystem::path configured(configured_log_file);
+		std::filesystem::path logs_dir;
+		std::string prefix;
+		if (configured.has_extension())
+		{
+			logs_dir = configured.parent_path() / SUNSHINE_DIR_LOGS;
+			prefix = configured.stem().string() + "-";
+		}
+		else // log_path pointing at a directory
+		{
+			logs_dir = configured;
+			prefix = "sunshine-";
+		}
+
+		if (std::filesystem::is_directory(logs_dir))
+		{
+			// the session label is fixed width, so the newest file is the last one alphabetically
+			std::string newest_name;
+			std::filesystem::path newest;
+			for (const auto& entry : std::filesystem::directory_iterator(logs_dir))
+			{
+				if (!entry.is_regular_file() || entry.path().extension() != ".log")
+					continue;
+				std::string name = entry.path().filename().string();
+				if (name.rfind(prefix, 0) != 0)
+					continue;
+				if (newest_name == "" || name > newest_name)
+				{
+					newest_name = name;
+					newest = entry.path();
+				}
+			}
+			if (newest_name != "")
+				return newest.string();
+		}
+		if (std::filesystem::is_regular_file(configured))
+			return configured_log_file;
+	}
+	catch (...) {}
+	return "";
+}
+
 DWORD sunshine_CheckLog(std::string input_file)
 {
 	std::string log;
@@ -1539,7 +1640,10 @@ DWORD sunshine_CheckLog(std::string input_file)
 	if (t.is_open())
 	{
 		std::stringstream buffer;
-		t.seekg(-5000, std::ios_base::end);
+		// only the tail is of interest, but a log file which was just created can be shorter
+		t.seekg(0, std::ios_base::end);
+		std::streamoff file_size = t.tellg();
+		t.seekg(file_size > 5000 ? file_size - 5000 : 0, std::ios_base::beg);
 		buffer << t.rdbuf();
 		std::string log = buffer.str();
 		t.close();
@@ -1583,10 +1687,10 @@ std::vector<std::string> sunshine_GetLogFiles()
 	for(int i = 0; i<Remote.sunshine_list.size();i++)
 	{
 		HKEY hKey = NULL;
-		LPCSTR pszSubkey = Remote.sunshine_list[i].c_str();
-		LPCSTR pszValueName = "";
+		LPCSTR pszSubkey = Remote.sunshine_list[i].registry_key.c_str();
+		LPCSTR pszValueName = Remote.sunshine_list[i].registry_value.c_str();
 		//Get sunshine install path from registry
-		if (RegOpenKeyA(HKEY_LOCAL_MACHINE, pszSubkey, &hKey) == ERROR_SUCCESS)
+		if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, pszSubkey, 0, KEY_READ | KEY_WOW64_64KEY, &hKey) == ERROR_SUCCESS)
 		{
 			// Buffer to store string read from registry
 			CHAR szValue[MAX_PATH];
@@ -1596,6 +1700,8 @@ std::vector<std::string> sunshine_GetLogFiles()
 			if (RegQueryValueExA(hKey, pszValueName, NULL, NULL, reinterpret_cast<LPBYTE>(&szValue), &cbValueLength) == ERROR_SUCCESS)
 			{
 				configuration_path = szValue;
+				while (configuration_path.length() > 0 && configuration_path.back() == '\\')
+					configuration_path.pop_back();
 				configuration_path += "\\config\\";
 				Sunshine_Config = configuration_path;
 				Sunshine_Config += SUNSHINE_FILE_CONF;
@@ -1634,7 +1740,17 @@ std::vector<std::string> sunshine_GetLogFiles()
 				}
 			}
 		}
+		if (hKey)
+			RegCloseKey(hKey);
 	}
+
+	// Vibepollo installs into the Apollo directory and may leave an Apollo registry key behind,
+	// which would resolve the same log file twice. Keep the last (most specific) match only.
+	for (size_t i = 1; i < log_files.size(); i++)
+		for (size_t j = 0; j < i; j++)
+			if (log_files[i] != "" && log_files[i] == log_files[j])
+				log_files[j] = "";
+
 	return log_files;
 	/*
 	std::vector<std::string> filtered_log_files;
