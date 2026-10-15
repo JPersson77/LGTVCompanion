@@ -59,11 +59,13 @@ bool SvcInstall()
 	SC_HANDLE schSCManager;
 	SC_HANDLE schService;
 	WCHAR szPath[MAX_PATH];
+	WCHAR szQuotedPath[MAX_PATH + 2];
 	if (!GetModuleFileNameW(NULL, szPath, MAX_PATH))
 	{
 		printf("Failed to install service (%d).\n", GetLastError());
 		return false;
 	}
+	swprintf_s(szQuotedPath, L"\"%s\"", szPath);
 	schSCManager = OpenSCManager(
 		NULL,                    // local computer
 		NULL,                    // ServicesActive database
@@ -81,7 +83,7 @@ bool SvcInstall()
 		SERVICE_WIN32_OWN_PROCESS, // service type
 		SERVICE_AUTO_START,        // start type
 		SERVICE_ERROR_NORMAL,      // error control type
-		szPath,                    // path to service's binary
+		szQuotedPath,              // quoted path to service's binary
 		NULL,                      // no load ordering group
 		NULL,                      // no tag identifier
 		SERVICE_DEPENDENCIES,      // dependencies
